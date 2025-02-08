@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "cortex"
+version = "0.0.1"
+description = "Semantic Layer for Databases, API Sources"
+authors = ["Nilotpal Roychowdhury <nilotpal@jointelescope.com>"]
+license = "GNU AGPL v3"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.13"
+pydantic = "^2.10.6"
+sqlalchemy = "^2.0.38"
+sqlalchemy-bigquery = "^1.12.1"
+#psycopg2-binary = "^3.2.4"
+psycopg = {extras = ["binary", "pool"], version = "3.2.4"}
+#psycopg2-pool = "^3.2.4"
+#psycopg2-binary = "^2.9.9:inn"
+
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

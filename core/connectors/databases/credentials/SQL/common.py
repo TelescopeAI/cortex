@@ -1,5 +1,5 @@
 from core.connectors.databases.credentials.factory import DatabaseCredentialsFactory
-from core.types.databases import DatabaseTypes
+from core.types.databases import DataSourceTypes
 from core.types.telescope import TSModel
 
 
@@ -9,7 +9,7 @@ class CommonSQLCredentials(TSModel):
     username: str
     password: str
     database: str
-    dialect: DatabaseTypes
+    dialect: DataSourceTypes
 
 
 class CommonSQLCredentialsFactory(DatabaseCredentialsFactory):

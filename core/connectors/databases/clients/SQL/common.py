@@ -8,7 +8,7 @@ from core.connectors.databases.clients.base import DatabaseClient
 from core.connectors.databases.clients.factory.abstracts import DatabaseClientFactory
 from core.connectors.databases.credentials.SQL.common import CommonSQLCredentials
 from core.exceptions.SQLClients import CSQLInvalidQuery
-from core.types.databases import DatabaseTypes
+from core.types.databases import DataSourceTypes
 from core.types.sql_schema import ColumnSchema
 
 
@@ -48,9 +48,9 @@ class CommonSQLClient(DatabaseClient):
     def get_uri(self):
         dialect = self.credentials.dialect
         dialect_str = dialect.value
-        if dialect is DatabaseTypes.MYSQL:
+        if dialect is DataSourceTypes.MYSQL:
             dialect_str = "mysql+pymysql"
-        if dialect is DatabaseTypes.POSTGRESQL:
+        if dialect is DataSourceTypes.POSTGRESQL:
             dialect_str = "postgresql+psycopg"
         conn_string = f"{dialect_str}://{self.credentials.username}:{self.credentials.password}@{self.credentials.host}:{self.credentials.port}/{self.credentials.database}"
         return conn_string

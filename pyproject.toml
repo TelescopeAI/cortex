@@ -19,6 +19,7 @@ pytz = "^2025.1"
 fastapi = {extras = ["standard"], version = "^0.115.8"}
 secweb = "^1.18.1"
 alembic = "^1.14.1"
+scalar-fastapi = "^1.0.3"
 
 
 

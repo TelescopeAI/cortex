@@ -3,11 +3,11 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 
 from api.schemas.responses.consumers.consumers import ConsumerResponse
-from core.consumers.consumer import Consumer
-from core.consumers.db.service import ConsumerCRUD
-from core.exceptions.consumers import ConsumerDoesNotExistError, ConsumerAlreadyExistsError
-from core.exceptions.environments import EnvironmentDoesNotExistError
+from cortex.core.consumers.consumer import Consumer
+from cortex.core.consumers.db.service import ConsumerCRUD
+from cortex.core.exceptions.consumers import ConsumerDoesNotExistError, ConsumerAlreadyExistsError
 from api.schemas.requests.consumer.consumers import ConsumerCreateRequest, ConsumerUpdateRequest
+from cortex.core.exceptions.environments import EnvironmentDoesNotExistError
 
 ConsumersRouter = APIRouter()
 

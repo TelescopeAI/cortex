@@ -7,7 +7,7 @@ from alembic import context
 import sys
 sys.path = ['', '..'] + sys.path[1:]
 
-from core.stores.connection import LocalSession
+from cortex.core.stores import LocalSession
 
 
 # this is the Alembic Config object, which provides

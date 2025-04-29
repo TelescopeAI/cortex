@@ -3,8 +3,8 @@ from typing import Optional
 from pydantic import Field as FieldV2
 from pydantic import Field
 
-from core.types.databases import DataSourceTypes
-from core.types.telescope import TSModel
+from cortex.core.types.databases import DataSourceTypes
+from cortex.core.types.telescope import TSModel
 
 
 class DBConnectionRequestParams(TSModel):

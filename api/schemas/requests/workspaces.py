@@ -1,12 +1,12 @@
 from typing import Optional
-from pydantic import BaseModel
+from cortex.core.types.telescope import TSModel
 
 
-class WorkspaceCreateRequest(BaseModel):
+class WorkspaceCreateRequest(TSModel):
     name: str
     description: Optional[str] = None
 
 
-class WorkspaceUpdateRequest(BaseModel):
+class WorkspaceUpdateRequest(TSModel):
     name: Optional[str] = None
     description: Optional[str] = None

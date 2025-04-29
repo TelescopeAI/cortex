@@ -2,12 +2,12 @@ from typing import List
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 
-from core.data.db.source_service import DataSourceCRUD
-from core.data.sources.data_sources import DataSource
-from core.exceptions.data.sources import DataSourceAlreadyExistsError, DataSourceDoesNotExistError
-from core.exceptions.environments import EnvironmentDoesNotExistError
+from cortex.core.data.db.source_service import DataSourceCRUD
+from cortex.core.data.sources.data_sources import DataSource
+from cortex.core.exceptions.data.sources import DataSourceAlreadyExistsError, DataSourceDoesNotExistError
 from api.schemas.requests.data_sources import DataSourceCreateRequest, DataSourceUpdateRequest
 from api.schemas.responses.data_sources import DataSourceResponse
+from cortex.core.exceptions.environments import EnvironmentDoesNotExistError
 
 DataSourcesRouter = APIRouter()
 

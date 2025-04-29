@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from core.types.telescope import TSModel
+from cortex.core.types.telescope import TSModel
 
 
 class EnvironmentResponse(TSModel):

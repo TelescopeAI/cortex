@@ -1,6 +1,6 @@
 from typing import Optional
 
-from core.types.telescope import TSModel
+from cortex.core.types.telescope import TSModel
 
 
 class DBValidationResult(TSModel):

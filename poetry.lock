@@ -1456,6 +1456,18 @@ files = [
 pyasn1 = ">=0.1.3"
 
 [[package]]
+name = "scalar-fastapi"
+version = "1.0.3"
+description = "This plugin provides an easy way to render a beautiful API reference based on a OpenAPI/Swagger file with FastAPI."
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "scalar_fastapi-1.0.3-py3-none-any.whl", hash = "sha256:4a47a140795097ad034518ce0e32940f2c54f0f4bc60e4c3289ca30a7e6f954d"},
+    {file = "scalar_fastapi-1.0.3.tar.gz", hash = "sha256:9e9cb8398e298cd435a0171eebe1675b8899eb21e47c238db0d48783143f0ffb"},
+]
+
+[[package]]
 name = "secweb"
 version = "1.18.1"
 description = "Secweb is a pack of security middlewares for fastApi and starlette servers it includes CSP, HSTS, and many more"
@@ -1949,4 +1961,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.13"
-content-hash = "2464b27523ffe8fceff334bc6789b2dfd86abe8b71ffddad574c363f0fef18cf"
+content-hash = "ab00e3575f51be9ee90a9110a79f3ec6326bf7ec8dd5a0883f4cfc8595a0bbd8"

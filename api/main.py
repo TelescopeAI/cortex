@@ -16,7 +16,7 @@ from starlette.types import ASGIApp
 from __version__ import version
 from api.docs.meta import DocsMeta
 from api.routers import PUBLIC_ROUTES
-from core.config.execution_env import ExecutionEnv
+from cortex.core.config.execution_env import ExecutionEnv
 from fastapi.logger import logger as fastapi_logger
 
 API_PREFIX = "/api"

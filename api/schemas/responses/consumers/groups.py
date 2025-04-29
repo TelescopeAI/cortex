@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import Json
 
 from api.schemas.responses.consumers.consumers import ConsumerResponse
-from core.types.telescope import TSModel
+from cortex.core.types.telescope import TSModel
 
 
 class ConsumerGroupResponse(TSModel):

@@ -4,6 +4,7 @@ from fastapi.openapi.docs import (
     get_swagger_ui_html,
     get_swagger_ui_oauth2_redirect_html,
 )
+from scalar_fastapi import get_scalar_api_reference
 
 
 def get_app() -> FastAPI:
@@ -14,8 +15,14 @@ def get_app() -> FastAPI:
 
 DocsRouter = APIRouter()
 
-
 @DocsRouter.get("/docs", include_in_schema=False)
+async def scalar_html(app: FastAPI = Depends(get_app)):
+    return get_scalar_api_reference(
+        openapi_url=app.openapi_url,
+        title=app.title,
+    )
+
+@DocsRouter.get("/docs/classic", include_in_schema=False)
 async def custom_swagger_ui_html(app: FastAPI = Depends(get_app)):
     print(app.openapi_url)
     return get_swagger_ui_html(

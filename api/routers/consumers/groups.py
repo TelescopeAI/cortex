@@ -7,11 +7,11 @@ from api.schemas.requests.consumer.groups import ConsumerGroupCreateRequest, Con
 from api.schemas.responses.consumers.consumers import ConsumerResponse
 from api.schemas.responses.consumers.groups import ConsumerGroupResponse, ConsumerGroupDetailResponse, \
     ConsumerGroupMembershipResponse
-from core.consumers.db.group_service import ConsumerGroupCRUD
-from core.consumers.groups import ConsumerGroup
-from core.exceptions.consumers import ConsumerDoesNotExistError, ConsumerGroupDoesNotExistError, \
+from cortex.core.consumers.db.group_service import ConsumerGroupCRUD
+from cortex.core.consumers.groups import ConsumerGroup
+from cortex.core.exceptions.consumers import ConsumerDoesNotExistError, ConsumerGroupDoesNotExistError, \
     ConsumerGroupAlreadyExistsError
-from core.exceptions.environments import EnvironmentDoesNotExistError
+from cortex.core.exceptions.environments import EnvironmentDoesNotExistError
 
 ConsumerGroupsRouter = APIRouter()
 

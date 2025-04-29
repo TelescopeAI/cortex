@@ -2,7 +2,7 @@ from typing import Optional
 from uuid import UUID
 from pydantic import EmailStr
 
-from core.types.telescope import TSModel
+from cortex.core.types.telescope import TSModel
 
 
 class ConsumerCreateRequest(TSModel):

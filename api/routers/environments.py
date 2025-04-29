@@ -2,12 +2,12 @@ from typing import List
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 
-from core.workspaces.db.environment_service import EnvironmentCRUD
-from core.workspaces.environments.environment import WorkspaceEnvironment
-from core.exceptions.environments import EnvironmentDoesNotExistError, NoEnvironmentsExistError
-from core.exceptions.workspaces import WorkspaceDoesNotExistError
+from cortex.core.exceptions.environments import NoEnvironmentsExistError, EnvironmentDoesNotExistError
+from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
+from cortex.core.exceptions.workspaces import WorkspaceDoesNotExistError
 from api.schemas.requests.environments import EnvironmentCreateRequest, EnvironmentUpdateRequest
 from api.schemas.responses.environments import EnvironmentResponse
+from cortex.core.workspaces.environments.environment import WorkspaceEnvironment
 
 EnvironmentsRouter = APIRouter()
 

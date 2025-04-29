@@ -6,9 +6,9 @@ import pytz
 from fastapi import APIRouter, HTTPException, status
 
 from api.schemas.responses.workspaces import WorkspaceResponse
-from core.exceptions.workspaces import WorkspaceDoesNotExistError, NoWorkspacesExistError, WorkspaceAlreadyExistsError
-from core.workspaces.db.workspace_service import WorkspaceCRUD
-from core.workspaces.workspace import Workspace
+from cortex.core.exceptions.workspaces import WorkspaceDoesNotExistError, NoWorkspacesExistError, WorkspaceAlreadyExistsError
+from cortex.core.workspaces.db.workspace_service import WorkspaceCRUD
+from cortex.core.workspaces.workspace import Workspace
 from api.schemas.requests.workspaces import WorkspaceCreateRequest, WorkspaceUpdateRequest
 
 WorkspaceRouter = APIRouter()

@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import UUID
 from pydantic import BaseModel
 
-from core.types.databases import DataSourceTypes, DataSourceCatalog
+from cortex.core.types.databases import DataSourceTypes, DataSourceCatalog
 
 
 class DataSourceResponse(BaseModel):

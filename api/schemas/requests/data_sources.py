@@ -2,7 +2,7 @@ from typing import Optional
 from uuid import UUID
 from pydantic import BaseModel
 
-from core.types.databases import DataSourceCatalog, DataSourceTypes
+from cortex.core.types.databases import DataSourceCatalog, DataSourceTypes
 
 
 class DataSourceCreateRequest(BaseModel):

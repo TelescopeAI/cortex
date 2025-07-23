@@ -5,9 +5,12 @@ from sqlalchemy import pool
 
 from alembic import context
 import sys
+
+from cortex.core.stores.connection import LocalSession
+
 sys.path = ['', '..'] + sys.path[1:]
 
-from cortex.core.stores import LocalSession
+
 
 
 # this is the Alembic Config object, which provides

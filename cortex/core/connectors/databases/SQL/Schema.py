@@ -38,7 +38,38 @@ def get_sql_schema(database_url: str, include_views: bool = False) -> DatabaseSc
     tables_list: List[TableSchema] = []
 
     for table in metadata.tables.values():
-        columns = [ColumnSchema(name=col.name, type=str(col.type)) for col in table.columns]
+        columns = []
+        for col in table.columns:
+            # Extract detailed type information
+            col_type = col.type
+            type_name = str(col_type).split('(')[0].upper()  # Get base type name
+            
+            # Extract type-specific attributes
+            max_length = None
+            precision = None
+            scale = None
+            
+            if hasattr(col_type, 'length') and col_type.length is not None:
+                max_length = col_type.length
+            if hasattr(col_type, 'precision') and col_type.precision is not None:
+                precision = col_type.precision
+            if hasattr(col_type, 'scale') and col_type.scale is not None:
+                scale = col_type.scale
+                
+            # Get nullable and default information
+            nullable = col.nullable
+            default_value = str(col.default.arg) if col.default is not None and hasattr(col.default, 'arg') else None
+            
+            column_schema = ColumnSchema(
+                name=col.name,
+                type=type_name,
+                max_length=max_length,
+                precision=precision,
+                scale=scale,
+                nullable=nullable,
+                default_value=default_value
+            )
+            columns.append(column_schema)
         primary_keys = [pk.name for pk in table.primary_key]
         foreign_keys_list = get_foreign_keys_schema(table)
 

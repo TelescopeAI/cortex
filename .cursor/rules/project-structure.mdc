@@ -1,0 +1,38 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Project Structure
+
+This project follows a modular architecture with several key components:
+
+## Core Components
+The `core/` directory contains the fundamental business logic and data models:
+- `core/database/`: Database models and services
+- `core/users/`: User management functionality
+- `core/chat/`: Chat-related features
+- `core/assistants/`: Assistant implementations
+- `core/vectors/`: Vector operations and storage
+- `core/models/`: Core data models
+- `core/events/`: Event handling system
+- `core/config/`: Configuration management
+
+## API Layer
+The `api/` directory implements the service endpoints:
+- `api/routers/`: API route definitions
+- `api/schemas/`: Request/response schemas
+- `api/utils/`: API utilities
+- `api/docs/`: API documentation
+- `api/monitoring/`: Monitoring and observability
+
+## Key Files
+- [main.py](mdc:observer/main.py): Application entry point
+- [setup.py](mdc:observer/setup.py): Project setup and dependencies
+- [pyproject.toml](mdc:observer/pyproject.toml): Project metadata and dependencies
+- [docker-compose.yml](mdc:observer/docker-compose.yml): Container orchestration
+
+## Environment Configuration
+The project uses different environment files for various deployments:
+- `local.env`: Local development settings
+- `prod.env`: Production settings

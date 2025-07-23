@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from cortex.core.types.telescope import TSModel
 
@@ -6,6 +6,11 @@ from cortex.core.types.telescope import TSModel
 class ColumnSchema(TSModel):
     name: str
     type: str
+    max_length: Optional[int] = None
+    precision: Optional[int] = None
+    scale: Optional[int] = None
+    nullable: Optional[bool] = None
+    default_value: Optional[str] = None
 
 
 class ForeignKeyRelation(TSModel):

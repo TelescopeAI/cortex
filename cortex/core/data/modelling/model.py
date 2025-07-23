@@ -1,20 +1,38 @@
-# cortex/cortex/core/data/modelling/model.py
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from uuid import UUID, uuid4
 
 import pytz
-from pydantic import Field
+from pydantic import Field, ConfigDict
 
 from cortex.core.types.telescope import TSModel
 
+
 class DataModel(TSModel):
+    """
+    Data model that represents a collection of metrics with shared configuration.
+    Supports versioning and is tied to a specific data source.
+    """
+    model_config = ConfigDict(from_attributes=True)
+    
     id: UUID = Field(default_factory=uuid4)
     data_source_id: UUID
     name: str
-    alias: Optional[str]
-    description: Optional[str]
-    model_type: str  # e.g., 'cube', 'metrics', 'dimensions'
-    config: Dict[str, Any]  # Stores the model configuration in JSON format
+    alias: Optional[str] = None
+    description: Optional[str] = None
+    
+    # Versioning support
+    version: int = 1
+    is_active: bool = True
+    parent_version_id: Optional[UUID] = None  # For version branching
+    
+    # Custom configuration dictionary for model-level settings
+    config: Dict[str, Any] = Field(default_factory=dict)
+    
+    # Validation state
+    is_valid: bool = False
+    validation_errors: Optional[List[str]] = None
+    
+    # Timestamps
     created_at: datetime = Field(default_factory=lambda: datetime.now(pytz.UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(pytz.UTC))

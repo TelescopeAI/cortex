@@ -80,6 +80,34 @@ class CommonSQLClient(DatabaseClient):
 
         column_schema: List[ColumnSchema] = []
         for col in columns:
-            column = ColumnSchema(name=col['name'], type=str(col['type']))
+            # Extract detailed type information
+            col_type = col['type']
+            type_name = str(col_type).split('(')[0].upper()
+            
+            # Extract type-specific attributes
+            max_length = None
+            precision = None
+            scale = None
+            
+            if hasattr(col_type, 'length') and col_type.length is not None:
+                max_length = col_type.length
+            if hasattr(col_type, 'precision') and col_type.precision is not None:
+                precision = col_type.precision
+            if hasattr(col_type, 'scale') and col_type.scale is not None:
+                scale = col_type.scale
+            
+            # Get nullable and default information
+            nullable = col.get('nullable')
+            default_value = str(col['default']) if col.get('default') is not None else None
+            
+            column = ColumnSchema(
+                name=col['name'],
+                type=type_name,
+                max_length=max_length,
+                precision=precision,
+                scale=scale,
+                nullable=nullable,
+                default_value=default_value
+            )
             column_schema.append(column)
         return column_schema

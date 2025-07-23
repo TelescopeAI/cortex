@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from pydantic import Field
 
@@ -14,8 +14,8 @@ class BaseQueryGenerator(TSModel, ABC):
     generated_query: Optional[str] = Field(None, description="The generated query string")
 
     @abstractmethod
-    def generate_query(self) -> str:
-        """Generate the complete query based on the metric"""
+    def generate_query(self, parameters: Optional[Dict[str, Any]] = None) -> str:
+        """Generate the complete query based on the metric with optional parameters"""
         pass
 
     @abstractmethod
@@ -36,4 +36,24 @@ class BaseQueryGenerator(TSModel, ABC):
     @abstractmethod
     def _build_group_by_clause(self) -> Optional[str]:
         """Build the GROUP BY clause for the query if applicable"""
+        pass
+
+    @abstractmethod
+    def _build_join_clause(self) -> Optional[str]:
+        """Build the JOIN clause for the query if applicable"""
+        pass
+
+    @abstractmethod
+    def _build_having_clause(self) -> Optional[str]:
+        """Build the HAVING clause for the query if applicable"""
+        pass
+
+    @abstractmethod
+    def _build_order_by_clause(self) -> Optional[str]:
+        """Build the ORDER BY clause for the query if applicable"""
+        pass
+
+    @abstractmethod
+    def _substitute_parameters(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> str:
+        """Substitute parameters in the query string"""
         pass

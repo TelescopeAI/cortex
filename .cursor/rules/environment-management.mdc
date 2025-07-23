@@ -1,0 +1,38 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Environment Management
+
+## Environment Files
+The project uses different environment files for configuration:
+
+### File Structure
+- `local.env`: Development environment settings
+- `prod.env`: Production environment settings
+- `prod_bck.env`: Backup production settings
+
+### Environment Service
+The environment management is handled by `EnvironmentCRUD` service which is integrated with data source management.
+
+### Best Practices:
+1. Environment Validation:
+- Always validate environment existence before operations
+- Use UUID for environment identification
+- Check environment constraints before data source operations
+
+2. Environment-Specific Configuration:
+- Keep sensitive data in environment files
+- Use different configurations for development and production
+- Document all environment variables
+
+3. Docker Integration:
+- Environment files are used in [docker-compose.yml](mdc:observer/docker-compose.yml)
+- Container configurations adapt based on environment
+- Use environment-specific volumes and networks
+
+4. Security:
+- Never commit sensitive environment values
+- Use `.gitignore` to exclude sensitive files
+- Store credentials separately in `credentials/` directory

@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
-  modules: ['shadcn-nuxt', '@vueuse/nuxt'],
+  modules: ['shadcn-nuxt', '@vueuse/nuxt', 'nuxt-charts', 'nuxt-shiki'],
   css: [
     './app/assets/css/tailwind.css',
     './app/assets/css/global.css'
@@ -29,5 +29,20 @@ export default defineNuxtConfig({
      * @default ".app//components/ui"
      */
     componentDir: './components/ui'
+  },
+  shiki: {
+    /**
+     * Bundled languages to include
+     */
+    bundledLangs: ['sql', 'javascript', 'typescript', 'json', 'html', 'css'],
+    /**
+     * Default language
+     */
+    defaultLang: 'sql',
+    /**
+     * Bundled themes to include
+     */
+    bundledThemes: ['aurora-x', 'andromeeda', 'night-owl', 'one-light'],
+    defaultTheme: 'one-light'
   }
 })

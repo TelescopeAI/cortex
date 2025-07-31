@@ -11,6 +11,9 @@ from cortex.core.query.engine.factory import QueryGeneratorFactory
 from cortex.core.query.engine.processors.output_processor import OutputProcessor
 from cortex.core.semantics.metrics.metric import SemanticMetric
 from cortex.core.types.databases import DataSourceTypes
+from cortex.core.data.db.source_service import DataSourceCRUD
+from cortex.core.connectors.databases.clients.service import DBClientService
+from cortex.core.utils.parsesql import convert_sqlalchemy_rows_to_dict
 from cortex.core.types.telescope import TSModel
 
 
@@ -49,6 +52,8 @@ class QueryExecutor(TSModel):
         metric: SemanticMetric,
         data_model: DataModel,
         parameters: Optional[Dict[str, Any]] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
         source_type: DataSourceTypes = DataSourceTypes.POSTGRESQL
     ) -> Dict[str, Any]:
         """
@@ -76,15 +81,15 @@ class QueryExecutor(TSModel):
         
         try:
             # Resolve metric extensions if needed
-            resolved_metric = MetricService.resolve_metric_extensions(data_model, metric)
+            resolved_metric = metric
             
             # Generate the query
             query_generator = QueryGeneratorFactory.create_generator(resolved_metric, source_type)
-            generated_query = query_generator.generate_query(parameters)
+            generated_query = query_generator.generate_query(parameters, limit, offset)
             log_entry.query = generated_query
             
             # Execute the query (placeholder - would integrate with actual database execution)
-            query_results = self._execute_database_query(generated_query, source_type)
+            query_results = self._execute_database_query(generated_query, metric.data_source_id)
             
             # Apply output format transformations if defined
             if resolved_metric.output_formats:
@@ -144,30 +149,32 @@ class QueryExecutor(TSModel):
                 }
             }
     
-    def _execute_database_query(self, query: str, source_type: DataSourceTypes) -> List[Dict[str, Any]]:
+    def _execute_database_query(self, query: str, data_source_id: UUID) -> List[Dict[str, Any]]:
         """
-        Execute the actual database query.
-        This is a placeholder implementation - would integrate with actual database clients.
-        
+        Execute the actual database query using the specified data source.
+
         Args:
-            query: SQL query to execute
-            source_type: Database source type
-            
+            query: SQL query to execute.
+            data_source_id: The ID of the data source to use for the query.
+
         Returns:
-            List of result dictionaries
+            A list of dictionaries representing the query results.
         """
-        # Placeholder implementation
-        # In a real implementation, this would:
-        # 1. Get database connection from source_type
-        # 2. Execute the query
-        # 3. Convert results to list of dictionaries
-        # 4. Handle database-specific errors
-        
-        # For now, return mock data
-        return [
-            {"id": 1, "name": "Sample Data", "count": 10},
-            {"id": 2, "name": "More Data", "count": 15}
-        ]
+        # 1. Fetch the data source details
+        data_source = DataSourceCRUD.get_data_source(data_source_id)
+
+        # 2. Get the appropriate database client
+        client = DBClientService.get_client(
+            details=data_source.config,
+            db_type=data_source.source_type
+        )
+
+        # 3. Connect, execute the query, and fetch results
+        client.connect()
+        results = client.query(query)
+
+        # 4. Convert results to a list of dictionaries
+        return convert_sqlalchemy_rows_to_dict(results)
     
     def get_query_log(self, limit: Optional[int] = None) -> List[QueryLogEntry]:
         """

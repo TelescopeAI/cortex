@@ -1,6 +1,6 @@
 from typing import Optional
 from uuid import UUID
-from pydantic import EmailStr
+from pydantic import EmailStr, Json
 
 from cortex.core.types.telescope import TSModel
 
@@ -11,6 +11,7 @@ class ConsumerCreateRequest(TSModel):
     last_name: str
     email: EmailStr
     organization: Optional[str] = None
+    properties: Optional[Json] = None
 
 
 class ConsumerUpdateRequest(TSModel):
@@ -18,3 +19,4 @@ class ConsumerUpdateRequest(TSModel):
     last_name: Optional[str] = None
     email: Optional[EmailStr] = None
     organization: Optional[str] = None
+    properties: Optional[Json] = None

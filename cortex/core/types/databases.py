@@ -18,7 +18,3 @@ class DataSourceCatalog(str, Enum):
     DATABASE = "DATABASE"
     API = "API"
     FILE = "FILE"
-
-
-class SQLDatabaseMeasure(Enum):
-    pass

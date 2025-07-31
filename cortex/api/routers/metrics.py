@@ -58,11 +58,13 @@ async def create_metric(metric_data: MetricCreateRequest):
             title=metric_data.title,
             query=metric_data.query,
             table_name=metric_data.table_name,
-            data_source=metric_data.data_source,
+            data_source_id=metric_data.data_source_id,
+            limit=metric_data.limit,
             measures=metric_data.measures,
             dimensions=metric_data.dimensions,
             joins=metric_data.joins,
             aggregations=metric_data.aggregations,
+            filters=metric_data.filters,
             output_formats=metric_data.output_formats,
             parameters=metric_data.parameters,
             public=metric_data.public,
@@ -210,7 +212,11 @@ async def update_metric(metric_id: UUID, metric_data: MetricUpdateRequest):
                 )
             
             # Update metric
-            updates = {k: v for k, v in metric_data.model_dump().items() if v is not None}
+            # Handle explicit None values for fields that can be cleared (like limit)
+            updates = {}
+            for k, v in metric_data.model_dump().items():
+                if v is not None or k in ['limit', 'filters']:  # Allow None for limit and filters
+                    updates[k] = v
             updated_metric = metric_service.update_metric(metric_id, updates)
             
             if not updated_metric:
@@ -316,6 +322,8 @@ async def execute_metric(metric_id: UUID, execution_request: MetricExecutionRequ
                 metric=metric,
                 data_model=pydantic_model,
                 parameters=execution_request.parameters,
+                limit=execution_request.limit,
+                offset=execution_request.offset,
                 source_type=DataSourceTypes.POSTGRESQL
             )
             

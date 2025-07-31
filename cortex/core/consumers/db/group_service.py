@@ -117,6 +117,28 @@ class ConsumerGroupCRUD:
             db_session.close()
 
     @staticmethod
+    def get_groups_for_consumer(consumer_id: UUID) -> List[ConsumerGroup]:
+        db_session = LocalSession().get_session()
+        try:
+            # Check if consumer exists
+            db_consumer = db_session.query(ConsumerORM).filter(
+                ConsumerORM.id == consumer_id
+            ).first()
+            if db_consumer is None:
+                raise ConsumerDoesNotExistError(consumer_id)
+
+            # Get groups that contain this consumer
+            db_groups = db_session.query(ConsumerGroupORM).join(
+                ConsumerGroupORM.consumers
+            ).filter(
+                ConsumerORM.id == consumer_id
+            ).all()
+            
+            return [ConsumerGroup.model_validate(g, from_attributes=True) for g in db_groups]
+        finally:
+            db_session.close()
+
+    @staticmethod
     def update_consumer_group(group: ConsumerGroup) -> ConsumerGroup:
         db_session = LocalSession().get_session()
         try:

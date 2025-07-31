@@ -1,54 +1,107 @@
 <template>
   <div class="space-y-4">
-    <!-- Table Selection -->
+    <!-- Data Source Selection -->
     <div class="space-y-2">
-      <Label for="table-name">Source Table</Label>
-      <Select :model-value="tableName" @update:model-value="(value) => $emit('update:tableName', value as string)">
+      <Label for="data-source">Data Source</Label>
+      <Select :model-value="dataSourceId" @update:model-value="(value) => handleDataSourceChange(value as string)">
         <SelectTrigger>
-          <SelectValue placeholder="Select a table" />
+          <SelectValue placeholder="Select a data source" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem
-            v-for="table in availableTables"
-            :key="table.name"
-            :value="table.name"
+            v-for="source in availableDataSources"
+            :key="source.id"
+            :value="source.id"
           >
-            {{ table.name }}
+            {{ source.name }} ({{ source.source_type }})
           </SelectItem>
         </SelectContent>
       </Select>
       <p class="text-xs text-muted-foreground">
-        Choose the primary table for your metric data
+        Choose the data source for your metric.
       </p>
     </div>
 
-    <!-- Data Source -->
+    <!-- Table vs Custom Query Toggle -->
     <div class="space-y-2">
-      <Label for="data-source">Data Source Alias</Label>
-      <Input
-        id="data-source"
-        :model-value="dataSource"
-        @update:model-value="(value) => $emit('update:dataSource', value as string)"
-        placeholder="default"
-      />
+      <Label>Query Source</Label>
+      <div class="flex items-center space-x-3">
+        <Switch
+          :model-value="useCustomQuery"
+          @update:model-value="handleQuerySourceToggle"
+        />
+        <span class="text-sm text-muted-foreground">
+          {{ useCustomQuery ? 'Custom Query' : 'Table Selection' }} ({{ useCustomQuery ? 'Custom' : 'Default' }})
+        </span>
+      </div>
       <p class="text-xs text-muted-foreground">
-        Alias for the data source connection (usually 'default')
+        Choose between table-based generation or custom SQL query.
       </p>
     </div>
 
-    <!-- Custom Query -->
-    <div class="space-y-2">
-      <Label for="custom-query">Custom SQL Query (Optional)</Label>
+    <!-- Table Selection (shown when toggle is off) -->
+    <div v-if="!useCustomQuery" class="space-y-2">
+      <Label for="table-name">Source Table</Label>
+                  <Select :model-value="tableName" @update:model-value="(value) => $emit('update:tableName', value as string)">
+              <SelectTrigger>
+                <SelectValue placeholder="Select a table" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="table in debugAvailableTables"
+                  :key="table.name"
+                  :value="table.name"
+                >
+                  {{ table.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+      <p class="text-xs text-muted-foreground">
+        Choose the primary table for your metric data.
+      </p>
+    </div>
+
+    <!-- Custom Query (shown when toggle is on) -->
+    <div v-if="useCustomQuery" class="space-y-2">
+      <Label for="custom-query">Custom SQL Query</Label>
       <Textarea
         id="custom-query"
         :model-value="query"
         @update:model-value="(value) => $emit('update:query', value as string)"
         placeholder="SELECT * FROM your_table WHERE condition..."
-        rows="8"
+        rows="4"
         class="font-mono text-sm"
       />
       <p class="text-xs text-muted-foreground">
-        Provide a custom SQL query to override table-based generation. This will take precedence over the selected table.
+        Provide a custom SQL query to override table-based generation.
+      </p>
+    </div>
+
+    <!-- Default Limit -->
+    <div class="space-y-2">
+      <Label>Limit Results</Label>
+      <div class="flex items-center space-x-3">
+        <Switch
+          :model-value="limitEnabled"
+          @update:model-value="handleLimitToggle"
+        />
+        <div v-if="limitEnabled" class="flex items-center space-x-2">
+          <NumberField 
+            :model-value="props.limit"
+            :min="1"
+            @update:model-value="(value) => emit('update:limit', value)"
+          >
+            <NumberFieldContent>
+              <NumberFieldDecrement />
+              <NumberFieldInput placeholder="100" class="w-fit" />
+              <NumberFieldIncrement />
+            </NumberFieldContent>
+          </NumberField>
+          <span class="text-sm text-muted-foreground">results</span>
+        </div>
+      </div>
+      <p class="text-xs text-muted-foreground">
+        Set limits for query results. Can be overridden at execution time.
       </p>
     </div>
 
@@ -62,11 +115,11 @@
         </div>
         <div>
           <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200">
-            Table vs Custom Query
+            Query Source Selection
           </h4>
           <p class="mt-1 text-sm text-blue-700 dark:text-blue-300">
-            If you specify a custom query, it will be used instead of the selected table. 
-            The table selection helps with column discovery for measures and dimensions.
+            Use the toggle to switch between table-based generation (default) and custom SQL queries. 
+            Table selection enables column discovery for measures and dimensions, while custom queries provide full SQL control.
           </p>
         </div>
       </div>
@@ -75,22 +128,80 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { Label } from '~/components/ui/label'
-import { Input } from '~/components/ui/input'
 import { Textarea } from '~/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
+import { NumberField, NumberFieldContent, NumberFieldDecrement, NumberFieldIncrement, NumberFieldInput } from '~/components/ui/number-field'
+import { Switch } from '~/components/ui/switch'
+import { useDataSources } from '~/composables/useDataSources'
 
 interface Props {
   tableName?: string
   query?: string
-  dataSource?: string
+  dataSourceId?: string
+  limit?: number
   availableTables?: Array<{ name: string; columns: any[] }>
+  tableSchema?: any
 }
 
-defineProps<Props>()
-defineEmits<{
+const props = defineProps<Props>()
+const emit = defineEmits<{
   'update:tableName': [value: string]
   'update:query': [value: string]
-  'update:dataSource': [value: string]
+  'update:dataSourceId': [value: string]
+  'update:limit': [value: number | undefined]
 }>()
+
+// Debug availableTables
+const debugAvailableTables = computed(() => {
+  console.log('BasicInfoBuilder - availableTables prop:', props.availableTables)
+  return props.availableTables || []
+})
+
+// Use data sources from tableSchema if available, otherwise fallback to useDataSources
+const { dataSources } = useDataSources()
+const availableDataSources = computed(() => {
+  console.log('BasicInfoBuilder - tableSchema prop:', props.tableSchema)
+  // If we have tableSchema, we can derive the data source from it
+  // For now, fallback to the composable
+  return dataSources.value || []
+})
+
+// Computed property for limit toggle
+const limitEnabled = computed(() => {
+  return props.limit !== undefined && props.limit !== null
+})
+
+// Computed property for query source toggle
+const useCustomQuery = computed(() => {
+  return !!(props.query && props.query.trim())
+})
+
+// Handle limit toggle
+const handleLimitToggle = (enabled: boolean) => {
+  if (enabled) {
+    emit('update:limit', 100) // Default value when enabling
+  } else {
+    emit('update:limit', undefined) // Clear limit when disabling
+  }
+}
+
+// Handle query source toggle
+const handleQuerySourceToggle = (enabled: boolean) => {
+  if (enabled) {
+    // Switch to custom query - clear table name and set default query
+    emit('update:tableName', '')
+    emit('update:query', 'SELECT * FROM your_table WHERE condition...')
+  } else {
+    // Switch to table selection - clear custom query
+    emit('update:query', '')
+  }
+}
+
+// Handle data source change
+const handleDataSourceChange = (value: string) => {
+  console.log('BasicInfoBuilder - Data source changed to:', value)
+  emit('update:dataSourceId', value)
+}
 </script> 

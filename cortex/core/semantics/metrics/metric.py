@@ -9,6 +9,7 @@ from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.measures import SemanticMeasure
 from cortex.core.semantics.joins import SemanticJoin
 from cortex.core.semantics.aggregations import SemanticAggregation
+from cortex.core.semantics.filters import SemanticFilter
 from cortex.core.semantics.output_formats import OutputFormat
 from cortex.core.semantics.refresh_keys import RefreshKey
 from cortex.core.semantics.parameters import ParameterDefinition
@@ -48,13 +49,15 @@ class SemanticMetric(TSModel):
     # Query definition
     query: Optional[str] = None  # Custom SQL query
     table_name: Optional[str] = None  # Source table
-    data_source: Optional[str] = "default"  # Data source name for multi-database support
+    data_source_id: Optional[UUID] = None  # Foreign key to the data source
+    limit: Optional[int] = None  # Default limit for query results
     
     # Metric components
     measures: Optional[List[SemanticMeasure]] = None
     dimensions: Optional[List[SemanticDimension]] = None
     joins: Optional[List[SemanticJoin]] = None
     aggregations: Optional[List[SemanticAggregation]] = None
+    filters: Optional[List[SemanticFilter]] = None
     output_formats: Optional[List[OutputFormat]] = None
     
     # Parameters for dynamic query generation
@@ -62,6 +65,9 @@ class SemanticMetric(TSModel):
     
     # Version tracking
     model_version: int = 1  # Version of the model this metric belongs to
+    
+    # Metric inheritance
+    extends: Optional[UUID] = None  # Parent metric ID for inheritance
     
     # Visibility control
     public: bool = True  # Whether this metric can be queried via API
@@ -80,5 +86,7 @@ class SemanticMetric(TSModel):
     # Timestamps
     created_at: datetime = Field(default_factory=lambda: datetime.now(pytz.UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(pytz.UTC))
+
+    model_config = ConfigDict(from_attributes=True, use_enum_values=True)
 
 

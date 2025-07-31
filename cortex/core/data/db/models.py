@@ -76,18 +76,21 @@ class MetricORM(BaseDBModel):
     # Query definition
     query = mapped_column(Text, nullable=True)  # Custom SQL query
     table_name = mapped_column(String, nullable=True)  # Source table
-    data_source = mapped_column(String, nullable=True, default="default")
+    data_source_id = mapped_column(UUID, ForeignKey("data_sources.id"), nullable=True, index=True)
+    limit = mapped_column(Integer, nullable=True)  # Default limit for query results
     
     # Metric components (stored as JSON)
     measures = mapped_column(JSONB, nullable=True)  # Array of SemanticMeasure objects
     dimensions = mapped_column(JSONB, nullable=True)  # Array of SemanticDimension objects
     joins = mapped_column(JSONB, nullable=True)  # Array of SemanticJoin objects
     aggregations = mapped_column(JSONB, nullable=True)  # Array of SemanticAggregation objects
+    filters = mapped_column(JSONB, nullable=True)  # Array of SemanticFilter objects
     output_formats = mapped_column(JSONB, nullable=True)  # Array of OutputFormat objects
     
     # Configuration
     parameters = mapped_column(JSONB, nullable=True)  # Parameter definitions
     model_version = mapped_column(Integer, nullable=False, default=1)
+    extends = mapped_column(UUID, ForeignKey("metrics.id"), nullable=True, index=True)  # Parent metric for inheritance
     public = mapped_column(Boolean, nullable=False, default=True, index=True)
     refresh_key = mapped_column(JSONB, nullable=True)  # RefreshKey object
     meta = mapped_column(JSONB, nullable=True)  # Custom metadata

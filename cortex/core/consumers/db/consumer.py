@@ -1,7 +1,7 @@
 from datetime import datetime
 
 import pytz
-from sqlalchemy import String, DateTime, ForeignKey, UUID
+from sqlalchemy import String, DateTime, ForeignKey, UUID, JSON
 from sqlalchemy.orm import mapped_column
 
 from cortex.core.stores.sqlalchemy import BaseDBModel
@@ -15,5 +15,6 @@ class ConsumerORM(BaseDBModel):
     last_name = mapped_column(String, nullable=False)
     email = mapped_column(String, nullable=False, index=True)
     organization = mapped_column(String, nullable=True)
+    properties = mapped_column(JSON, nullable=True)
     created_at = mapped_column(DateTime, default=datetime.now(pytz.UTC))
     updated_at = mapped_column(DateTime, default=datetime.now(pytz.UTC), onupdate=datetime.now(pytz.UTC))

@@ -7,6 +7,7 @@ from cortex.core.semantics.measures import SemanticMeasure
 from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.joins import SemanticJoin
 from cortex.core.semantics.aggregations import SemanticAggregation
+from cortex.core.semantics.filters import SemanticFilter
 from cortex.core.semantics.output_formats import OutputFormat
 from cortex.core.semantics.refresh_keys import RefreshKey
 from cortex.core.semantics.parameters import ParameterDefinition
@@ -22,11 +23,13 @@ class MetricResponse(BaseModel):
     title: Optional[str]
     query: Optional[str]
     table_name: Optional[str]
-    data_source: Optional[str]
+    data_source_id: Optional[UUID]
+    limit: Optional[int]
     measures: Optional[List[Dict[str, Any]]]  # Simplified as dict for now
     dimensions: Optional[List[Dict[str, Any]]]  # Simplified as dict for now
     joins: Optional[List[Dict[str, Any]]]  # Simplified as dict for now
     aggregations: Optional[List[Dict[str, Any]]]  # Simplified as dict for now
+    filters: Optional[List[Dict[str, Any]]]  # Simplified as dict for now
     output_formats: Optional[List[Dict[str, Any]]]  # Simplified as dict for now
     parameters: Optional[Dict[str, Any]]  # Simplified as dict for now
     model_version: int
@@ -52,8 +55,9 @@ class MetricListResponse(BaseModel):
 class MetricExecutionResponse(BaseModel):
     """Response schema for metric execution results"""
     success: bool
+    # Execution stats, query info, etc.
+    metadata: Dict[str, Any]  
     data: Optional[List[Dict[str, Any]]]
-    metadata: Dict[str, Any]  # Execution stats, query info, etc.
     errors: Optional[List[str]]
 
 

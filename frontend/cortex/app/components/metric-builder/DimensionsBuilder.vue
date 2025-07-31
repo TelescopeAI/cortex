@@ -3,33 +3,11 @@
     <!-- Add Dimension Button -->
     <div class="flex justify-between items-center">
       <h4 class="text-sm font-medium">Dimensions</h4>
-      <DropdownMenu>
-        <DropdownMenuTrigger as-child>
-          <Button variant="outline" size="sm">
-            <Plus class="h-4 w-4 mr-2" />
-            Add Dimension
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent>
-          <DropdownMenuSub v-for="table in availableTables" :key="table.name">
-            <DropdownMenuSubTrigger>
-              <Database class="h-4 w-4 mr-2" />
-              {{ table.name }}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuItem
-                v-for="column in table.columns"
-                :key="`${table.name}.${column.name}`"
-                @click="addDimension(table.name, column)"
-                class="cursor-pointer"
-              >
-                <span class="font-mono text-sm">{{ column.name }}</span>
-                <span class="text-xs text-muted-foreground ml-2">({{ column.type }})</span>
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <ColumnSelector
+        :available-tables="availableTables"
+        button-text="Add Dimension"
+        @select="addDimension"
+      />
     </div>
 
     <!-- Dimensions List -->
@@ -73,12 +51,27 @@
               />
             </div>
 
-            <!-- Primary Key -->
+            <!-- Table -->
             <div class="space-y-2">
-              <Label>Primary Key</Label>
+              <Label>Table</Label>
+              <Select v-model="dimension.table" @update:model-value="updateDimensions">
+                <SelectTrigger>
+                  <SelectValue placeholder="Select table" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="table in availableTables" :key="table.name" :value="table.name">{{ table.name }}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4">
+            <!-- Query -->
+            <div class="space-y-2">
+              <Label>Query *</Label>
               <Input
-                v-model="dimension.primary_key"
-                placeholder="Optional primary key column"
+                v-model="dimension.query"
+                placeholder="e.g., column_name or CAST(column AS type)"
                 @update:model-value="updateDimensions"
               />
             </div>
@@ -107,6 +100,7 @@ import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
 import { Textarea } from '~/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -116,12 +110,14 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '~/components/ui/dropdown-menu'
-import { Plus, Grid, X, Database } from 'lucide-vue-next'
+import { Grid, X } from 'lucide-vue-next'
+import ColumnSelector from '~/components/ColumnSelector.vue'
 
 interface Dimension {
   name: string
   description?: string
-  primary_key?: string
+  query: string
+  table?: string
 }
 
 interface Props {
@@ -159,7 +155,8 @@ const addDimension = (tableName: string, column: any) => {
   const newDimension: Dimension = {
     name: column.name,
     description: `Dimension based on ${tableName}.${column.name}`,
-    primary_key: column.primary_key ? column.name : undefined
+    query: column.name,
+    table: tableName
   }
   
   dimensions.value.push(newDimension)

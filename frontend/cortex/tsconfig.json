@@ -8,6 +8,8 @@
       "@/*": ["./app/*"],
       "~~/*": ["./*"],
       "@@/*": ["./*"]
-    }
+    },
+//    "allowSyntheticDefaultImports": true,
+//    "types": ["topojson-client"]
   }
 }

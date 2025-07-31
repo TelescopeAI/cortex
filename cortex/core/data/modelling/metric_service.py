@@ -80,25 +80,19 @@ class MetricService(TSModel):
         return False
     
     @staticmethod
-    def resolve_metric_extensions(data_model: DataModel, metric: SemanticMetric) -> SemanticMetric:
+    def resolve_metric_extensions(metric: SemanticMetric) -> SemanticMetric:
         """
-        Resolve metric extensions by merging base metric with extension definitions.
-        NOTE: Since metrics are now stored separately, this method returns the metric as-is.
-        Extension resolution would require fetching the base metric from the metrics API.
+        Resolve metric extensions by applying base metric configurations.
         
         Args:
-            data_model: DataModel containing all metrics
-            metric: SemanticMetric that may extend another metric
+            metric: The metric to resolve
             
         Returns:
-            The metric as-is since base metrics are stored separately
+            Resolved metric with extensions applied
         """
-        if not metric.extends:
-            return metric
-        
-        # Since metrics are now stored separately, we can't easily resolve extensions
-        # without making additional API calls. For now, return the metric as-is.
-        # TODO: Implement extension resolution by fetching base metrics from the API
+        # For now, metric extension has no effect - return the metric as-is
+        # The extends field is a UUID pointing to a parent metric ID
+        # TODO: Implement extension resolution by fetching parent metrics from the database
         return metric
     
     @staticmethod
@@ -116,30 +110,21 @@ class MetricService(TSModel):
         pass
     
     @staticmethod
-    def get_metric_dependencies(data_model: DataModel, metric_alias: str) -> List[str]:
+    def get_metric_dependencies(metric: SemanticMetric) -> List[UUID]:
         """
-        Get the list of metric aliases that the given metric depends on (through extensions).
+        Get the list of metric UUIDs that the given metric depends on (through extensions).
         
         Args:
-            data_model: DataModel containing all metrics
-            metric_alias: Alias of the metric to analyze
+            metric: The metric to analyze
             
         Returns:
-            List of metric aliases that this metric depends on
+            List of metric UUIDs that this metric depends on
         """
         dependencies = []
-        visited = set()
         
-        def _collect_dependencies(alias: str):
-            if alias in visited:
-                return  # Avoid circular dependencies
-            
-            visited.add(alias)
-            metric = MetricService.get_metric_by_alias(data_model, alias)
-            
-            if metric and metric.extends:
-                dependencies.append(metric.extends)
-                _collect_dependencies(metric.extends)
+        # For now, just return the direct parent if it exists
+        # TODO: Implement recursive dependency resolution by fetching parent metrics from database
+        if metric.extends:
+            dependencies.append(metric.extends)
         
-        _collect_dependencies(metric_alias)
         return dependencies 

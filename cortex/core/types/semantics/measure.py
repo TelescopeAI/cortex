@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class SemanticMeasureType(Enum):
+class SemanticMeasureType(str, Enum):
     STRING = "string"
     NUMBER = "number"
     COUNT = "count"
@@ -17,7 +17,7 @@ class SemanticMeasureType(Enum):
     DURATION = "duration"
 
 
-class SemanticMeasureOutputFormat(Enum):
+class SemanticMeasureOutputFormat(str, Enum):
     PERCENT = "percent"
     CURRENCY = "currency"
 

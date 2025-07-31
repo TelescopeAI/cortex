@@ -29,7 +29,14 @@ class JoinProcessor(TSModel):
             if join_clause:
                 join_clauses.append(join_clause)
         
-        return " ".join(join_clauses) if join_clauses else None
+        # Format joins with line breaks and proper indentation
+        if len(join_clauses) > 1:
+            formatted_clauses = [join_clauses[0]]  # First join
+            for clause in join_clauses[1:]:
+                formatted_clauses.append(f"\n{clause}")
+            return " ".join(formatted_clauses)
+        else:
+            return " ".join(join_clauses) if join_clauses else None
     
     @staticmethod
     def _build_single_join(join: SemanticJoin) -> str:
@@ -57,13 +64,13 @@ class JoinProcessor(TSModel):
                 condition_sql = f"{condition.left_table}.{condition.left_column} {condition.operator} {condition.right_table}.{condition.right_column}"
                 conditions.append(condition_sql)
         
-        # Build the complete JOIN clause
+        # Build the complete JOIN clause with proper indentation
         on_clause = " AND ".join(conditions)
         
         if join.alias:
-            return f"{join_type_sql} {join.right_table} AS {join.alias} ON {on_clause}"
+            return f"{join_type_sql} {join.right_table} AS {join.alias}\n  ON {on_clause}"
         else:
-            return f"{join_type_sql} {join.right_table} ON {on_clause}"
+            return f"{join_type_sql} {join.right_table}\n  ON {on_clause}"
     
     @staticmethod
     def _get_join_type_sql(join_type: JoinType) -> str:

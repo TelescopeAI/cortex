@@ -3,38 +3,17 @@
     <!-- Add Measure Button -->
     <div class="flex justify-between items-center">
       <h4 class="text-sm font-medium">Measures</h4>
-      <DropdownMenu>
-        <DropdownMenuTrigger as-child>
-          <Button variant="outline" size="sm">
-            <Plus class="h-4 w-4 mr-2" />
-            Add Measure
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent>
-          <DropdownMenuSub v-for="table in availableTables" :key="table.name">
-            <DropdownMenuSubTrigger>
-              <Database class="h-4 w-4 mr-2" />
-              {{ table.name }}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuItem
-                v-for="column in table.columns"
-                :key="`${table.name}.${column.name}`"
-                @click="addMeasure(table.name, column)"
-                class="cursor-pointer"
-              >
-                <span class="font-mono text-sm">{{ column.name }}</span>
-                <span class="text-xs text-muted-foreground ml-2">({{ column.type }})</span>
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem @click="addCustomMeasure" class="cursor-pointer">
-            <Code class="h-4 w-4 mr-2" />
-            Custom Measure
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div class="flex items-center space-x-2">
+        <ColumnSelector
+          :available-tables="availableTables"
+          button-text="Add Measure"
+          @select="addMeasure"
+        />
+        <Button variant="outline" size="sm" @click="addCustomMeasure">
+          <Code class="h-4 w-4 mr-2" />
+          Custom Measure
+        </Button>
+      </div>
     </div>
 
     <!-- Measures List -->
@@ -74,7 +53,7 @@
               <Input
                 v-model="measure.name"
                 placeholder="measure_name"
-                @update:model-value="updateMeasures"
+                @update:model-value="(value) => handleNameChange(measure, value)"
               />
             </div>
 
@@ -107,14 +86,27 @@
               />
             </div>
 
+            <!-- Query -->
+            <div class="space-y-2">
+              <Label>Query</Label>
+              <Input
+                v-model="measure.query"
+                placeholder="column_name or expression"
+                @update:model-value="updateMeasures"
+              />
+            </div>
+
             <!-- Table -->
             <div class="space-y-2">
               <Label>Table</Label>
-              <Input
-                v-model="measure.table"
-                placeholder="table_name"
-                @update:model-value="updateMeasures"
-              />
+              <Select v-model="measure.table" @update:model-value="updateMeasures">
+                <SelectTrigger>
+                  <SelectValue placeholder="Select table" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="table in availableTables" :key="table.name" :value="table.name">{{ table.name }}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -129,17 +121,7 @@
             />
           </div>
 
-          <!-- Custom Query for custom type -->
-          <div v-if="measure.type === 'custom'" class="space-y-2">
-            <Label>Custom Query Expression</Label>
-            <Textarea
-              v-model="measure.query"
-              placeholder="SUM(column_name * rate) as custom_calculation"
-              rows="3"
-              class="font-mono text-sm"
-              @update:model-value="updateMeasures"
-            />
-          </div>
+          
 
           <!-- Format Options -->
           <div class="space-y-2">
@@ -180,7 +162,8 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '~/components/ui/dropdown-menu'
-import { Plus, Target, X, Database, Code } from 'lucide-vue-next'
+import { Target, X, Code } from 'lucide-vue-next'
+import ColumnSelector from '~/components/ColumnSelector.vue'
 
 interface Measure {
   name: string
@@ -190,7 +173,6 @@ interface Measure {
   alias?: string
   query?: string
   table?: string
-  primary_key?: string
 }
 
 interface Props {
@@ -224,13 +206,37 @@ const updateMeasures = () => {
   emit('update:measures', measures.value)
 }
 
+const toSnakeCase = (str: string) => {
+  if (!str) return '';
+  return String(str)
+    .replace(/^[^A-Za-z0-9]*|[^A-Za-z0-9]*$/g, '')
+    .replace(/([a-z])([A-Z])/g, (m, a, b) => `${a}_${b.toLowerCase()}`)
+    .replace(/[^A-Za-z0-9]+|_+/g, '_')
+    .toLowerCase();
+};
+
+const handleNameChange = (measure: Measure, newName: string | number) => {
+  const newNameStr = String(newName);
+    const snakeCaseName = toSnakeCase(newNameStr);
+  // Auto-fill alias and query only if they are empty or were auto-filled before
+  if (!measure.alias || measure.alias === toSnakeCase(measure.name)) {
+    measure.alias = snakeCaseName;
+  }
+  if (!measure.query || measure.query === toSnakeCase(measure.name)) {
+    measure.query = snakeCaseName;
+  }
+    measure.name = newNameStr;
+  updateMeasures();
+};
+
 const addMeasure = (tableName: string, column: any) => {
   const newMeasure: Measure = {
     name: `${column.name}_measure`,
     description: `Measure based on ${tableName}.${column.name}`,
     type: getDefaultType(column.type),
     table: tableName,
-    alias: column.name
+    alias: column.name,
+    query: column.name
   }
   
   measures.value.push(newMeasure)
@@ -242,7 +248,9 @@ const addCustomMeasure = () => {
     name: 'custom_measure',
     description: 'Custom measure',
     type: 'custom',
-    query: ''
+    query: 'custom_measure',
+    alias: 'custom_measure',
+    table: undefined // User will select table manually
   }
   
   measures.value.push(newMeasure)

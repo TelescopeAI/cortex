@@ -8,9 +8,13 @@ import { Textarea } from '~/components/ui/textarea'
 import { Separator } from '~/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
-import { ArrowLeft, Edit, PlayCircle, Settings, Copy, History, Code, Save, Loader2 } from 'lucide-vue-next'
+import { ArrowLeft, Edit, PlayCircle, Settings, Copy, History, Code, Save, Loader2, CheckCircle, XCircle } from 'lucide-vue-next'
+import ExecutionResultViewer from '@/components/ExecutionResultViewer.vue'
 import { toast } from 'vue-sonner'
-import MetricSchemaBuilder from '~/components/metric-builder/MetricSchemaBuilder.vue'
+import SchemaSheet from '~/components/metric-builder/SchemaSheet.vue'
+import CodeHighlight from '~/components/CodeHighlight.vue'
+import EditMetricDialog from '~/components/EditMetricDialog.vue'
+import { useDateFormat, useTimeAgo, useNavigatorLanguage } from '@vueuse/core'
 
 // Page metadata
 definePageMeta({
@@ -32,87 +36,43 @@ const parentModel = ref<any>(null)
 const metricVersions = ref<any[]>([])
 const executionResults = ref<any>(null)
 const compiledQuery = ref('')
+const validationResult = ref<any>(null)
 const loading = ref(true)
 const executing = ref(false)
 const validating = ref(false)
 const compiling = ref(false)
 
-// Schema editing state
-const isEditingSchema = ref(false)
-const schemaData = ref<any>({})
+// Schema dialog state
+const schemaDialogOpen = ref(false)
 const selectedDataSourceId = ref<string>('')
-const isSavingSchema = ref(false)
 
 // Execution parameters
 const executionParams = ref<Record<string, any>>({})
 
-// Schema editing functions
-const onEditSchema = () => {
-  isEditingSchema.value = true
-  // Initialize schema data from current metric
-  if (metric.value) {
-    schemaData.value = {
-      table_name: metric.value.table_name,
-      query: metric.value.query,
-      data_source: metric.value.data_source,
-      measures: metric.value.measures || [],
-      dimensions: metric.value.dimensions || [],
-      joins: metric.value.joins || [],
-      aggregations: metric.value.aggregations || [],
-      parameters: metric.value.parameters || {}
-    }
-  }
-  // Set data source ID for schema loading
-  if (parentModel.value?.data_source_id) {
+// Schema dialog functions
+const onOpenSchema = () => {
+  // Set data source ID for schema loading if not already set
+  if (parentModel.value?.data_source_id && !selectedDataSourceId.value) {
     selectedDataSourceId.value = parentModel.value.data_source_id
   }
+  schemaDialogOpen.value = true
 }
 
-const onSaveSchema = async () => {
+const onSaveSchema = async (schemaData: any) => {
   if (!metric.value) return
   
-  isSavingSchema.value = true
   try {
     // Call the backend API to update the metric
-    const updatedMetric = await updateMetric(metricId, {
-      table_name: schemaData.value.table_name,
-      query: schemaData.value.query,
-      data_source: schemaData.value.data_source,
-      measures: schemaData.value.measures,
-      dimensions: schemaData.value.dimensions,
-      joins: schemaData.value.joins,
-      aggregations: schemaData.value.aggregations,
-      parameters: schemaData.value.parameters
-    })
+    const updatedMetric = await updateMetric(metricId, schemaData)
     
     if (updatedMetric) {
       // Update local state with the response from backend
       Object.assign(metric.value, updatedMetric)
-      isEditingSchema.value = false
       toast.success('Schema updated successfully')
     }
   } catch (error) {
     console.error('Failed to save schema:', error)
     toast.error('Failed to save schema')
-  } finally {
-    isSavingSchema.value = false
-  }
-}
-
-const onCancelSchemaEdit = () => {
-  isEditingSchema.value = false
-  // Reset schema data to original values
-  if (metric.value) {
-    schemaData.value = {
-      table_name: metric.value.table_name,
-      query: metric.value.query,
-      data_source: metric.value.data_source,
-      measures: metric.value.measures || [],
-      dimensions: metric.value.dimensions || [],
-      joins: metric.value.joins || [],
-      aggregations: metric.value.aggregations || [],
-      parameters: metric.value.parameters || {}
-    }
   }
 }
 
@@ -124,7 +84,7 @@ const metricStatus = computed(() => {
 })
 
 const hasParameters = computed(() => {
-  return metric.value?.parameters && metric.value.parameters.length > 0
+  return metric.value?.parameters && Array.isArray(metric.value.parameters) && metric.value.parameters.length > 0
 })
 
 const getStatusBadgeVariant = (status: string) => {
@@ -145,19 +105,32 @@ const getStatusIcon = (status: string) => {
   }
 }
 
+// Get user's locale from browser
+const { language } = useNavigatorLanguage()
+
+// Helper function to convert UTC date string to local timezone
+const convertUTCToLocal = (dateString: string): Date => {
+  // Parse the UTC date string and convert to local timezone
+  const utcDate = new Date(dateString)
+  return new Date(utcDate.getTime() - (utcDate.getTimezoneOffset() * 60000))
+}
+
+// Format relative time using VueUse
 const formatRelativeTime = (date: string | Date) => {
-  const now = new Date()
-  const target = new Date(date)
-  const diffMs = now.getTime() - target.getTime()
-  const diffMinutes = Math.floor(diffMs / (1000 * 60))
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-  
-  if (diffMinutes < 1) return 'just now'
-  if (diffMinutes < 60) return `${diffMinutes}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays < 7) return `${diffDays}d ago`
-  return target.toLocaleDateString()
+  // Convert UTC to local timezone before passing to useTimeAgo
+  const localDate = typeof date === 'string' ? convertUTCToLocal(date) : date
+  return useTimeAgo(localDate, { 
+    updateInterval: 1000 // Update every second for real-time updates
+  })
+}
+
+// Format absolute date using VueUse
+const formatAbsoluteDate = (date: string | Date) => {
+  // Convert UTC to local timezone before passing to useDateFormat
+  const localDate = typeof date === 'string' ? convertUTCToLocal(date) : date
+  return useDateFormat(localDate, 'MMM D, YYYY', { 
+    locales: language.value || 'en-US' 
+  })
 }
 
 // Event handlers
@@ -181,10 +154,12 @@ const onValidate = async () => {
   validating.value = true
   try {
     const result = await validateMetric(metricId)
+    validationResult.value = result
     console.log('Validation result:', result)
-    // Show validation results
+    toast.success('Validation completed')
   } catch (error) {
     console.error('Failed to validate metric:', error)
+    toast.error('Validation failed')
   } finally {
     validating.value = false
   }
@@ -196,9 +171,11 @@ const onCompile = async () => {
   compiling.value = true
   try {
     const result = await compileMetric(metricId)
-    compiledQuery.value = (result as any)?.sql || (result as any)?.query || 'No compiled query available'
+    compiledQuery.value = (result as any)?.compiled_query || (result as any)?.sql || (result as any)?.query || 'No compiled query available'
+    toast.success('Query compiled successfully')
   } catch (error) {
     console.error('Failed to compile metric:', error)
+    toast.error('Compilation failed')
   } finally {
     compiling.value = false
   }
@@ -221,14 +198,25 @@ const onExecute = async () => {
 }
 
 const onCopyQuery = () => {
-  if (metric.value?.sql_query) {
-    navigator.clipboard.writeText(metric.value.sql_query)
-    // Show toast notification
+  if (metric.value?.query) {
+    navigator.clipboard.writeText(metric.value.query)
+    toast.success('Query copied to clipboard')
+  } else if (compiledQuery.value && compiledQuery.value !== 'No compiled query available') {
+    navigator.clipboard.writeText(compiledQuery.value)
+    toast.success('Compiled query copied to clipboard')
+  } else {
+    toast.error('No query available to copy')
   }
 }
 
 const onParameterChange = (paramName: string, value: any) => {
   executionParams.value[paramName] = value
+}
+
+const handleMetricUpdated = (updatedMetric: any) => {
+  // Update the local metric data with the updated data
+  Object.assign(metric.value, updatedMetric)
+  toast.success('Metric updated successfully')
 }
 
 // Data loading
@@ -277,6 +265,11 @@ const loadData = async () => {
       loadParentModel(),
       loadMetricVersions()
     ])
+    
+    // Set selected data source ID for schema loading
+    if (parentModel.value?.data_source_id) {
+      selectedDataSourceId.value = parentModel.value.data_source_id
+    }
   } finally {
     loading.value = false
   }
@@ -284,7 +277,7 @@ const loadData = async () => {
 
 // Initialize parameters from metric definition
 const initializeParameters = () => {
-  if (metric.value?.parameters) {
+  if (metric.value?.parameters && Array.isArray(metric.value.parameters)) {
     const params: Record<string, any> = {}
     metric.value.parameters.forEach((param: any) => {
       if (param.default_value !== undefined) {
@@ -313,7 +306,7 @@ onMounted(() => {
       </div>
       <Card>
         <CardContent class="pt-6">
-          <div class="space-y-4">
+          <div class="space-y-4 min-w-0">
             <div class="h-6 bg-muted rounded w-1/4 animate-pulse"></div>
             <div class="h-32 bg-muted rounded animate-pulse"></div>
           </div>
@@ -323,52 +316,36 @@ onMounted(() => {
 
     <!-- Content -->
     <div v-else-if="metric" class="space-y-6">
+      <div class="flex flex-col space-y-4"></div>
       <!-- Header -->
-      <div class="flex items-center justify-between">
-        <div class="flex items-center space-x-4">
-          <Button variant="ghost" size="sm" @click="onBack">
-            <ArrowLeft class="h-4 w-4 mr-2" />
-            Back to Metrics
-          </Button>
+      <div class="flex flex-col space-y-4">
+        <Button variant="ghost" size="sm" @click="onBack" class="w-fit">
+          <ArrowLeft class="h-4 w-4 mr-2" />
+          Back to Metrics
+        </Button>
+        
+        <div class="flex flex-col gap-y-4 items-start justify-between">
           <div class="space-y-1">
             <h1 class="text-2xl font-semibold tracking-tight">
-              🎯 {{ metric.name }}
+              {{ metric.name }}
             </h1>
             <p class="text-sm text-muted-foreground">
-              {{ metric.title || 'Metric Details' }}
+              {{ metric.title || '' }}
             </p>
           </div>
-        </div>
-        
-        <div class="flex items-center space-x-2">
-          <Button variant="outline" size="sm" @click="onValidate" :disabled="validating">
-            <Settings class="h-4 w-4 mr-2" />
-            {{ validating ? 'Validating...' : 'Validate' }}
-          </Button>
-          <Button variant="outline" size="sm" @click="onCompile" :disabled="compiling">
-            <Code class="h-4 w-4 mr-2" />
-            {{ compiling ? 'Compiling...' : 'Compile' }}
-          </Button>
-          <Button variant="outline" size="sm" @click="onExecute" :disabled="executing">
-            <PlayCircle class="h-4 w-4 mr-2" />
-            {{ executing ? 'Executing...' : 'Execute' }}
-          </Button>
-          <Button variant="outline" size="sm" @click="onEditSchema" :disabled="isEditingSchema">
-            <Edit class="h-4 w-4 mr-2" />
-            Edit Schema
-          </Button>
-          <Button size="sm" @click="onEdit">
-            <Edit class="h-4 w-4 mr-2" />
-            Edit
-          </Button>
+          <div class="flex flex-col space-y-2">
+            <EditMetricDialog
+              :metric="metric"
+              @updated="handleMetricUpdated"
+            />
+          </div>
         </div>
       </div>
 
       <!-- Main Content Tabs -->
       <Tabs default-value="overview" class="w-full">
-        <TabsList class="grid w-full grid-cols-5">
+        <TabsList class="grid w-full grid-cols-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="schema">Schema</TabsTrigger>
           <TabsTrigger value="query">Query</TabsTrigger>
           <TabsTrigger value="execute">Execute</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
@@ -457,93 +434,111 @@ onMounted(() => {
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div class="space-y-1">
                   <div class="text-muted-foreground">Created</div>
-                  <div>{{ formatRelativeTime(metric.created_at) }}</div>
+                  <div class="space-y-1">
+                    <div>{{ formatAbsoluteDate(metric.created_at) }}</div>
+                    <div class="text-xs text-muted-foreground">{{ formatRelativeTime(metric.created_at) }}</div>
+                  </div>
                 </div>
                 <div class="space-y-1">
                   <div class="text-muted-foreground">Last Updated</div>
-                  <div>{{ formatRelativeTime(metric.updated_at) }}</div>
+                  <div class="space-y-1">
+                    <div>{{ formatAbsoluteDate(metric.updated_at) }}</div>
+                    <div class="text-xs text-muted-foreground">{{ formatRelativeTime(metric.updated_at) }}</div>
+                  </div>
                 </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <!-- Schema Tab -->
-        <TabsContent value="schema" class="space-y-6">
-          <div v-if="!isEditingSchema" class="space-y-6">
-            <!-- Schema Overview -->
-            <Card>
-              <CardHeader>
-                <CardTitle>Schema Overview</CardTitle>
-              </CardHeader>
-              <CardContent class="space-y-4">
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div class="space-y-2">
-                    <div class="text-sm font-medium text-muted-foreground">Table</div>
-                    <div class="text-sm font-mono">{{ metric.table_name || 'Not specified' }}</div>
-                  </div>
-                  <div class="space-y-2">
-                    <div class="text-sm font-medium text-muted-foreground">Measures</div>
-                    <div class="text-sm">{{ metric.measures?.length || 0 }}</div>
-                  </div>
-                  <div class="space-y-2">
-                    <div class="text-sm font-medium text-muted-foreground">Dimensions</div>
-                    <div class="text-sm">{{ metric.dimensions?.length || 0 }}</div>
-                  </div>
-                  <div class="space-y-2">
-                    <div class="text-sm font-medium text-muted-foreground">Parameters</div>
-                    <div class="text-sm">{{ Object.keys(metric.parameters || {}).length }}</div>
-                  </div>
-                </div>
-                
-                <div class="flex justify-end">
-                  <Button @click="onEditSchema">
-                    <Edit class="h-4 w-4 mr-2" />
-                    Edit Schema
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
 
-          <!-- Schema Builder (when editing) -->
-          <div v-else class="space-y-6">
-            <div class="flex items-center justify-between">
-              <h3 class="text-lg font-semibold">Edit Metric Schema</h3>
-              <div class="flex items-center space-x-2">
-                <Button variant="outline" @click="onCancelSchemaEdit" :disabled="isSavingSchema">
-                  Cancel
-                </Button>
-                <Button @click="onSaveSchema" :disabled="isSavingSchema">
-                  <Save v-if="!isSavingSchema" class="h-4 w-4 mr-2" />
-                  <Loader2 v-else class="h-4 w-4 mr-2 animate-spin" />
-                  {{ isSavingSchema ? 'Saving...' : 'Save Schema' }}
-                </Button>
-              </div>
-            </div>
-
-            <MetricSchemaBuilder
-              v-model="schemaData"
-              :selected-data-source-id="selectedDataSourceId"
-            />
-          </div>
-        </TabsContent>
 
         <!-- Query Tab -->
         <TabsContent value="query" class="space-y-6">
+          <!-- Action Buttons -->
           <Card>
-            <CardHeader class="flex flex-row items-center justify-between">
-              <CardTitle>SQL Query</CardTitle>
-              <Button variant="outline" size="sm" @click="onCopyQuery">
-                <Copy class="h-4 w-4 mr-2" />
-                Copy
-              </Button>
+            <CardHeader>
+              <CardTitle>Query Actions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div class="flex gap-4">
+                <Button @click="onValidate" :disabled="validating" class="flex-1">
+                  <Settings class="h-4 w-4 mr-2" />
+                  {{ validating ? 'Validating...' : 'Validate Query' }}
+                </Button>
+                <Button @click="onCompile" :disabled="compiling" class="flex-1">
+                  <Code class="h-4 w-4 mr-2" />
+                  {{ compiling ? 'Compiling...' : 'Compile Query' }}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <!-- Validation Results -->
+          <Card v-if="validationResult">
+            <CardHeader>
+              <CardTitle class="flex items-center space-x-2">
+                <CheckCircle v-if="validationResult.is_valid" class="h-5 w-5 text-green-500" />
+                <XCircle v-else class="h-5 w-5 text-red-500" />
+                <span>Validation Results</span>
+              </CardTitle>
             </CardHeader>
             <CardContent class="space-y-4">
-              <div v-if="metric.sql_query" class="space-y-2">
-                <div class="bg-muted p-4 rounded text-sm font-mono overflow-x-auto">
-                  <pre>{{ metric.sql_query }}</pre>
+              <div class="flex items-center space-x-2">
+                <Badge :variant="validationResult.is_valid ? 'default' : 'destructive'">
+                  {{ validationResult.is_valid ? 'Valid' : 'Invalid' }}
+                </Badge>
+              </div>
+              
+              <div v-if="validationResult.errors && validationResult.errors.length > 0" class="space-y-2">
+                <h4 class="font-medium text-sm">Errors:</h4>
+                <div class="space-y-1">
+                  <div v-for="error in validationResult.errors" :key="error" class="text-sm text-red-600 bg-red-50 p-2 rounded">
+                    {{ error }}
+                  </div>
                 </div>
+              </div>
+              
+              <div v-if="validationResult.warnings && validationResult.warnings.length > 0" class="space-y-2">
+                <h4 class="font-medium text-sm">Warnings:</h4>
+                <div class="space-y-1">
+                  <div v-for="warning in validationResult.warnings" :key="warning" class="text-sm text-yellow-600 bg-yellow-50 p-2 rounded">
+                    {{ warning }}
+                  </div>
+                </div>
+              </div>
+              
+              <div v-if="validationResult.compiled_query" class="space-y-2">
+                <CodeHighlight lang="sql" :code="validationResult.compiled_query" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <!-- Compilation Results -->
+          <Card v-if="compiledQuery">
+            <CardHeader>
+              <CardTitle class="flex items-center space-x-2">
+                <Code class="h-5 w-5" />
+                <span>Compiled Query</span>
+                <Button variant="outline" size="sm" @click="onCopyQuery" class="ml-auto">
+                  <Copy class="h-4 w-4 mr-2" />
+                  Copy
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent class="">
+              <CodeHighlight lang="sql" :code="compiledQuery" />
+            </CardContent>
+          </Card>
+
+          <!-- Original SQL Query -->
+          <Card>
+            <CardHeader>
+              <CardTitle>Original SQL Query</CardTitle>
+            </CardHeader>
+            <CardContent class="space-y-4">
+              <div v-if="metric.query">
+                <CodeHighlight lang="sql" :code="metric.query" />
               </div>
               <div v-else class="text-center py-8">
                 <Code class="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -554,22 +549,10 @@ onMounted(() => {
               </div>
             </CardContent>
           </Card>
-
-          <!-- Compiled Query -->
-          <Card v-if="compiledQuery">
-            <CardHeader>
-              <CardTitle>Compiled Query</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div class="bg-muted p-4 rounded text-sm font-mono overflow-x-auto">
-                <pre>{{ compiledQuery }}</pre>
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
 
         <!-- Execute Tab -->
-        <TabsContent value="execute" class="space-y-6">
+        <TabsContent value="execute" class="space-y-6 min-w-0">
           <!-- Parameter Input -->
           <Card v-if="hasParameters">
             <CardHeader>
@@ -621,9 +604,7 @@ onMounted(() => {
               <CardTitle>Results</CardTitle>
             </CardHeader>
             <CardContent>
-              <div class="bg-muted p-4 rounded text-sm font-mono overflow-x-auto">
-                <pre>{{ JSON.stringify(executionResults, null, 2) }}</pre>
-              </div>
+              <ExecutionResultViewer :data="executionResults.data || []" :metadata="executionResults.metadata || {}" />
             </CardContent>
           </Card>
         </TabsContent>
@@ -655,7 +636,12 @@ onMounted(() => {
                 <TableBody>
                   <TableRow v-for="version in metricVersions" :key="version.id">
                     <TableCell class="font-medium">{{ version.version }}</TableCell>
-                    <TableCell>{{ formatRelativeTime(version.created_at) }}</TableCell>
+                    <TableCell>
+                      <div class="space-y-1">
+                        <div>{{ formatAbsoluteDate(version.created_at) }}</div>
+                        <div class="text-xs text-muted-foreground">{{ formatRelativeTime(version.created_at) }}</div>
+                      </div>
+                    </TableCell>
                     <TableCell>{{ version.change_summary || 'No summary' }}</TableCell>
                     <TableCell>
                       <Button variant="ghost" size="sm">
@@ -682,5 +668,14 @@ onMounted(() => {
         Back to Metrics
       </Button>
     </div>
+
+    <!-- Schema Sheet -->
+    <SchemaSheet
+      :open="schemaDialogOpen"
+      :metric="metric"
+      :selected-data-source-id="selectedDataSourceId"
+      @update:open="schemaDialogOpen = $event"
+      @save="onSaveSchema"
+    />
   </div>
 </template> 

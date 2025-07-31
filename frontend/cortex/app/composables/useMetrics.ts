@@ -7,16 +7,22 @@ export interface SemanticMetric {
   title?: string
   description?: string
   data_model_id: string
+  data_source_id?: string
   data_model?: {
     id: string
     name: string
   }
-  sql_query?: string
+  query?: string
+  table_name?: string
+  limit?: number
   parameters?: MetricParameter[]
   public: boolean
   model_version?: number
+  measures?: any[]
+  dimensions?: any[]
   joins?: any[]
   aggregations?: any[]
+  filters?: any[]
   output_formats?: any[]
   extends?: string
   add?: Record<string, any>
@@ -61,9 +67,9 @@ export const useMetrics = () => {
     
     try {
       // Use the correct backend endpoint with proper URL construction
-      const response = await $fetch(apiUrl('/api/v1/metrics'), {
+      const response = await $fetch<{ metrics: SemanticMetric[], total_count: number, page: number, page_size: number }>(apiUrl('/api/v1/metrics'), {
         query: filters
-      }) as { metrics: SemanticMetric[], total_count: number, page: number, page_size: number }
+      })
       metrics.value = response.metrics || []
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch metrics'
@@ -75,7 +81,7 @@ export const useMetrics = () => {
 
   const getMetric = async (id: string): Promise<SemanticMetric | null> => {
     try {
-      const response = await $fetch(apiUrl(`/api/v1/metrics/${id}`)) as SemanticMetric
+      const response = await $fetch<SemanticMetric>(apiUrl(`/api/v1/metrics/${id}`))
       return response
     } catch (err) {
       console.error('Failed to fetch metric:', err)
@@ -85,10 +91,10 @@ export const useMetrics = () => {
 
   const createMetric = async (metricData: Partial<SemanticMetric>): Promise<SemanticMetric | null> => {
     try {
-      const response = await $fetch(apiUrl('/api/v1/metrics'), {
+      const response = await $fetch<SemanticMetric>(apiUrl('/api/v1/metrics'), {
         method: 'POST',
         body: metricData
-      }) as SemanticMetric
+      })
       // Add to local state
       metrics.value.push(response)
       return response
@@ -100,10 +106,10 @@ export const useMetrics = () => {
 
   const updateMetric = async (id: string, metricData: Partial<SemanticMetric>): Promise<SemanticMetric | null> => {
     try {
-      const response = await $fetch(apiUrl(`/api/v1/metrics/${id}`), {
+      const response = await $fetch<SemanticMetric>(apiUrl(`/api/v1/metrics/${id}`), {
         method: 'PUT',
         body: metricData
-      }) as SemanticMetric
+      })
       // Update local state
       const index = metrics.value.findIndex(m => m.id === id)
       if (index !== -1) {
@@ -169,10 +175,10 @@ export const useMetrics = () => {
 
   const cloneMetric = async (id: string, cloneRequest: { name: string; alias?: string }) => {
     try {
-      const response = await $fetch(apiUrl(`/api/v1/metrics/${id}/clone`), {
+      const response = await $fetch<SemanticMetric>(apiUrl(`/api/v1/metrics/${id}/clone`), {
         method: 'POST',
         body: cloneRequest
-      }) as SemanticMetric
+      })
       // Add to local state
       metrics.value.push(response)
       return response
@@ -184,7 +190,7 @@ export const useMetrics = () => {
 
   const getMetricVersions = async (id: string) => {
     try {
-      const response = await $fetch(apiUrl(`/api/v1/metrics/${id}/versions`)) as { versions: any[], total_count: number }
+      const response = await $fetch<{ versions: any[], total_count: number }>(apiUrl(`/api/v1/metrics/${id}/versions`))
       return response.versions || []
     } catch (err) {
       console.error('Failed to fetch metric versions:', err)
@@ -194,9 +200,9 @@ export const useMetrics = () => {
 
   const getMetricsForModel = async (modelId: string) => {
     try {
-      const response = await $fetch(apiUrl('/api/v1/metrics'), {
+      const response = await $fetch<{ metrics: SemanticMetric[], total_count: number, page: number, page_size: number }>(apiUrl('/api/v1/metrics'), {
         query: { data_model_id: modelId }
-      }) as { metrics: SemanticMetric[], total_count: number, page: number, page_size: number }
+      })
       return response.metrics || []
     } catch (err) {
       console.error('Failed to fetch metrics for model:', err)

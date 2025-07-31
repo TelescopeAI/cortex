@@ -57,6 +57,7 @@ class ConsumerCRUD(TSModel):
                         last_name=consumer.last_name,
                         email=consumer.email,
                         organization=consumer.organization,
+                        properties=consumer.properties,
                         created_at=datetime.now(pytz.UTC),
                         updated_at=datetime.now(pytz.UTC)
                     )
@@ -84,6 +85,7 @@ class ConsumerCRUD(TSModel):
             ).first()
             if db_consumer is None:
                 raise ConsumerDoesNotExistError(consumer_id)
+            
             return Consumer.model_validate(db_consumer, from_attributes=True)
         except Exception as e:
             raise e
@@ -100,6 +102,7 @@ class ConsumerCRUD(TSModel):
             db_consumers = db_session.query(ConsumerORM).filter(
                 ConsumerORM.environment_id == environment_id
             ).all()
+            
             return [Consumer.model_validate(c, from_attributes=True) for c in db_consumers]
         except Exception as e:
             raise e
@@ -135,6 +138,10 @@ class ConsumerCRUD(TSModel):
 
             if consumer.organization != db_consumer.organization:
                 db_consumer.organization = consumer.organization
+                changes_made = True
+
+            if consumer.properties != db_consumer.properties:
+                db_consumer.properties = consumer.properties
                 changes_made = True
 
             # Only update the database if changes were made

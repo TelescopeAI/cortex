@@ -10,15 +10,15 @@ class DataModelResponse(TSModel):
     """Response schema for data model operations."""
     id: UUID
     name: str
-    alias: Optional[str]
-    description: Optional[str]
+    alias: Optional[str] = None
+    description: Optional[str] = None
     data_source_id: UUID
     version: int
     is_active: bool
-    parent_version_id: Optional[UUID]
+    parent_version_id: Optional[UUID] = None
     config: Dict[str, Any]
     is_valid: bool
-    validation_errors: Optional[List[str]]
+    validation_errors: Optional[List[str]] = None
     metrics_count: int = 0
     created_at: datetime
     updated_at: datetime
@@ -55,11 +55,11 @@ class QueryLogResponse(TSModel):
     metric_id: UUID
     data_model_id: UUID
     query: str
-    parameters: Optional[Dict[str, Any]]
+    parameters: Optional[Dict[str, Any]] = None
     execution_time_ms: float
-    row_count: Optional[int]
+    row_count: Optional[int] = None
     success: bool
-    error_message: Optional[str]
+    error_message: Optional[str] = None
     executed_at: datetime
 
 
@@ -85,11 +85,11 @@ class ModelVersionResponse(TSModel):
     version_number: int
     semantic_model: Dict[str, Any]
     is_valid: bool
-    validation_errors: Optional[List[str]]
-    compiled_queries: Optional[Dict[str, str]]
-    description: Optional[str]
-    created_by: Optional[UUID]
-    tags: Optional[List[str]]
+    validation_errors: Optional[List[str]] = None
+    compiled_queries: Optional[Dict[str, str]] = None
+    description: Optional[str] = None
+    created_by: Optional[UUID] = None
+    tags: Optional[List[str]] = None
     config: Dict[str, Any]
     created_at: datetime
 
@@ -104,10 +104,10 @@ class MetricResponse(TSModel):
     """Response schema for individual metrics."""
     id: UUID
     name: str
-    alias: Optional[str]
-    description: Optional[str]
-    title: Optional[str]
-    data_source: Optional[str]
+    alias: Optional[str] = None
+    description: Optional[str] = None
+    title: Optional[str] = None
+    data_source_id: Optional[UUID] = None
     model_version: int
     public: bool
     created_at: datetime

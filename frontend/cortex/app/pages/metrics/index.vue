@@ -16,6 +16,7 @@ import type { DataModel } from '~/composables/useDataModels'
 import type { SemanticMetric } from '~/composables/useMetrics'
 import CreateMetricDialog from '~/components/CreateMetricDialog.vue'
 import { toast } from 'vue-sonner'
+import { useDateFormat, useTimeAgo, useNavigatorLanguage } from '@vueuse/core'
 
 // Page metadata
 definePageMeta({
@@ -27,13 +28,13 @@ definePageMeta({
 const { models, loading: modelsLoading, fetchModels, createModel } = useDataModels()
 const { metrics, loading: metricsLoading, fetchMetrics, executeMetric, validateMetric, createMetric } = useMetrics()
 const { currentView, modelFilters, metricFilters, switchView } = useMetricsView()
-const { dataSources, loading: dataSourcesLoading } = useDataSources()
+const { dataSources, loading: dataSourcesLoading, getDataSourceSchema } = useDataSources()
 
 // Component state
 const searchQuery = ref('')
-const selectedDataSource = ref<string | undefined>(undefined)
-const selectedStatus = ref<string | undefined>(undefined)
-const selectedModel = ref<string | undefined>(undefined)
+const selectedDataSource = ref<string | null>(null)
+const selectedStatus = ref<string | null>(null)
+const selectedModel = ref<string | null>(null)
 
 // Dialog states
 const showCreateModelDialog = ref(false)
@@ -70,27 +71,13 @@ const modelFormErrors = ref({
   data_source_id: ''
 })
 
-// Auto-generate alias from name
-const generateAlias = (name: string): string => {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '_')
-    .replace(/[^a-z0-9_]/g, '')
-    .replace(/_{2,}/g, '_')
-    .replace(/^_+|_+$/g, '')
-}
-
-// Validate alias format
-const validateAlias = (alias: string): boolean => {
-  // Allow only lowercase letters, numbers, and underscores
-  // No spaces, no special characters except underscore
-  const aliasRegex = /^[a-z0-9_]+$/
-  return aliasRegex.test(alias) && alias.length > 0
-}
-
-// Track if alias was manually edited
-const aliasManuallyEdited = ref(false)
+const { 
+  generateAlias, 
+  validateAlias, 
+  getAliasError, 
+  aliasManuallyEdited, 
+  markAsManuallyEdited
+} = useAliasGenerator()
 
 // Watch for name changes to auto-generate alias
 watch(() => modelForm.value.name, (newName) => {
@@ -103,16 +90,12 @@ watch(() => modelForm.value.name, (newName) => {
 
 // Track manual alias edits
 const onAliasInput = () => {
-  aliasManuallyEdited.value = true
+  markAsManuallyEdited()
 }
 
 // Watch for alias changes to validate
 watch(() => modelForm.value.alias, (newAlias) => {
-  if (newAlias && !validateAlias(newAlias)) {
-    modelFormErrors.value.alias = 'Alias can only contain lowercase letters, numbers, and underscores'
-  } else {
-    modelFormErrors.value.alias = ''
-  }
+  modelFormErrors.value.alias = getAliasError(newAlias)
 })
 
 // Watch for data source changes
@@ -181,20 +164,32 @@ const getMetricStatus = (metric: any) => {
   return 'valid' // placeholder
 }
 
-// Add date utility
+// Get user's locale from browser
+const { language } = useNavigatorLanguage()
+
+// Helper function to convert UTC date string to local timezone
+const convertUTCToLocal = (dateString: string): Date => {
+  // Parse the UTC date string and convert to local timezone
+  const utcDate = new Date(dateString)
+  return new Date(utcDate.getTime() - (utcDate.getTimezoneOffset() * 60000))
+}
+
+// Format relative time using VueUse
 const formatRelativeTime = (date: string | Date) => {
-  const now = new Date()
-  const target = new Date(date)
-  const diffMs = now.getTime() - target.getTime()
-  const diffMinutes = Math.floor(diffMs / (1000 * 60))
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-  
-  if (diffMinutes < 1) return 'just now'
-  if (diffMinutes < 60) return `${diffMinutes}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays < 7) return `${diffDays}d ago`
-  return target.toLocaleDateString()
+  // Convert UTC to local timezone before passing to useTimeAgo
+  const localDate = typeof date === 'string' ? convertUTCToLocal(date) : date
+  return useTimeAgo(localDate, { 
+    updateInterval: 1000 // Update every second for real-time updates
+  })
+}
+
+// Format absolute date using VueUse
+const formatAbsoluteDate = (date: string | Date) => {
+  // Convert UTC to local timezone before passing to useDateFormat
+  const localDate = typeof date === 'string' ? convertUTCToLocal(date) : date
+  return useDateFormat(localDate, 'MMM D, YYYY', { 
+    locales: language.value || 'en-US' 
+  })
 }
 
 const getStatusBadgeVariant = (status: string) => {
@@ -527,7 +522,7 @@ onMounted(() => {
               <SelectValue placeholder="Data Source" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem :value="undefined">All Sources</SelectItem>
+              <SelectItem :value="null">All Sources</SelectItem>
               <SelectItem value="postgres">PostgreSQL</SelectItem>
               <SelectItem value="bigquery">BigQuery</SelectItem>
               <SelectItem value="snowflake">Snowflake</SelectItem>
@@ -540,7 +535,7 @@ onMounted(() => {
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem :value="undefined">All Status</SelectItem>
+              <SelectItem :value="null">All Status</SelectItem>
               <SelectItem value="valid">Valid</SelectItem>
               <SelectItem value="invalid">Invalid</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
@@ -553,7 +548,7 @@ onMounted(() => {
               <SelectValue placeholder="Model" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem :value="undefined">All Models</SelectItem>
+              <SelectItem :value="null">All Models</SelectItem>
               <SelectItem v-for="model in models || []" :key="model.id" :value="model.id">
                 {{ model.name }}
               </SelectItem>
@@ -613,7 +608,7 @@ onMounted(() => {
           <p class="text-sm text-muted-foreground mb-4">
             Try adjusting your search or filter criteria
           </p>
-          <Button variant="outline" @click="searchQuery = ''; selectedDataSource = undefined; selectedStatus = undefined">
+          <Button variant="outline" @click="searchQuery = ''; selectedDataSource = null; selectedStatus = null">
             Clear Filters
           </Button>
         </div>
@@ -645,7 +640,7 @@ onMounted(() => {
                 <div class="flex items-center justify-between text-sm">
                   <div class="flex items-center space-x-2 text-muted-foreground">
                     <span>📊</span>
-                    <span>{{ model.data_source?.name || 'Unknown' }}</span>
+                    <span>{{ getDataSourceSchema(model.data_source_id) }}</span>
                   </div>
                   <span class="text-muted-foreground">v{{ model.version }}</span>
                 </div>
@@ -727,7 +722,7 @@ onMounted(() => {
           <p class="text-sm text-muted-foreground mb-4">
             Try adjusting your search or filter criteria
           </p>
-          <Button variant="outline" @click="searchQuery = ''; selectedModel = undefined; selectedStatus = undefined">
+          <Button variant="outline" @click="searchQuery = ''; selectedModel = null; selectedStatus = null">
             Clear Filters
           </Button>
         </div>
@@ -812,6 +807,7 @@ onMounted(() => {
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

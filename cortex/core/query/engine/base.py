@@ -14,8 +14,8 @@ class BaseQueryGenerator(TSModel, ABC):
     generated_query: Optional[str] = Field(None, description="The generated query string")
 
     @abstractmethod
-    def generate_query(self, parameters: Optional[Dict[str, Any]] = None) -> str:
-        """Generate the complete query based on the metric with optional parameters"""
+    def generate_query(self, parameters: Optional[Dict[str, Any]] = None, limit: Optional[int] = None, offset: Optional[int] = None) -> str:
+        """Generate the complete query based on the metric with optional parameters and limit/offset"""
         pass
 
     @abstractmethod
@@ -51,6 +51,11 @@ class BaseQueryGenerator(TSModel, ABC):
     @abstractmethod
     def _build_order_by_clause(self) -> Optional[str]:
         """Build the ORDER BY clause for the query if applicable"""
+        pass
+
+    @abstractmethod
+    def _build_limit_clause(self, limit: Optional[int] = None, offset: Optional[int] = None) -> Optional[str]:
+        """Build the LIMIT clause for the query if applicable"""
         pass
 
     @abstractmethod

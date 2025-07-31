@@ -82,9 +82,22 @@ async def get_consumer_group_with_members(group_id: UUID):
     """Get a consumer group by ID with all its members"""
     try:
         group, consumers = ConsumerGroupCRUD.get_consumer_group_with_consumers(group_id)
+        # Get groups for each consumer
+        from cortex.core.consumers.db.service import ConsumerCRUD
+        consumer_responses = []
+        
+        for consumer in consumers:
+            groups = ConsumerGroupCRUD.get_groups_for_consumer(consumer.id)
+            groups_data = [{"id": str(g.id), "name": g.name, "description": g.description} for g in groups]
+            
+            consumer_dict = consumer.model_dump()
+            consumer_dict["groups"] = groups_data
+            
+            consumer_responses.append(ConsumerResponse(**consumer_dict))
+        
         return ConsumerGroupDetailResponse(
             **group.model_dump(),
-            consumers=[ConsumerResponse(**c.model_dump()) for c in consumers]
+            consumers=consumer_responses
         )
     except ConsumerGroupDoesNotExistError as e:
         raise HTTPException(

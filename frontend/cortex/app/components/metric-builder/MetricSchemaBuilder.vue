@@ -1,59 +1,15 @@
 <template>
   <div class="space-y-6">
-    <!-- Header with Preview Toggle -->
-    <div class="flex items-center justify-between">
-      <div>
-        <h3 class="text-lg font-semibold">Metric Schema Builder</h3>
-        <p class="text-sm text-muted-foreground">Build your metric schema using the visual builder or JSON editor</p>
-      </div>
-      <div class="flex items-center space-x-2">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          @click="showJsonPreview = !showJsonPreview"
-        >
-          <Code class="h-4 w-4 mr-2" />
-          {{ showJsonPreview ? 'Hide' : 'Show' }} JSON
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          @click="loadSchemaFromDataSource"
-          :disabled="!selectedDataSourceId || schemaLoading"
-        >
-          <Database class="h-4 w-4 mr-2" />
-          {{ schemaLoading ? 'Loading...' : 'Load Schema' }}
-        </Button>
-      </div>
-    </div>
-
-    <!-- JSON Preview -->
-    <Card v-if="showJsonPreview">
-      <CardHeader>
-        <CardTitle class="flex items-center space-x-2">
-          <Code class="h-5 w-5" />
-          <span>Generated Schema JSON</span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Textarea
-          :model-value="generatedJson"
-          readonly
-          rows="20"
-          class="font-mono text-sm"
-          placeholder="Schema JSON will appear here as you build..."
-        />
-      </CardContent>
-    </Card>
 
     <!-- Builder Tabs -->
     <Tabs v-model="activeTab" class="w-full">
-      <TabsList class="grid w-full grid-cols-6">
+      <TabsList class="grid w-full grid-cols-7">
         <TabsTrigger value="basic">Basic Info</TabsTrigger>
         <TabsTrigger value="measures">Measures</TabsTrigger>
         <TabsTrigger value="dimensions">Dimensions</TabsTrigger>
         <TabsTrigger value="joins">Joins</TabsTrigger>
         <TabsTrigger value="aggregations">Aggregations</TabsTrigger>
+        <TabsTrigger value="filters">Filters</TabsTrigger>
         <TabsTrigger value="parameters">Parameters</TabsTrigger>
       </TabsList>
 
@@ -70,8 +26,10 @@
             <BasicInfoBuilder
               v-model:table-name="schema.table_name"
               v-model:query="schema.query"
-              v-model:data-source="schema.data_source"
+              v-model:data-source-id="schema.data_source_id"
+              v-model:limit="schema.limit"
               :available-tables="availableTables"
+              :table-schema="props.tableSchema"
             />
           </CardContent>
         </Card>
@@ -89,7 +47,6 @@
           <CardContent>
             <MeasuresBuilder
               v-model:measures="schema.measures"
-              :available-columns="availableColumns"
               :table-schema="tableSchema"
             />
           </CardContent>
@@ -108,7 +65,6 @@
           <CardContent>
             <DimensionsBuilder
               v-model:dimensions="schema.dimensions"
-              :available-columns="availableColumns"
               :table-schema="tableSchema"
             />
           </CardContent>
@@ -126,9 +82,8 @@
           </CardHeader>
           <CardContent>
             <JoinsBuilder
-              v-model:joins="schema.joins"
+              v-model="schema.joins"
               :available-tables="availableTables"
-              :table-schema="tableSchema"
             />
           </CardContent>
         </Card>
@@ -148,6 +103,24 @@
               v-model:aggregations="schema.aggregations"
               :available-columns="availableColumns"
               :measures="schema.measures"
+            />
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <!-- Filters Tab -->
+      <TabsContent value="filters" class="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Filters</CardTitle>
+            <CardDescription>
+              Define filters to apply to your metric data
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FiltersBuilder
+              v-model:filters="schema.filters"
+              :table-schema="tableSchema"
             />
           </CardContent>
         </Card>
@@ -176,12 +149,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '~/components/ui/card'
-import { Button } from '~/components/ui/button'
-import { Textarea } from '~/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
-import { Code, Database } from 'lucide-vue-next'
-import { useDataSources } from '~/composables/useDataSources'
-import { toast } from 'vue-sonner'
 
 // Import builder components
 import BasicInfoBuilder from './BasicInfoBuilder.vue'
@@ -189,91 +157,63 @@ import MeasuresBuilder from './MeasuresBuilder.vue'
 import DimensionsBuilder from './DimensionsBuilder.vue'
 import JoinsBuilder from './JoinsBuilder.vue'
 import AggregationsBuilder from './AggregationsBuilder.vue'
+import FiltersBuilder from './FiltersBuilder.vue'
 import ParametersBuilder from './ParametersBuilder.vue'
 
 interface Props {
   selectedDataSourceId?: string
   modelValue?: any
+  tableSchema?: any
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
   'update:modelValue': [value: any]
+  'update:selectedDataSourceId': [value: string | undefined]
 }>()
 
 const { getDataSourceSchema } = useDataSources()
 
 // Component state
 const activeTab = ref('basic')
-const showJsonPreview = ref(false)
-const schemaLoading = ref(false)
-const tableSchema = ref<any>(null)
 
 // Schema data structure
 const schema = ref({
   table_name: '',
   query: '',
-  data_source: 'default',
+  data_source_id: undefined as string | undefined,
+  limit: undefined as number | undefined,
   measures: [],
   dimensions: [],
   joins: [],
   aggregations: [],
-  parameters: {}
+  filters: [],
+  parameters: {},
+  tableSchema: undefined as any
 })
 
 // Available data computed from schema
 const availableTables = computed(() => {
-  if (!tableSchema.value?.tables) return []
-  return tableSchema.value.tables.map((table: any) => ({
-    name: table.name,
-    columns: table.columns
-  }))
+  console.log('MetricSchemaBuilder - tableSchema prop:', props.tableSchema)
+  if (!props.tableSchema?.tables) return []
+  return props.tableSchema.tables
 })
 
 const availableColumns = computed(() => {
-  if (!schema.value.table_name || !tableSchema.value?.tables) return []
-  
-  const selectedTable = tableSchema.value.tables.find(
-    (table: any) => table.name === schema.value.table_name
-  )
-  
-  return selectedTable?.columns || []
-})
-
-// Generated JSON
-const generatedJson = computed(() => {
-  const cleanSchema = JSON.parse(JSON.stringify(schema.value))
-  
-  // Remove empty arrays and null values
-  Object.keys(cleanSchema).forEach(key => {
-    if (Array.isArray(cleanSchema[key]) && cleanSchema[key].length === 0) {
-      delete cleanSchema[key]
-    } else if (cleanSchema[key] === null || cleanSchema[key] === '') {
-      delete cleanSchema[key]
+  if (!props.tableSchema?.tables) return []
+  const columns: Array<{ name: string; type: string }> = []
+  props.tableSchema.tables.forEach((table: any) => {
+    if (table.columns) {
+      table.columns.forEach((column: any) => {
+        columns.push({
+          name: `${table.name}.${column.name}`,
+          type: column.type
+        })
+      })
     }
   })
-  
-  return JSON.stringify(cleanSchema, null, 2)
+  return columns
 })
-
-// Load schema from data source
-const loadSchemaFromDataSource = async () => {
-  if (!props.selectedDataSourceId) {
-    toast.error('Please select a data source first')
-    return
-  }
-
-  schemaLoading.value = true
-  try {
-    tableSchema.value = await getDataSourceSchema(props.selectedDataSourceId)
-    toast.success('Schema loaded successfully')
-  } catch (error) {
-    console.error('Failed to load schema:', error)
-    toast.error('Failed to load schema from data source')
-  } finally {
-    schemaLoading.value = false
-  }
-}
 
 // Watch for changes and emit to parent
 watch(schema, (newSchema) => {
@@ -287,12 +227,44 @@ watch(() => props.modelValue, (newValue) => {
   }
 }, { immediate: true })
 
-// Auto-load schema if data source is provided
+// Load schema from data source
+const loadSchemaFromDataSource = async (dataSourceId: string) => {
+  try {
+    console.log('Loading schema for data source:', dataSourceId)
+    const loadedSchema = await getDataSourceSchema(dataSourceId)
+    console.log('Schema loaded:', loadedSchema)
+    
+    // Update the schema data with the new tableSchema
+    schema.value = { ...schema.value, tableSchema: loadedSchema }
+    
+    // Emit the updated schema to parent
+    emit('update:modelValue', schema.value)
+  } catch (error) {
+    console.error('Failed to load schema:', error)
+  }
+}
+
+// Sync selectedDataSourceId prop with schema.data_source_id (only when prop changes)
 watch(() => props.selectedDataSourceId, (newId) => {
-  if (newId) {
-    // Always reload schema when data source changes
-    tableSchema.value = null
-    loadSchemaFromDataSource()
+  console.log('MetricSchemaBuilder - selectedDataSourceId prop changed to:', newId)
+  if (newId !== schema.value.data_source_id) {
+    schema.value.data_source_id = newId || undefined
   }
 }, { immediate: true })
+
+// Emit data source changes back to parent
+watch(() => schema.value.data_source_id, (newId) => {
+  console.log('MetricSchemaBuilder - schema.data_source_id changed to:', newId)
+  emit('update:selectedDataSourceId', newId)
+}, { immediate: false })
+
+// Auto-load schema when selectedDataSourceId changes
+watch(() => props.selectedDataSourceId, (newDataSourceId, oldDataSourceId) => {
+  if (newDataSourceId && newDataSourceId !== oldDataSourceId) {
+    console.log('Data source changed from', oldDataSourceId, 'to', newDataSourceId)
+    loadSchemaFromDataSource(newDataSourceId)
+  }
+}, { immediate: true })
+
+
 </script> 

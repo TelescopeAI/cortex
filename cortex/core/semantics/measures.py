@@ -1,5 +1,7 @@
 from typing import Optional
 
+from pydantic import ConfigDict
+
 from cortex.core.types.semantics.measure import SemanticMeasureType, SemanticMeasureOutputFormat
 from cortex.core.types.telescope import TSModel
 
@@ -30,3 +32,5 @@ class SemanticMeasure(TSModel):
     query: Optional[str] = None
     table: Optional[str] = None
     primary_key: Optional[str] = None
+
+    model_config = ConfigDict(use_enum_values=True)

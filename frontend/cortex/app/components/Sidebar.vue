@@ -25,7 +25,7 @@ import {
 } from '~/components/ui/dropdown-menu';
 import CreateWorkspaceDialog from '~/components/CreateWorkspaceDialog.vue';
 import CreateEnvironmentDialog from '~/components/CreateEnvironmentDialog.vue';
-import { ChevronDown, Check, Database, Target } from 'lucide-vue-next';
+import { ChevronDown, Check, Database, Target, Users } from 'lucide-vue-next';
 
 const { workspaces, selectedWorkspaceId, selectWorkspace } = useWorkspaces();
 const { environments, selectedEnvironmentId, selectEnvironment } = useEnvironments();
@@ -161,6 +161,10 @@ watch([selectedWorkspaceId, selectedEnvironmentId], ([workspaceId, environmentId
         <SidebarMenuButton @click="router.push('/metrics')">
           <Target class="w-4 h-4 mr-2" />
           Metrics
+        </SidebarMenuButton>
+        <SidebarMenuButton @click="router.push('/consumers')">
+          <Users class="w-4 h-4 mr-2" />
+          Consumers
         </SidebarMenuButton>
       </SidebarMenu>
     </SidebarContent>

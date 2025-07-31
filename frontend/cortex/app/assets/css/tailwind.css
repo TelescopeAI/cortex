@@ -138,4 +138,26 @@
   body {
     @apply bg-background text-foreground;
   }
+  :root {
+    --vis-color0: oklch(0.72 0.192 149.58) !important;
+    --vis-color1: oklch(0.63 0.1963 157.86) !important;
+
+    --tooltip-label-color: rgba(255, 255, 255, 0.5) !important;
+    --tooltip-value-color: rgba(255, 255, 255, 1) !important;
+
+    --vis-axis-grid-color: rgba(255, 255, 255, 0.1) !important;
+
+    --vis-tooltip-background-color: #121212 !important;
+    --vis-tooltip-border-color: none !important;
+
+    --tooltip-label-color: rgba(255, 255, 255, 0.5);
+    --tooltip-value-color: rgba(255, 255, 255, 1);
+
+    --vis-tooltip-text-color: rgba(255, 255, 255, 0.5) !important;
+    --vis-axis-tick-label-color: rgba(255, 255, 255, 0.5) !important;
+    --vis-legend-label-color: rgba(255, 255, 255, 0.75) !important;
+
+    --vis-axis-label-color: rgba(255, 255, 255, 0.5) !important;
+    --vis-legend-label-color: rgba(255, 255, 255, 0.5) !important;
+  }
 }

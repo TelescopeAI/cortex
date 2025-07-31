@@ -49,6 +49,17 @@ export function useEnvironments() {
     return response;
   }
 
+  // Get a single environment by ID
+  async function getEnvironment(id: string) {
+    try {
+      const response = await $fetch<Environment>(apiUrl(`/api/v1/environments/${id}`));
+      return response;
+    } catch (error) {
+      console.error('Failed to fetch environment:', error);
+      return null;
+    }
+  }
+
   // Return empty array if no workspace is selected
   const environments = computed(() => {
     if (!selectedWorkspaceId.value) return [];
@@ -63,5 +74,6 @@ export function useEnvironments() {
     selectedEnvironmentId,
     selectEnvironment,
     createEnvironment,
+    getEnvironment,
   };
 } 

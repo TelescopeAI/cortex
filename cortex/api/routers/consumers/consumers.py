@@ -8,6 +8,7 @@ from cortex.core.consumers.db.service import ConsumerCRUD
 from cortex.core.exceptions.consumers import ConsumerDoesNotExistError, ConsumerAlreadyExistsError
 from cortex.api.schemas.requests.consumer.consumers import ConsumerCreateRequest, ConsumerUpdateRequest
 from cortex.core.exceptions.environments import EnvironmentDoesNotExistError
+from cortex.core.consumers.db.group_service import ConsumerGroupCRUD
 
 ConsumersRouter = APIRouter()
 
@@ -26,10 +27,13 @@ async def create_consumer(consumer_data: ConsumerCreateRequest):
             first_name=consumer_data.first_name,
             last_name=consumer_data.last_name,
             email=consumer_data.email,
-            organization=consumer_data.organization
+            organization=consumer_data.organization,
+            properties=consumer_data.properties
         )
         created_consumer = ConsumerCRUD.add_consumer(consumer)
-        return ConsumerResponse(**created_consumer.model_dump())
+        consumer_dict = created_consumer.model_dump()
+        consumer_dict["groups"] = []  # New consumer has no groups
+        return ConsumerResponse(**consumer_dict)
     except EnvironmentDoesNotExistError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -56,7 +60,16 @@ async def get_consumer(consumer_id: UUID):
     """Get a consumer by ID"""
     try:
         consumer = ConsumerCRUD.get_consumer(consumer_id)
-        return ConsumerResponse(**consumer.model_dump())
+        
+        # Get groups for this consumer
+        from cortex.core.consumers.db.group_service import ConsumerGroupCRUD
+        groups = ConsumerGroupCRUD.get_groups_for_consumer(consumer_id)
+        groups_data = [{"id": str(g.id), "name": g.name, "description": g.description} for g in groups]
+        
+        consumer_dict = consumer.model_dump()
+        consumer_dict["groups"] = groups_data
+        
+        return ConsumerResponse(**consumer_dict)
     except ConsumerDoesNotExistError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -78,7 +91,21 @@ async def list_consumers(environment_id: UUID):
     """List all consumers in an environment"""
     try:
         consumers = ConsumerCRUD.get_consumers_by_environment(environment_id)
-        return [ConsumerResponse(**c.model_dump()) for c in consumers]
+        
+        # Get groups for each consumer
+        from cortex.core.consumers.db.group_service import ConsumerGroupCRUD
+        consumer_responses = []
+        
+        for consumer in consumers:
+            groups = ConsumerGroupCRUD.get_groups_for_consumer(consumer.id)
+            groups_data = [{"id": str(g.id), "name": g.name, "description": g.description} for g in groups]
+            
+            consumer_dict = consumer.model_dump()
+            consumer_dict["groups"] = groups_data
+            
+            consumer_responses.append(ConsumerResponse(**consumer_dict))
+        
+        return consumer_responses
     except EnvironmentDoesNotExistError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -99,14 +126,31 @@ async def list_consumers(environment_id: UUID):
 async def update_consumer(consumer_id: UUID, consumer_data: ConsumerUpdateRequest):
     """Update a consumer"""
     try:
-        updated_consumer = ConsumerCRUD.update_consumer(
-            consumer_id=consumer_id,
-            first_name=consumer_data.first_name,
-            last_name=consumer_data.last_name,
-            email=consumer_data.email,
-            organization=consumer_data.organization
-        )
-        return ConsumerResponse(**updated_consumer.model_dump())
+        # Get existing consumer first
+        existing_consumer = ConsumerCRUD.get_consumer(consumer_id)
+        
+        # Update only the fields that are provided
+        if consumer_data.first_name is not None:
+            existing_consumer.first_name = consumer_data.first_name
+        if consumer_data.last_name is not None:
+            existing_consumer.last_name = consumer_data.last_name
+        if consumer_data.email is not None:
+            existing_consumer.email = consumer_data.email
+        if consumer_data.organization is not None:
+            existing_consumer.organization = consumer_data.organization
+        if consumer_data.properties is not None:
+            existing_consumer.properties = consumer_data.properties
+            
+        updated_consumer = ConsumerCRUD.update_consumer(existing_consumer)
+        
+        # Get groups for this consumer
+        groups = ConsumerGroupCRUD.get_groups_for_consumer(consumer_id)
+        groups_data = [{"id": str(g.id), "name": g.name, "description": g.description} for g in groups]
+        
+        consumer_dict = updated_consumer.model_dump()
+        consumer_dict["groups"] = groups_data
+        
+        return ConsumerResponse(**consumer_dict)
     except ConsumerDoesNotExistError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

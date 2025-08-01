@@ -559,17 +559,17 @@ onMounted(() => {
     </Card>
 
     <!-- View Toggle -->
-    <Tabs :value="currentView" @update:value="onViewChange" class="w-full">
+    <Tabs :value="currentView" @update:value="onViewChange" default-value="metrics" class="w-full">
       <TabsList class="grid w-full grid-cols-2">
-        <TabsTrigger value="models" class="flex items-center space-x-2">
-          <FolderOpen class="h-4 w-4" />
-          <span>Models</span>
-          <Badge variant="secondary" class="ml-2">{{ models?.length || 0 }}</Badge>
-        </TabsTrigger>
         <TabsTrigger value="metrics" class="flex items-center space-x-2">
           <Target class="h-4 w-4" />
           <span>Metrics</span>
           <Badge variant="secondary" class="ml-2">{{ metrics?.length || 0 }}</Badge>
+        </TabsTrigger>
+        <TabsTrigger value="models" class="flex items-center space-x-2">
+          <FolderOpen class="h-4 w-4" />
+          <span>Models</span>
+          <Badge variant="secondary" class="ml-2">{{ models?.length || 0 }}</Badge>
         </TabsTrigger>
       </TabsList>
 

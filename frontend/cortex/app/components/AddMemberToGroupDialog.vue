@@ -37,7 +37,9 @@
                 </div>
               </SelectItem>
               <div v-if="filteredConsumers.length === 0" class="p-2 text-sm text-muted-foreground">
-                No consumers found
+                {{ props.group && props.group.consumers && props.group.consumers.length > 0 
+                   ? 'No available consumers (all consumers are already members of this group)' 
+                   : 'No consumers found' }}
               </div>
             </SelectContent>
           </Select>
@@ -71,6 +73,7 @@ import { UserPlus, Loader2 } from 'lucide-vue-next'
 interface Props {
   open: boolean
   groupId: string
+  group?: any // Current group data to filter out existing members
 }
 
 interface Emits {
@@ -97,9 +100,17 @@ const filteredConsumers = computed(() => {
   
   return consumers.value.filter(consumer => {
     const searchTerm = consumerSearchQuery.value.toLowerCase()
-    return consumer.first_name.toLowerCase().includes(searchTerm) ||
+    const matchesSearch = consumer.first_name.toLowerCase().includes(searchTerm) ||
            consumer.last_name.toLowerCase().includes(searchTerm) ||
            consumer.email.toLowerCase().includes(searchTerm)
+    
+    // If we have group data, filter out consumers who are already members
+    if (props.group && props.group.consumers) {
+      const isAlreadyMember = props.group.consumers.some((member: any) => member.id === consumer.id)
+      return matchesSearch && !isAlreadyMember
+    }
+    
+    return matchesSearch
   })
 })
 

@@ -1,8 +1,6 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from uuid import UUID
-
-from pydantic import Json
 
 from cortex.api.schemas.responses.consumers.consumers import ConsumerResponse
 from cortex.core.types.telescope import TSModel
@@ -14,7 +12,7 @@ class ConsumerGroupResponse(TSModel):
     name: str
     description: Optional[str] = None
     alias: Optional[str] = None
-    properties: Optional[Json] = None
+    properties: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
 

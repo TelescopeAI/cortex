@@ -194,7 +194,7 @@ onMounted(() => {
     </Card>
 
     <!-- View Toggle -->
-    <Tabs :value="currentView" @update:value="onViewChange" class="w-full">
+    <Tabs :value="currentView" @update:value="onViewChange" default-value="consumers" class="w-full">
       <TabsList class="grid w-full grid-cols-2">
         <TabsTrigger value="consumers" class="flex items-center space-x-2">
           <UserPlus class="h-4 w-4" />

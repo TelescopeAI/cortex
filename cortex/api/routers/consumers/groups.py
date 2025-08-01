@@ -151,7 +151,8 @@ async def update_consumer_group(group_id: UUID, group_data: ConsumerGroupUpdateR
             existing_group.description = group_data.description
         if group_data.alias is not None:
             existing_group.alias = group_data.alias
-        if group_data.properties is not None:
+        # Allow null values for properties to clear them
+        if hasattr(group_data, 'properties'):
             existing_group.properties = group_data.properties
 
         updated_group = ConsumerGroupCRUD.update_consumer_group(existing_group)

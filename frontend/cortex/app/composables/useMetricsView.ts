@@ -8,8 +8,8 @@ export const useMetricsView = () => {
   const route = useRoute()
   const router = useRouter()
 
-  // Initialize view from URL query param or default to 'models'
-  const currentView = ref<ViewType>((route.query.view as ViewType) || 'models')
+  // Initialize view from URL query param or default to 'metrics'
+  const currentView = ref<ViewType>((route.query.view as ViewType) || 'metrics')
 
   // Filter states
   const modelFilters = ref<ModelFilters>({

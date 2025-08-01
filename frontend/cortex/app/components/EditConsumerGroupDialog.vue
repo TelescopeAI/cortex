@@ -50,18 +50,11 @@
           />
         </div>
         
-        <div class="space-y-2">
-          <Label for="edit-properties">Properties (JSON)</Label>
-          <Textarea
-            id="edit-properties"
-            v-model="form.properties"
-            placeholder='{"key": "value"}'
-            rows="4"
-            class="font-mono text-sm"
-            :disabled="isLoading"
-          />
-          <p class="text-xs text-muted-foreground">Optional key-value pairs in JSON format</p>
-        </div>
+        <KeyValuePairs
+          :model-value="form.properties"
+          :is-loading="isLoading"
+          @update:model-value="(value) => form.properties = value"
+        />
       </form>
       
       <DialogFooter>
@@ -93,6 +86,7 @@ import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
 import { Textarea } from '~/components/ui/textarea'
 import { Edit, Loader2 } from 'lucide-vue-next'
+import KeyValuePairs from '~/components/KeyValuePairs.vue'
 
 interface Props {
   group: any
@@ -111,7 +105,7 @@ const form = ref({
   name: '',
   alias: '',
   description: '',
-  properties: ''
+  properties: null as Record<string, any> | null
 })
 
 const isFormValid = computed(() => {
@@ -123,7 +117,7 @@ const resetForm = () => {
     name: '',
     alias: '',
     description: '',
-    properties: ''
+    properties: null
   }
 }
 
@@ -133,7 +127,7 @@ const loadGroupData = () => {
       name: props.group.name || '',
       alias: props.group.alias || '',
       description: props.group.description || '',
-      properties: props.group.properties ? JSON.stringify(props.group.properties, null, 2) : ''
+      properties: props.group.properties || null
     }
   }
 }
@@ -143,23 +137,16 @@ const handleSubmit = async () => {
 
   isLoading.value = true
   try {
-    // Parse properties if provided
-    let properties = null
-    if (form.value.properties.trim()) {
-      try {
-        properties = JSON.parse(form.value.properties)
-      } catch (error) {
-        toast.error('Invalid JSON format for properties')
-        return
-      }
-    }
-
+    console.log('Form properties before submit:', form.value.properties) // Debug log
+    
     const groupData = {
       name: form.value.name.trim(),
       alias: form.value.alias.trim() || undefined,
       description: form.value.description.trim() || undefined,
-      properties
+      properties: form.value.properties
     }
+
+    console.log('Group data to send:', groupData) // Debug log
 
     const updatedGroup = await updateConsumerGroup(props.group.id, groupData)
     

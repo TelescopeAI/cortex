@@ -64,18 +64,15 @@
           />
         </div>
         
-        <div class="space-y-2">
-          <Label for="edit-properties">Properties (JSON)</Label>
-          <Textarea
-            id="edit-properties"
-            v-model="form.properties"
-            placeholder='{"key": "value"}'
-            rows="4"
-            class="font-mono text-sm"
-            :disabled="isLoading"
-          />
-          <p class="text-xs text-muted-foreground">Optional key-value pairs in JSON format</p>
-        </div>
+        <KeyValuePairs
+          :model-value="form.properties"
+          :is-loading="isLoading"
+          @update:model-value="(value) => {
+            console.log('KeyValuePairs update event received:', value)
+            form.properties = value
+            console.log('Form properties after update:', form.properties)
+          }"
+        />
       </form>
       
       <DialogFooter>
@@ -107,6 +104,7 @@ import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
 import { Textarea } from '~/components/ui/textarea'
 import { Edit, Loader2 } from 'lucide-vue-next'
+import KeyValuePairs from '~/components/KeyValuePairs.vue'
 
 interface Props {
   consumer: any
@@ -126,7 +124,7 @@ const form = ref({
   last_name: '',
   email: '',
   organization: '',
-  properties: ''
+  properties: null as Record<string, any> | null
 })
 
 const isFormValid = computed(() => {
@@ -141,19 +139,21 @@ const resetForm = () => {
     last_name: '',
     email: '',
     organization: '',
-    properties: ''
+    properties: null
   }
 }
 
 const loadConsumerData = () => {
   if (props.consumer) {
+    console.log('Loading consumer data, original properties:', props.consumer.properties)
     form.value = {
       first_name: props.consumer.first_name || '',
       last_name: props.consumer.last_name || '',
       email: props.consumer.email || '',
       organization: props.consumer.organization || '',
-      properties: props.consumer.properties ? JSON.stringify(props.consumer.properties, null, 2) : ''
+      properties: props.consumer.properties || null
     }
+    console.log('Form properties after loading:', form.value.properties)
   }
 }
 
@@ -162,24 +162,19 @@ const handleSubmit = async () => {
 
   isLoading.value = true
   try {
-    // Parse properties if provided
-    let properties = null
-    if (form.value.properties.trim()) {
-      try {
-        properties = JSON.parse(form.value.properties)
-      } catch (error) {
-        toast.error('Invalid JSON format for properties')
-        return
-      }
-    }
-
+    console.log('Form properties before submit:', form.value.properties) // Debug log
+    
     const consumerData = {
       first_name: form.value.first_name.trim(),
       last_name: form.value.last_name.trim(),
       email: form.value.email.trim(),
       organization: form.value.organization.trim() || undefined,
-      properties
+      properties: form.value.properties
     }
+
+    console.log('Consumer data to send:', consumerData) // Debug log
+    console.log('Properties type:', typeof consumerData.properties) // Debug log
+    console.log('Properties value:', consumerData.properties) // Debug log
 
     const updatedConsumer = await updateConsumer(props.consumer.id, consumerData)
     
@@ -202,4 +197,9 @@ watch(() => open.value, (isOpen) => {
     loadConsumerData()
   }
 })
+
+// Debug watcher for form properties
+watch(() => form.value.properties, (newValue) => {
+  console.log('Form properties changed:', newValue)
+}, { deep: true })
 </script> 

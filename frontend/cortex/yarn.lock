@@ -6798,10 +6798,10 @@ regexp-tree@^0.1.27:
   resolved "https://registry.yarnpkg.com/regexp-tree/-/regexp-tree-0.1.27.tgz#2198f0ef54518ffa743fe74d983b56ffd631b6cd"
   integrity sha512-iETxpjK6YoRWJG5o6hXLwvjYAoW+FEZn9os0PD/b6AP6xQwsa/Y7lCVgIixBbUPMfhu+i2LtdeAqVTgGlQarfA==
 
-reka-ui@^2.4.0:
-  version "2.4.0"
-  resolved "https://registry.yarnpkg.com/reka-ui/-/reka-ui-2.4.0.tgz#5585363ae0a3ad51c65497bd772dcc9443cb691e"
-  integrity sha512-5WHLEquWI5W67NnjH9F+RhpzRAcwjAEQHtHZMa5wYdhClcYDr59q0RAAcymcnfndFqv0MiBxyFfzbGSRyIZG5g==
+reka-ui@^2.4.1:
+  version "2.4.1"
+  resolved "https://registry.yarnpkg.com/reka-ui/-/reka-ui-2.4.1.tgz#13a1ceeb7703618fb5ed24060d968b4bc596b2c6"
+  integrity sha512-NB7DrCsODN8MH02BWtgiExygfFcuuZ5/PTn6fMgjppmFHqePvNhmSn1LEuF35nel6PFbA4v+gdj0IoGN1yZ+vw==
   dependencies:
     "@floating-ui/dom" "^1.6.13"
     "@floating-ui/vue" "^1.1.6"

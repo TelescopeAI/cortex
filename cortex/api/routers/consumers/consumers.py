@@ -138,7 +138,8 @@ async def update_consumer(consumer_id: UUID, consumer_data: ConsumerUpdateReques
             existing_consumer.email = consumer_data.email
         if consumer_data.organization is not None:
             existing_consumer.organization = consumer_data.organization
-        if consumer_data.properties is not None:
+        # Allow null values for properties to clear them
+        if hasattr(consumer_data, 'properties'):
             existing_consumer.properties = consumer_data.properties
             
         updated_consumer = ConsumerCRUD.update_consumer(existing_consumer)

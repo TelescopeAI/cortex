@@ -6,10 +6,21 @@ import { Badge } from '~/components/ui/badge'
 import { Separator } from '~/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
-import { ArrowLeft, Edit, Settings, Users, MoreHorizontal, Loader2, ArrowRight } from 'lucide-vue-next'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '~/components/ui/alert-dialog'
+import { ArrowLeft, Edit, Settings, Users, MoreHorizontal, Loader2, ArrowRight, Trash2 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import EditConsumerDialog from '~/components/EditConsumerDialog.vue'
 import AddConsumerToGroupDialog from '~/components/AddConsumerToGroupDialog.vue'
+import PropertiesDisplay from '~/components/PropertiesDisplay.vue'
 import { useDateFormat, useTimeAgo, useNavigatorLanguage } from '@vueuse/core'
 
 // Page metadata
@@ -25,6 +36,7 @@ const consumerId = route.params.id as string
 // Use composables
 const { getConsumer, updateConsumer, deleteConsumer } = useConsumers()
 const { getEnvironment } = useEnvironments()
+const { removeConsumerFromGroup } = useConsumerGroups()
 
 // Component state
 const consumer = ref<any>(null)
@@ -72,7 +84,8 @@ const onEnvironmentClick = () => {
 
 const handleConsumerUpdated = (updatedConsumer: any) => {
   // Update the local consumer data with the updated data
-  Object.assign(consumer.value, updatedConsumer)
+  console.log('Consumer updated, new data:', updatedConsumer)
+  consumer.value = { ...consumer.value, ...updatedConsumer }
   toast.success('Consumer updated successfully')
 }
 
@@ -87,6 +100,31 @@ const handleAddedToGroup = () => {
   // Refresh the consumer data to show the new group membership
   loadConsumer()
   toast.success('Consumer added to group successfully')
+}
+
+// Remove from group dialog state
+const showRemoveFromGroupDialog = ref(false)
+const groupToRemove = ref<any>(null)
+
+const onRemoveFromGroup = (group: any) => {
+  groupToRemove.value = group
+  showRemoveFromGroupDialog.value = true
+}
+
+const handleRemovedFromGroup = async () => {
+  if (!groupToRemove.value) return
+  
+  try {
+    await removeConsumerFromGroup(groupToRemove.value.id, consumerId)
+    // Refresh the consumer data to show the updated group membership
+    loadConsumer()
+    toast.success('Consumer removed from group successfully')
+  } catch (error) {
+    console.error('Failed to remove consumer from group:', error)
+    toast.error('Failed to remove consumer from group')
+  } finally {
+    groupToRemove.value = null
+  }
 }
 
 const onGroupClick = (groupId: string) => {
@@ -234,12 +272,10 @@ onMounted(() => {
               </div>
 
               <!-- Properties -->
-              <div v-if="consumer.properties" class="space-y-2">
-                <div class="text-sm font-medium text-muted-foreground">Properties</div>
-                <div class="bg-muted p-4 rounded">
-                  <pre class="text-sm font-mono whitespace-pre-wrap">{{ JSON.stringify(consumer.properties, null, 2) }}</pre>
-                </div>
-              </div>
+              <PropertiesDisplay 
+                :properties="consumer.properties"
+                :is-loading="loading"
+              />
 
               <!-- Timestamps -->
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -294,17 +330,33 @@ onMounted(() => {
                   <div 
                     v-for="group in consumer.groups" 
                     :key="group.id" 
-                    class="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
-                    @click="onGroupClick(group.id)"
+                    class="p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                   >
                     <div class="flex justify-between items-start">
-                      <div class="space-y-1">
+                      <div 
+                        class="space-y-1 flex-1 cursor-pointer"
+                        @click="onGroupClick(group.id)"
+                      >
                         <h4 class="font-medium">{{ group.name }}</h4>
                         <p v-if="group.description" class="text-sm text-muted-foreground">{{ group.description }}</p>
                       </div>
-                      <Button variant="ghost" size="sm">
-                        <ArrowRight class="h-4 w-4" />
-                      </Button>
+                      <div class="flex items-center space-x-2">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          @click="onGroupClick(group.id)"
+                        >
+                          <ArrowRight class="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          @click.stop="onRemoveFromGroup(group)"
+                          class="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 class="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -348,8 +400,26 @@ onMounted(() => {
     <!-- Add to Group Dialog -->
     <AddConsumerToGroupDialog
       :open="showAddToGroupDialog"
+      :consumer="consumer"
       @update:open="showAddToGroupDialog = $event"
       @added="handleAddedToGroup"
     />
+
+    <!-- Remove from Group Alert Dialog -->
+    <AlertDialog :open="showRemoveFromGroupDialog" @update:open="showRemoveFromGroupDialog = $event">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Remove from Group</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to remove {{ consumer?.first_name }} {{ consumer?.last_name }} from 
+            <strong>{{ groupToRemove?.name }}</strong>? This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction @click="handleRemovedFromGroup">Remove</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>
 </template> 

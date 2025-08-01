@@ -4,10 +4,10 @@
       <DialogHeader>
         <DialogTitle class="flex items-center space-x-2">
           <UserPlus class="h-5 w-5" />
-          <span>Add Consumer to Group</span>
+          <span>{{ props.consumer ? 'Add to Group' : 'Add Consumer to Group' }}</span>
         </DialogTitle>
         <DialogDescription>
-          Add a consumer to an existing consumer group.
+          {{ props.consumer ? `Add ${props.consumer.first_name} ${props.consumer.last_name} to an existing consumer group.` : 'Add a consumer to an existing consumer group.' }}
         </DialogDescription>
       </DialogHeader>
       
@@ -15,7 +15,11 @@
         <!-- Consumer Selection -->
         <div class="space-y-2">
           <Label for="consumer">Consumer *</Label>
-          <Select v-model="selectedConsumerId" :disabled="isLoading">
+          <div v-if="props.consumer" class="text-sm bg-muted p-3 rounded-md">
+            <div class="font-medium">{{ props.consumer.first_name }} {{ props.consumer.last_name }}</div>
+            <div class="text-muted-foreground">{{ props.consumer.email }}</div>
+          </div>
+          <Select v-else v-model="selectedConsumerId" :disabled="isLoading">
             <SelectTrigger>
               <SelectValue placeholder="Select a consumer" />
             </SelectTrigger>
@@ -68,7 +72,9 @@
                 </div>
               </SelectItem>
               <div v-if="filteredGroups.length === 0" class="p-2 text-sm text-muted-foreground">
-                No groups found
+                {{ props.consumer && props.consumer.groups && props.consumer.groups.length > 0 
+                   ? 'No available groups (consumer is already a member of all groups)' 
+                   : 'No groups found' }}
               </div>
             </SelectContent>
           </Select>
@@ -102,6 +108,7 @@ import { UserPlus, Loader2 } from 'lucide-vue-next'
 
 interface Props {
   open: boolean
+  consumer?: any // Optional consumer to pre-fill
 }
 
 interface Emits {
@@ -122,7 +129,8 @@ const consumerSearchQuery = ref('')
 const groupSearchQuery = ref('')
 
 const isFormValid = computed(() => {
-  return selectedConsumerId.value && selectedGroupId.value
+  const hasConsumer = props.consumer || selectedConsumerId.value
+  return hasConsumer && selectedGroupId.value
 })
 
 const filteredConsumers = computed(() => {
@@ -141,8 +149,16 @@ const filteredGroups = computed(() => {
   
   return consumerGroups.value.filter(group => {
     const searchTerm = groupSearchQuery.value.toLowerCase()
-    return group.name.toLowerCase().includes(searchTerm) ||
+    const matchesSearch = group.name.toLowerCase().includes(searchTerm) ||
            (group.description && group.description.toLowerCase().includes(searchTerm))
+    
+    // If we have a pre-filled consumer, filter out groups they're already part of
+    if (props.consumer && props.consumer.groups) {
+      const isAlreadyMember = props.consumer.groups.some((consumerGroup: any) => consumerGroup.id === group.id)
+      return matchesSearch && !isAlreadyMember
+    }
+    
+    return matchesSearch
   })
 })
 
@@ -152,7 +168,8 @@ const handleSubmit = async () => {
   isLoading.value = true
   
   try {
-    await addConsumerToGroup(selectedGroupId.value, selectedConsumerId.value)
+    const consumerId = props.consumer ? props.consumer.id : selectedConsumerId.value
+    await addConsumerToGroup(selectedGroupId.value, consumerId)
     
     toast.success('Consumer added to group successfully')
     emit('added')

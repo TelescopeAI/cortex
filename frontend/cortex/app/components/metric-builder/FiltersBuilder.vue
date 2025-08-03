@@ -282,21 +282,18 @@
 
 
 
-        <!-- Parameterized Filter -->
+        <!-- $CORTEX_ Parameter Guidance -->
         <div class="space-y-2">
-          <div class="flex items-center space-x-2">
-            <Checkbox
-              :model-value="filter.is_parameterized"
-              @update:model-value="(value) => updateFilter(index, 'is_parameterized', value)"
-            />
-            <Label>Parameterized Filter</Label>
+          <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div class="flex items-center space-x-2 mb-2">
+              <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
+              <span class="text-sm font-medium text-blue-900">$CORTEX_ Parameters</span>
+            </div>
+            <p class="text-xs text-blue-700">
+              Use $CORTEX_ prefix in filter values to auto-substitute with consumer properties when context_id is provided.
+              <br />Example: $CORTEX_client_id, $CORTEX_currency
+            </p>
           </div>
-          <Input
-            v-if="filter.is_parameterized"
-            :model-value="filter.parameter_name"
-            @update:model-value="(value) => updateFilter(index, 'parameter_name', value)"
-            placeholder="Parameter name (e.g., user_id)"
-          />
         </div>
       </div>
     </div>
@@ -312,7 +309,6 @@ import { Textarea } from '~/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 import { NumberField, NumberFieldContent, NumberFieldDecrement, NumberFieldIncrement, NumberFieldInput } from '~/components/ui/number-field'
 import { Switch } from '~/components/ui/switch'
-import { Checkbox } from '~/components/ui/checkbox'
 import { Badge } from '~/components/ui/badge'
 import {
   DropdownMenu,
@@ -341,8 +337,6 @@ interface Filter {
   values?: any[]
   min_value?: any
   max_value?: any
-  is_parameterized: boolean
-  parameter_name?: string
 }
 
 interface Props {
@@ -387,9 +381,7 @@ const addFilter = () => {
     filter_type: 'where',
     is_active: true,
     custom_expression: '',
-    use_custom_expression: false,
-    is_parameterized: false,
-    parameter_name: ''
+    use_custom_expression: false
   }
   filters.value.push(newFilter)
 }

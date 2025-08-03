@@ -15,6 +15,7 @@ from cortex.core.data.db.source_service import DataSourceCRUD
 from cortex.core.connectors.databases.clients.service import DBClientService
 from cortex.core.utils.parsesql import convert_sqlalchemy_rows_to_dict
 from cortex.core.types.telescope import TSModel
+from cortex.core.query.context import MetricContext
 
 
 class QueryLogEntry(TSModel):
@@ -54,7 +55,8 @@ class QueryExecutor(TSModel):
         parameters: Optional[Dict[str, Any]] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
-        source_type: DataSourceTypes = DataSourceTypes.POSTGRESQL
+        source_type: DataSourceTypes = DataSourceTypes.POSTGRESQL,
+        context_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Execute a specific metric from a data model with comprehensive logging.
@@ -83,9 +85,12 @@ class QueryExecutor(TSModel):
             # Resolve metric extensions if needed
             resolved_metric = metric
             
+            # Process context_id if provided and enhance parameters with consumer properties for $CORTEX_ substitution
+            enhanced_parameters = self._enhance_parameters_with_context(parameters, context_id)
+            
             # Generate the query
             query_generator = QueryGeneratorFactory.create_generator(resolved_metric, source_type)
-            generated_query = query_generator.generate_query(parameters, limit, offset)
+            generated_query = query_generator.generate_query(enhanced_parameters, limit, offset)
             log_entry.query = generated_query
             
             # Execute the query (placeholder - would integrate with actual database execution)
@@ -175,6 +180,44 @@ class QueryExecutor(TSModel):
 
         # 4. Convert results to a list of dictionaries
         return convert_sqlalchemy_rows_to_dict(results)
+    
+    def _enhance_parameters_with_context(self, parameters: Optional[Dict[str, Any]], context_id: Optional[str]) -> Optional[Dict[str, Any]]:
+        """
+        Enhance parameters with context-based values from consumer properties.
+        
+        Args:
+            parameters: Original parameters dictionary
+            context_id: Context identifier in format <TYPE>_<UNIQUEID> or <TYPE>_<ID1>_<ID2>
+            
+        Returns:
+            Enhanced parameters dictionary with context values substituted
+        """
+        if not context_id:
+            return parameters
+        
+        try:
+            # Parse the context_id
+            context = MetricContext.parse(context_id)
+            
+            # Get consumer properties from context
+            consumer_properties = context.get_consumer_properties()
+            
+            if not consumer_properties:
+                return parameters
+            
+            # Create enhanced parameters by merging original parameters with consumer properties
+            enhanced_parameters = parameters.copy() if parameters else {}
+            
+            # Merge consumer properties into enhanced parameters for $CORTEX_ substitution
+            enhanced_parameters.update(consumer_properties)
+            
+            return enhanced_parameters
+            
+        except Exception as e:
+            print(f"Error enhancing parameters with context {context_id}: {e}")
+            return parameters
+    
+
     
     def get_query_log(self, limit: Optional[int] = None) -> List[QueryLogEntry]:
         """

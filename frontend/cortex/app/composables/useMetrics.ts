@@ -53,6 +53,9 @@ export interface MetricFilters {
 export interface ExecutionRequest {
   parameters?: Record<string, any>
   output_format?: string
+  context_id?: string
+  limit?: number
+  offset?: number
 }
 
 export const useMetrics = () => {

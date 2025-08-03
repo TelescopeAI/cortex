@@ -42,8 +42,7 @@ class SemanticFilter(TSModel):
     min_value: Optional[Any] = None
     max_value: Optional[Any] = None
     
-    # For dynamic filters that can be parameterized
-    is_parameterized: bool = False
-    parameter_name: Optional[str] = None
+    # For dynamic filters that can be parameterized using $CORTEX_ prefix
+    # Any field starting with $CORTEX_ will be treated as a parameter
 
     model_config = ConfigDict(use_enum_values=True) 

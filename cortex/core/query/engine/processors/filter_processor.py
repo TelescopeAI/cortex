@@ -37,10 +37,6 @@ class FilterProcessor(TSModel):
             if not filter_obj.is_active:
                 continue
                 
-            # Skip parameterized filters if no parameters provided
-            if filter_obj.is_parameterized and not parameters:
-                continue
-                
             # Generate SQL condition for this filter
             condition = FilterProcessor._build_filter_condition(
                 filter_obj, parameters, table_prefix
@@ -84,14 +80,8 @@ class FilterProcessor(TSModel):
             filter_obj.query, filter_obj.table, table_prefix
         )
         
-        # Handle parameterized filters
-        if filter_obj.is_parameterized and parameters:
-            if filter_obj.parameter_name in parameters:
-                value = parameters[filter_obj.parameter_name]
-            else:
-                return None  # Skip if parameter not provided
-        else:
-            value = filter_obj.value
+        # Get the value (could be a $CORTEX_ placeholder that was already substituted)
+        value = filter_obj.value
         
         # Build condition based on operator
         if filter_obj.operator is None:
@@ -212,25 +202,7 @@ class FilterProcessor(TSModel):
 
     @staticmethod
     def _substitute_parameters(expression: str, parameters: Optional[Dict[str, Any]] = None) -> str:
-        """Substitute parameters in a custom expression"""
-        if not parameters:
-            return expression
-        
-        result = expression
-        for param_name, param_value in parameters.items():
-            # Handle different parameter formats: {param}, :param, ${param}
-            patterns = [
-                f"{{{param_name}}}",      # {param_name}
-                f":{param_name}",         # :param_name
-                f"${{{param_name}}}"      # ${param_name}
-            ]
-            
-            for pattern in patterns:
-                if isinstance(param_value, str):
-                    # Quote string values
-                    result = result.replace(pattern, f"'{param_value}'")
-                else:
-                    # Use numeric/boolean values as-is
-                    result = result.replace(pattern, str(param_value))
-        
-        return result 
+        """Substitute parameters in a custom expression - DEPRECATED: Use base_sql.py instead"""
+        # This method is deprecated - parameter substitution is now handled in base_sql.py
+        # to avoid double substitution and double quoting issues
+        return expression 

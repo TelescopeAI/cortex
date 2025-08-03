@@ -8,12 +8,14 @@ import { Textarea } from '~/components/ui/textarea'
 import { Separator } from '~/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
+import { Switch } from '~/components/ui/switch'
+import { Label } from '~/components/ui/label'
 import { ArrowLeft, Edit, PlayCircle, Settings, Copy, History, Code, Save, Loader2, CheckCircle, XCircle } from 'lucide-vue-next'
 import ExecutionResultViewer from '@/components/ExecutionResultViewer.vue'
 import { toast } from 'vue-sonner'
 import SchemaSheet from '~/components/metric-builder/SchemaSheet.vue'
 import CodeHighlight from '~/components/CodeHighlight.vue'
-import EditMetricDialog from '~/components/EditMetricDialog.vue'
+import KeyValuePairs from '~/components/KeyValuePairs.vue'
 import { useDateFormat, useTimeAgo, useNavigatorLanguage } from '@vueuse/core'
 
 // Page metadata
@@ -42,20 +44,24 @@ const executing = ref(false)
 const validating = ref(false)
 const compiling = ref(false)
 
-// Schema dialog state
-const schemaDialogOpen = ref(false)
+// Schema sheet state
+const schemaSheetOpen = ref(false)
 const selectedDataSourceId = ref<string>('')
 
 // Execution parameters
 const executionParams = ref<Record<string, any>>({})
+const contextId = ref<string>('')
+const useLimit = ref(false)
+const limitValue = ref<number>(100)
+const offsetValue = ref<number>(0)
 
-// Schema dialog functions
+// Schema sheet functions
 const onOpenSchema = () => {
   // Set data source ID for schema loading if not already set
   if (parentModel.value?.data_source_id && !selectedDataSourceId.value) {
     selectedDataSourceId.value = parentModel.value.data_source_id
   }
-  schemaDialogOpen.value = true
+  schemaSheetOpen.value = true
 }
 
 const onSaveSchema = async (schemaData: any) => {
@@ -85,6 +91,41 @@ const metricStatus = computed(() => {
 
 const hasParameters = computed(() => {
   return metric.value?.parameters && Array.isArray(metric.value.parameters) && metric.value.parameters.length > 0
+})
+
+const availableCortexParameters = computed(() => {
+  if (!metric.value) return []
+  
+  const params: string[] = []
+  
+  // Check filters for $CORTEX_ parameters
+  if (metric.value.filters) {
+    metric.value.filters.forEach((filter: any) => {
+      if (filter.query && typeof filter.query === 'string' && filter.query.includes('$CORTEX_')) {
+        const matches = filter.query.match(/\$CORTEX_([a-zA-Z_][a-zA-Z0-9_]*)/g)
+        if (matches) {
+          params.push(...matches.map((m: string) => m.replace('$CORTEX_', '')))
+        }
+      }
+      if (filter.value && typeof filter.value === 'string' && filter.value.includes('$CORTEX_')) {
+        const matches = filter.value.match(/\$CORTEX_([a-zA-Z_][a-zA-Z0-9_]*)/g)
+        if (matches) {
+          params.push(...matches.map((m: string) => m.replace('$CORTEX_', '')))
+        }
+      }
+    })
+  }
+  
+  // Check custom query for $CORTEX_ parameters
+  if (metric.value.query && typeof metric.value.query === 'string') {
+    const matches = metric.value.query.match(/\$CORTEX_([a-zA-Z_][a-zA-Z0-9_]*)/g)
+    if (matches) {
+      params.push(...matches.map((m: string) => m.replace('$CORTEX_', '')))
+    }
+  }
+  
+  // Remove duplicates and return
+  return [...new Set(params)]
 })
 
 const getStatusBadgeVariant = (status: string) => {
@@ -186,9 +227,20 @@ const onExecute = async () => {
   
   executing.value = true
   try {
-    const result = await executeMetric(metricId, {
-      parameters: executionParams.value
-    })
+    const executionRequest: any = {
+      parameters: executionParams.value,
+      context_id: contextId.value || undefined
+    }
+    
+    // Add limit and offset if enabled
+    if (useLimit.value) {
+      executionRequest.limit = limitValue.value
+      if (offsetValue.value > 0) {
+        executionRequest.offset = offsetValue.value
+      }
+    }
+    
+    const result = await executeMetric(metricId, executionRequest)
     executionResults.value = result
   } catch (error) {
     console.error('Failed to execute metric:', error)
@@ -334,10 +386,10 @@ onMounted(() => {
             </p>
           </div>
           <div class="flex flex-col space-y-2">
-            <EditMetricDialog
-              :metric="metric"
-              @updated="handleMetricUpdated"
-            />
+            <Button variant="outline" size="sm" @click="onOpenSchema">
+              <Edit class="h-4 w-4 mr-2" />
+              Edit Schema
+            </Button>
           </div>
         </div>
       </div>
@@ -397,6 +449,12 @@ onMounted(() => {
                   <div class="text-sm font-medium text-muted-foreground">Alias</div>
                   <div class="text-sm font-mono bg-muted p-2 rounded">{{ metric.alias }}</div>
                 </div>
+              </div>
+
+              <!-- Data Source Information -->
+              <div v-if="parentModel?.data_source" class="space-y-2">
+                <div class="text-sm font-medium text-muted-foreground">Data Source</div>
+                <div class="text-sm font-mono bg-muted p-2 rounded">{{ parentModel.data_source.name }}</div>
               </div>
 
               <!-- Description -->
@@ -553,29 +611,103 @@ onMounted(() => {
 
         <!-- Execute Tab -->
         <TabsContent value="execute" class="space-y-6 min-w-0">
+          <!-- Context ID Input -->
+          <Card>
+            <CardHeader>
+              <CardTitle>Execution Context</CardTitle>
+            </CardHeader>
+            <CardContent class="space-y-4">
+              <div class="space-y-2">
+                <Label class="text-sm font-medium">Context ID (Optional)</Label>
+                <Input
+                  v-model="contextId"
+                  placeholder="e.g., C_ec85aba3-0fa7-4128-ae54-5b1282b4990b"
+                  class="font-mono text-sm"
+                />
+                <div class="text-xs text-muted-foreground">
+                  <p class="mb-1">Format: C_&lt;Consumer UUID&gt;, CG_&lt;Group UUID&gt;, or CCG_&lt;Consumer UUID&gt;_&lt;Group UUID&gt;</p>
+                  <p>Context ID will automatically substitute $CORTEX_ parameters with consumer properties.</p>
+                </div>
+                
+                <!-- Context Status Indicator -->
+                <div v-if="contextId && availableCortexParameters.length > 0" class="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div class="flex items-center space-x-2">
+                    <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <span class="text-sm font-medium text-blue-900">Context Active</span>
+                  </div>
+                  <p class="text-xs text-blue-700 mt-1">
+                    The following $CORTEX_ parameters will be substituted: {{ availableCortexParameters.join(', ') }}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <!-- Parameter Input -->
           <Card v-if="hasParameters">
             <CardHeader>
               <CardTitle>Parameters</CardTitle>
             </CardHeader>
             <CardContent class="space-y-4">
-              <div 
-                v-for="param in metric.parameters" 
-                :key="param.name"
-                class="space-y-2"
-              >
-                <label class="text-sm font-medium">
-                  {{ param.name }}
-                  <span v-if="param.required" class="text-destructive">*</span>
-                </label>
-                <Input
-                  :model-value="executionParams[param.name]"
-                  @update:model-value="onParameterChange(param.name, $event)"
-                  :placeholder="param.description || `Enter ${param.name}`"
-                  :type="param.type === 'number' ? 'number' : 'text'"
+              <KeyValuePairs
+                :model-value="executionParams"
+                @update:model-value="(value) => executionParams = value || {}"
+                :is-loading="executing"
+              />
+              <div class="text-xs text-muted-foreground">
+                <p>Available parameters from metric schema: {{ metric.parameters?.map((p: any) => p.name).join(', ') || 'None' }}</p>
+                <p class="mt-1">Use $CORTEX_ prefix in metric schema to auto-substitute with consumer properties when context_id is provided.</p>
+                <p v-if="availableCortexParameters.length > 0" class="mt-1">
+                  <span class="font-medium">$CORTEX_ parameters found:</span> {{ availableCortexParameters.join(', ') }}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <!-- Limit and Offset Controls -->
+          <Card>
+            <CardHeader>
+              <CardTitle>Query Limits</CardTitle>
+            </CardHeader>
+            <CardContent class="space-y-4">
+              <div class="flex items-center space-x-2">
+                <Switch
+                  id="use-limit"
+                  v-model="useLimit"
                 />
-                <div v-if="param.description" class="text-xs text-muted-foreground">
-                  {{ param.description }}
+                <Label for="use-limit">Enable custom limit and offset</Label>
+              </div>
+              
+              <div v-if="useLimit" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div class="space-y-2">
+                    <Label for="limit-value">Limit</Label>
+                    <Input
+                      id="limit-value"
+                      v-model.number="limitValue"
+                      type="number"
+                      min="1"
+                      max="10000"
+                      placeholder="100"
+                    />
+                    <div class="text-xs text-muted-foreground">
+                      Maximum number of rows to return (1-10,000)
+                    </div>
+                  </div>
+                  
+                  <div class="space-y-2">
+                    <Label for="offset-value">Offset</Label>
+                    <Input
+                      id="offset-value"
+                      v-model.number="offsetValue"
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                    />
+                    <div class="text-xs text-muted-foreground">
+                      Number of rows to skip (0+)
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -671,10 +803,10 @@ onMounted(() => {
 
     <!-- Schema Sheet -->
     <SchemaSheet
-      :open="schemaDialogOpen"
+      :open="schemaSheetOpen"
       :metric="metric"
       :selected-data-source-id="selectedDataSourceId"
-      @update:open="schemaDialogOpen = $event"
+      @update:open="schemaSheetOpen = $event"
       @save="onSaveSchema"
     />
   </div>

@@ -324,7 +324,8 @@ async def execute_metric(metric_id: UUID, execution_request: MetricExecutionRequ
                 parameters=execution_request.parameters,
                 limit=execution_request.limit,
                 offset=execution_request.offset,
-                source_type=DataSourceTypes.POSTGRESQL
+                source_type=DataSourceTypes.POSTGRESQL,
+                context_id=execution_request.context_id
             )
             
             return MetricExecutionResponse(

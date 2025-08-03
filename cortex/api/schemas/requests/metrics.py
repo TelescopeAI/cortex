@@ -69,6 +69,7 @@ class MetricExecutionRequest(BaseModel):
     filters: Optional[Dict[str, Any]] = None
     limit: Optional[int] = None
     offset: Optional[int] = None
+    context_id: Optional[str] = None
 
 
 class MetricCloneRequest(BaseModel):

@@ -231,27 +231,18 @@ class SQLQueryGenerator(BaseQueryGenerator):
         return " ".join(formatted_parts)
 
     def _substitute_parameters(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> str:
-        """Substitute parameters in the query string"""
+        """Substitute $CORTEX_ parameters in the query string"""
         if not parameters:
             return query
         
         substituted_query = query
         
-        # Replace parameter placeholders with actual values
+        # Replace $CORTEX_ parameter placeholders with actual values
         for param_name, param_value in parameters.items():
-            # Handle different parameter formats: {param}, :param, ${param}
-            patterns = [
-                f"{{{param_name}}}",      # {param_name}
-                f":{param_name}",         # :param_name
-                f"${{{param_name}}}"      # ${param_name}
-            ]
+            # Only handle $CORTEX_ pattern to avoid double substitution
+            pattern = f"$CORTEX_{param_name}"
             
-            for pattern in patterns:
-                if isinstance(param_value, str):
-                    # Quote string values
-                    substituted_query = substituted_query.replace(pattern, f"'{param_value}'")
-                else:
-                    # Use numeric/boolean values as-is
-                    substituted_query = substituted_query.replace(pattern, str(param_value))
+            # Use str() for all values - let SQL formatters handle proper quoting
+            substituted_query = substituted_query.replace(pattern, str(param_value))
         
         return substituted_query

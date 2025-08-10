@@ -25,16 +25,16 @@ class MetricResponse(BaseModel):
     table_name: Optional[str]
     data_source_id: Optional[UUID]
     limit: Optional[int]
-    measures: Optional[List[Dict[str, Any]]]  # Simplified as dict for now
-    dimensions: Optional[List[Dict[str, Any]]]  # Simplified as dict for now
-    joins: Optional[List[Dict[str, Any]]]  # Simplified as dict for now
-    aggregations: Optional[List[Dict[str, Any]]]  # Simplified as dict for now
-    filters: Optional[List[Dict[str, Any]]]  # Simplified as dict for now
-    output_formats: Optional[List[Dict[str, Any]]]  # Simplified as dict for now
-    parameters: Optional[Dict[str, Any]]  # Simplified as dict for now
+    measures: Optional[List[SemanticMeasure]] = None
+    dimensions: Optional[List[SemanticDimension]] = None
+    joins: Optional[List[SemanticJoin]] = None
+    aggregations: Optional[List[SemanticAggregation]] = None
+    filters: Optional[List[SemanticFilter]] = None
+    output_formats: Optional[List[OutputFormat]] = None
+    parameters: Optional[Dict[str, ParameterDefinition]] = None
     model_version: int
     public: bool
-    refresh_key: Optional[Dict[str, Any]]  # Simplified as dict for now
+    refresh_key: Optional[RefreshKey] = None
     meta: Optional[Dict[str, Any]]
     is_valid: bool
     validation_errors: Optional[List[str]]

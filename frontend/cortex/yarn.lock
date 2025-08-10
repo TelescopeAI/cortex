@@ -1127,6 +1127,33 @@
     unimport "^5.1.0"
     untyped "^2.0.0"
 
+"@nuxt/kit@^4.0.0":
+  version "4.0.3"
+  resolved "https://registry.yarnpkg.com/@nuxt/kit/-/kit-4.0.3.tgz#da6211aaab3f02996ef18bfd9abc0580867b2ead"
+  integrity sha512-9+lwvP4n8KhO91azoebO0o39smESGzEV4HU6nef9HIFyt04YwlVMY37Pk63GgZn0WhWVjyPWcQWs0rUdZUYcPw==
+  dependencies:
+    c12 "^3.2.0"
+    consola "^3.4.2"
+    defu "^6.1.4"
+    destr "^2.0.5"
+    errx "^0.1.0"
+    exsolve "^1.0.7"
+    ignore "^7.0.5"
+    jiti "^2.5.1"
+    klona "^2.0.6"
+    mlly "^1.7.4"
+    ohash "^2.0.11"
+    pathe "^2.0.3"
+    pkg-types "^2.2.0"
+    scule "^1.3.0"
+    semver "^7.7.2"
+    std-env "^3.9.0"
+    tinyglobby "^0.2.14"
+    ufo "^1.6.1"
+    unctx "^2.4.1"
+    unimport "^5.2.0"
+    untyped "^2.0.0"
+
 "@nuxt/schema@4.0.0":
   version "4.0.0"
   resolved "https://registry.yarnpkg.com/@nuxt/schema/-/schema-4.0.0.tgz#99ea1f57d19a9204ab87eb0333ef9a4d8edf353a"
@@ -3135,6 +3162,24 @@ c12@^3.0.4, c12@^3.1.0:
     pkg-types "^2.2.0"
     rc9 "^2.1.2"
 
+c12@^3.2.0:
+  version "3.2.0"
+  resolved "https://registry.yarnpkg.com/c12/-/c12-3.2.0.tgz#7c4e4ccb4f9d3d290611ea9c30914581dd0cfc21"
+  integrity sha512-ixkEtbYafL56E6HiFuonMm1ZjoKtIo7TH68/uiEq4DAwv9NcUX2nJ95F8TrbMeNjqIkZpruo3ojXQJ+MGG5gcQ==
+  dependencies:
+    chokidar "^4.0.3"
+    confbox "^0.2.2"
+    defu "^6.1.4"
+    dotenv "^17.2.1"
+    exsolve "^1.0.7"
+    giget "^2.0.0"
+    jiti "^2.5.1"
+    ohash "^2.0.11"
+    pathe "^2.0.3"
+    perfect-debounce "^1.0.0"
+    pkg-types "^2.2.0"
+    rc9 "^2.1.2"
+
 cac@^6.7.14:
   version "6.7.14"
   resolved "https://registry.yarnpkg.com/cac/-/cac-6.7.14.tgz#804e1e6f506ee363cb0e3ccbb09cad5dd9870959"
@@ -4098,6 +4143,11 @@ dotenv@^16.3.1, dotenv@^16.4.7, dotenv@^16.6.1:
   resolved "https://registry.yarnpkg.com/dotenv/-/dotenv-16.6.1.tgz#773f0e69527a8315c7285d5ee73c4459d20a8020"
   integrity sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==
 
+dotenv@^17.2.1:
+  version "17.2.1"
+  resolved "https://registry.yarnpkg.com/dotenv/-/dotenv-17.2.1.tgz#6f32e10faf014883515538dc922a0fb8765d9b32"
+  integrity sha512-kQhDYKZecqnM0fCnzI5eIv5L4cAe/iRI+HqMbO/hbRdTAeXDG+M9FjipUxNfbARuEg4iHIbhnhs78BCHNbSxEQ==
+
 dunder-proto@^1.0.1:
   version "1.0.1"
   resolved "https://registry.yarnpkg.com/dunder-proto/-/dunder-proto-1.0.1.tgz#d7ae667e1dc83482f8b70fd0f6eefc50da30f58a"
@@ -4121,6 +4171,14 @@ eastasianwidth@^0.2.0:
   version "0.2.0"
   resolved "https://registry.yarnpkg.com/eastasianwidth/-/eastasianwidth-0.2.0.tgz#696ce2ec0aa0e6ea93a397ffcf24aa7840c827cb"
   integrity sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==
+
+echarts@^5.5.1:
+  version "5.6.0"
+  resolved "https://registry.yarnpkg.com/echarts/-/echarts-5.6.0.tgz#2377874dca9fb50f104051c3553544752da3c9d6"
+  integrity sha512-oTbVTsXfKuEhxftHqL5xprgLoc0k7uScAwtryCgWF6hPYFLRwOUHiFmHGCBKP5NPFNkDVopOieyUqYGH8Fa3kA==
+  dependencies:
+    tslib "2.3.0"
+    zrender "5.6.1"
 
 ee-first@1.1.1:
   version "1.1.1"
@@ -5869,6 +5927,13 @@ nuxt-charts@0.2.0-beta.0:
     "@unovis/vue" "^1.5.1"
     vue-chrts "^0.1.11"
 
+nuxt-echarts@0.4.0:
+  version "0.4.0"
+  resolved "https://registry.yarnpkg.com/nuxt-echarts/-/nuxt-echarts-0.4.0.tgz#0877a935764470697d2e4ebe345a33717ef1e9b6"
+  integrity sha512-JMqy7idyYbdqJomOHWfWhltMoQJPdbNIBD3AZ82n1wTlIYMyssG1j941murw0izTVovuLcIK/89thF32igeNEw==
+  dependencies:
+    "@nuxt/kit" "^4.0.0"
+
 nuxt-shiki@0.3.1:
   version "0.3.1"
   resolved "https://registry.yarnpkg.com/nuxt-shiki/-/nuxt-shiki-0.3.1.tgz#53df48cf07075c1827c6a11197239a794bb6cd49"
@@ -7539,6 +7604,11 @@ ts-api-utils@^2.1.0:
   resolved "https://registry.yarnpkg.com/ts-api-utils/-/ts-api-utils-2.1.0.tgz#595f7094e46eed364c13fd23e75f9513d29baf91"
   integrity sha512-CUgTZL1irw8u29bzrOD/nH85jqyc74D6SshFgujOIA7osm2Rz7dYH77agkx7H4FBNxDq7Cjf+IjaX/8zwFW+ZQ==
 
+tslib@2.3.0:
+  version "2.3.0"
+  resolved "https://registry.yarnpkg.com/tslib/-/tslib-2.3.0.tgz#803b8cdab3e12ba581a4ca41c8839bbb0dacb09e"
+  integrity sha512-N82ooyxVNm6h1riLCoyS9e3fuJ3AMG2zIZs2Gd1ATcSFjSA23Q0fzjjZeh0jbJvWVDZ0cJT8yaNNaaXHzueNjg==
+
 tslib@^2.0.0, tslib@^2.3.1, tslib@^2.4.0, tslib@^2.6.3, tslib@^2.8.0:
   version "2.8.1"
   resolved "https://registry.yarnpkg.com/tslib/-/tslib-2.8.1.tgz#612efe4ed235d567e8aba5f2a5fab70280ade83f"
@@ -8218,6 +8288,13 @@ zod@^4.0.5:
   version "4.0.5"
   resolved "https://registry.yarnpkg.com/zod/-/zod-4.0.5.tgz#b47825f318e7884d94bcd6f5385a1de805ccfb1c"
   integrity sha512-/5UuuRPStvHXu7RS+gmvRf4NXrNxpSllGwDnCBcJZtQsKrviYXm54yDGV2KYNLT5kq0lHGcl7lqWJLgSaG+tgA==
+
+zrender@5.6.1:
+  version "5.6.1"
+  resolved "https://registry.yarnpkg.com/zrender/-/zrender-5.6.1.tgz#e08d57ecf4acac708c4fcb7481eb201df7f10a6b"
+  integrity sha512-OFXkDJKcrlx5su2XbzJvj/34Q3m6PvyCZkVPHGYpcCJ52ek4U/ymZyfuV1nKE23AyBJ51E/6Yr0mhZ7xGTO4ag==
+  dependencies:
+    tslib "2.3.0"
 
 zwitch@^2.0.4:
   version "2.0.4"

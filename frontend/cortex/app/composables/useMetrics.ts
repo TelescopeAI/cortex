@@ -164,18 +164,6 @@ export const useMetrics = () => {
     }
   }
 
-  const compileMetric = async (id: string) => {
-    try {
-      const response = await $fetch(apiUrl(`/api/v1/metrics/${id}/compile`), {
-        method: 'POST'
-      })
-      return response
-    } catch (err) {
-      console.error('Failed to compile metric:', err)
-      throw err
-    }
-  }
-
   const cloneMetric = async (id: string, cloneRequest: { name: string; alias?: string }) => {
     try {
       const response = await $fetch<SemanticMetric>(apiUrl(`/api/v1/metrics/${id}/clone`), {
@@ -224,7 +212,6 @@ export const useMetrics = () => {
     deleteMetric,
     executeMetric,
     validateMetric,
-    compileMetric,
     cloneMetric,
     getMetricVersions,
     getMetricsForModel

@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
-  modules: ['shadcn-nuxt', '@vueuse/nuxt', 'nuxt-charts', 'nuxt-shiki'],
+  modules: ['shadcn-nuxt', '@vueuse/nuxt', 'nuxt-charts', 'nuxt-shiki', 'nuxt-echarts'],
   css: [
     './app/assets/css/tailwind.css',
     './app/assets/css/global.css'
@@ -29,6 +29,27 @@ export default defineNuxtConfig({
      * @default ".app//components/ui"
      */
     componentDir: './components/ui'
+  },
+  echarts: {
+    /**
+     * Chart types used in the application
+     */
+    charts: ['BarChart', 'LineChart', 'PieChart', 'GaugeChart', 'ScatterChart'],
+    /**
+     * Components used by charts
+     */
+    components: [
+      'TitleComponent',
+      'TooltipComponent', 
+      'LegendComponent',
+      'GridComponent',
+      'DatasetComponent',
+      'TransformComponent'
+    ],
+    /**
+     * Features to include
+     */
+    features: ['LabelLayout', 'UniversalTransition']
   },
   shiki: {
     /**

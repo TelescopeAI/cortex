@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Optional
+from uuid import uuid4
 
 import pytz
 from sqlalchemy import String, DateTime, UUID, Boolean, Integer, Text
@@ -66,7 +67,8 @@ class ModelVersionORM(BaseDBModel):
 class MetricORM(BaseDBModel):
     __tablename__ = "metrics"
     
-    id = mapped_column(UUID, primary_key=True, index=True)
+    # Generate UUID in application layer to satisfy NOT NULL without relying on DB defaults
+    id = mapped_column(UUID, primary_key=True, index=True, default=uuid4)
     data_model_id = mapped_column(UUID, ForeignKey("data_models.id"), nullable=False, index=True)
     name = mapped_column(String, nullable=False, index=True)
     alias = mapped_column(String, nullable=True, index=True)

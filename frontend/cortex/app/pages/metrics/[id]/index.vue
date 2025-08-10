@@ -10,12 +10,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
 import { Switch } from '~/components/ui/switch'
 import { Label } from '~/components/ui/label'
-import { ArrowLeft, Edit, PlayCircle, Settings, Copy, History, Code, Save, Loader2, CheckCircle, XCircle } from 'lucide-vue-next'
+import { ArrowLeft, Edit, PlayCircle, Settings, Copy, History, Code, Save, Loader2, CheckCircle, XCircle, Database } from 'lucide-vue-next'
 import ExecutionResultViewer from '@/components/ExecutionResultViewer.vue'
 import { toast } from 'vue-sonner'
 import SchemaSheet from '~/components/metric-builder/SchemaSheet.vue'
 import CodeHighlight from '~/components/CodeHighlight.vue'
 import KeyValuePairs from '~/components/KeyValuePairs.vue'
+import ContextIdBuilder from '~/components/ContextIdBuilder.vue'
 import { useDateFormat, useTimeAgo, useNavigatorLanguage } from '@vueuse/core'
 
 // Page metadata
@@ -29,7 +30,7 @@ const route = useRoute()
 const metricId = route.params.id as string
 
 // Use composables
-const { getMetric, executeMetric, validateMetric, compileMetric, getMetricVersions, updateMetric } = useMetrics()
+const { getMetric, executeMetric, validateMetric, getMetricVersions, updateMetric } = useMetrics()
 const { getModel } = useDataModels()
 
 // Component state
@@ -42,7 +43,7 @@ const validationResult = ref<any>(null)
 const loading = ref(true)
 const executing = ref(false)
 const validating = ref(false)
-const compiling = ref(false)
+
 
 // Schema sheet state
 const schemaSheetOpen = ref(false)
@@ -194,31 +195,21 @@ const onValidate = async () => {
   
   validating.value = true
   try {
-    const result = await validateMetric(metricId)
+    const result = await validateMetric(metricId) as any
     validationResult.value = result
+    // Update compiled query if validation succeeded and query is available
+    if (result.compiled_query) {
+      compiledQuery.value = result.compiled_query
+    }
     console.log('Validation result:', result)
     toast.success('Validation completed')
+    // Reload metric to get updated validation status and compiled query
+    await loadMetric()
   } catch (error) {
     console.error('Failed to validate metric:', error)
     toast.error('Validation failed')
   } finally {
     validating.value = false
-  }
-}
-
-const onCompile = async () => {
-  if (!metric.value) return
-  
-  compiling.value = true
-  try {
-    const result = await compileMetric(metricId)
-    compiledQuery.value = (result as any)?.compiled_query || (result as any)?.sql || (result as any)?.query || 'No compiled query available'
-    toast.success('Query compiled successfully')
-  } catch (error) {
-    console.error('Failed to compile metric:', error)
-    toast.error('Compilation failed')
-  } finally {
-    compiling.value = false
   }
 }
 
@@ -240,10 +231,18 @@ const onExecute = async () => {
       }
     }
     
-    const result = await executeMetric(metricId, executionRequest)
+    const result = await executeMetric(metricId, executionRequest) as any
     executionResults.value = result
+    
+    // Show appropriate toast based on execution result
+    if (result.success) {
+      toast.success('Metric executed successfully')
+    } else {
+      toast.error('Metric execution failed - check results for details')
+    }
   } catch (error) {
     console.error('Failed to execute metric:', error)
+    toast.error('Failed to execute metric')
   } finally {
     executing.value = false
   }
@@ -522,11 +521,7 @@ onMounted(() => {
               <div class="flex gap-4">
                 <Button @click="onValidate" :disabled="validating" class="flex-1">
                   <Settings class="h-4 w-4 mr-2" />
-                  {{ validating ? 'Validating...' : 'Validate Query' }}
-                </Button>
-                <Button @click="onCompile" :disabled="compiling" class="flex-1">
-                  <Code class="h-4 w-4 mr-2" />
-                  {{ compiling ? 'Compiling...' : 'Compile Query' }}
+                  {{ validating ? 'Validating & Compiling...' : 'Validate & Compile Query' }}
                 </Button>
               </div>
             </CardContent>
@@ -548,15 +543,6 @@ onMounted(() => {
                 </Badge>
               </div>
               
-              <div v-if="validationResult.errors && validationResult.errors.length > 0" class="space-y-2">
-                <h4 class="font-medium text-sm">Errors:</h4>
-                <div class="space-y-1">
-                  <div v-for="error in validationResult.errors" :key="error" class="text-sm text-red-600 bg-red-50 p-2 rounded">
-                    {{ error }}
-                  </div>
-                </div>
-              </div>
-              
               <div v-if="validationResult.warnings && validationResult.warnings.length > 0" class="space-y-2">
                 <h4 class="font-medium text-sm">Warnings:</h4>
                 <div class="space-y-1">
@@ -566,45 +552,46 @@ onMounted(() => {
                 </div>
               </div>
               
-              <div v-if="validationResult.compiled_query" class="space-y-2">
-                <CodeHighlight lang="sql" :code="validationResult.compiled_query" />
-              </div>
+
             </CardContent>
           </Card>
 
           <!-- Compilation Results -->
-          <Card v-if="compiledQuery">
+          <Card v-if="compiledQuery || (validationResult && !validationResult.is_valid)">
             <CardHeader>
               <CardTitle class="flex items-center space-x-2">
                 <Code class="h-5 w-5" />
                 <span>Compiled Query</span>
-                <Button variant="outline" size="sm" @click="onCopyQuery" class="ml-auto">
+                <Button v-if="compiledQuery" variant="outline" size="sm" @click="onCopyQuery" class="ml-auto">
                   <Copy class="h-4 w-4 mr-2" />
                   Copy
                 </Button>
               </CardTitle>
             </CardHeader>
-            <CardContent class="">
-              <CodeHighlight lang="sql" :code="compiledQuery" />
+            <CardContent class="space-y-4">
+              <div v-if="compiledQuery">
+                <CodeHighlight lang="sql" :code="compiledQuery" />
+              </div>
+              
+              <!-- Show compilation errors here if validation failed -->
+              <div v-if="validationResult && !validationResult.is_valid && validationResult.errors" class="space-y-2">
+                <h4 class="font-medium text-sm text-red-600">Compilation Errors:</h4>
+                <div class="space-y-1">
+                  <div v-for="error in validationResult.errors" :key="error" class="text-sm text-red-600 bg-red-50 p-2 rounded">
+                    {{ error }}
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
-          <!-- Original SQL Query -->
-          <Card>
+          <!-- Original SQL Query - only show if metric has custom SQL query -->
+          <Card v-if="metric.query">
             <CardHeader>
               <CardTitle>Original SQL Query</CardTitle>
             </CardHeader>
             <CardContent class="space-y-4">
-              <div v-if="metric.query">
-                <CodeHighlight lang="sql" :code="metric.query" />
-              </div>
-              <div v-else class="text-center py-8">
-                <Code class="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 class="text-lg font-medium text-muted-foreground mb-2">No SQL query</h3>
-                <p class="text-sm text-muted-foreground">
-                  This metric doesn't have a SQL query defined yet.
-                </p>
-              </div>
+              <CodeHighlight lang="sql" :code="metric.query" />
             </CardContent>
           </Card>
         </TabsContent>
@@ -617,29 +604,7 @@ onMounted(() => {
               <CardTitle>Execution Context</CardTitle>
             </CardHeader>
             <CardContent class="space-y-4">
-              <div class="space-y-2">
-                <Label class="text-sm font-medium">Context ID (Optional)</Label>
-                <Input
-                  v-model="contextId"
-                  placeholder="e.g., C_ec85aba3-0fa7-4128-ae54-5b1282b4990b"
-                  class="font-mono text-sm"
-                />
-                <div class="text-xs text-muted-foreground">
-                  <p class="mb-1">Format: C_&lt;Consumer UUID&gt;, CG_&lt;Group UUID&gt;, or CCG_&lt;Consumer UUID&gt;_&lt;Group UUID&gt;</p>
-                  <p>Context ID will automatically substitute $CORTEX_ parameters with consumer properties.</p>
-                </div>
-                
-                <!-- Context Status Indicator -->
-                <div v-if="contextId && availableCortexParameters.length > 0" class="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div class="flex items-center space-x-2">
-                    <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    <span class="text-sm font-medium text-blue-900">Context Active</span>
-                  </div>
-                  <p class="text-xs text-blue-700 mt-1">
-                    The following $CORTEX_ parameters will be substituted: {{ availableCortexParameters.join(', ') }}
-                  </p>
-                </div>
-              </div>
+              <ContextIdBuilder v-model="contextId" />
             </CardContent>
           </Card>
 
@@ -733,10 +698,39 @@ onMounted(() => {
           <!-- Execution Results -->
           <Card v-if="executionResults">
             <CardHeader>
-              <CardTitle>Results</CardTitle>
+              <CardTitle class="flex items-center space-x-2">
+                <CheckCircle v-if="executionResults.success" class="h-5 w-5 text-green-500" />
+                <XCircle v-else class="h-5 w-5 text-red-500" />
+                <span>Execution Results</span>
+                <Badge :variant="executionResults.success ? 'default' : 'destructive'">
+                  {{ executionResults.success ? 'Success' : 'Failed' }}
+                </Badge>
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <ExecutionResultViewer :data="executionResults.data || []" :metadata="executionResults.metadata || {}" />
+            <CardContent class="space-y-4">
+              <!-- Show errors if execution failed -->
+              <div v-if="!executionResults.success && executionResults.errors && executionResults.errors.length > 0" class="space-y-2">
+                <h4 class="font-medium text-sm text-red-600">Execution Errors:</h4>
+                <div class="space-y-1">
+                  <div v-for="error in executionResults.errors" :key="error" class="text-sm text-red-600 bg-red-50 p-2 rounded">
+                    {{ error }}
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Show data if execution was successful -->
+              <div v-if="executionResults.success && executionResults.data">
+                <ExecutionResultViewer :data="executionResults.data || []" :metadata="executionResults.metadata || {}" />
+              </div>
+              
+              <!-- Show message if no data returned -->
+              <div v-if="executionResults.success && (!executionResults.data || executionResults.data.length === 0)" class="text-center py-8">
+                <Database class="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 class="text-lg font-medium text-muted-foreground mb-2">No data returned</h3>
+                <p class="text-sm text-muted-foreground">
+                  The query executed successfully but returned no results.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

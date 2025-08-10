@@ -1,6 +1,10 @@
 import json
 import os
-from datetime import datetime
+import base64
+from datetime import datetime, date
+from decimal import Decimal
+from enum import Enum
+from uuid import UUID
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -8,14 +12,38 @@ from sqlalchemy.orm import Session, sessionmaker
 from cortex.core.stores.sqlalchemy import BaseDBModel
 
 
-def date_time_encoder(val):
-    if isinstance(val, datetime):
+def json_default_encoder(val):
+    """General JSON encoder for non-serializable types.
+
+    Handles common Python types that need conversion:
+    - datetime/date -> ISO 8601 strings
+    - UUID -> str
+    - Decimal -> float
+    - set -> list
+    - bytes -> utf-8 string if decodable, else base64
+    - Enum -> value
+    """
+    if isinstance(val, (datetime, date)):
         return val.isoformat()
-    raise TypeError()
+    if isinstance(val, UUID):
+        return str(val)
+    if isinstance(val, Decimal):
+        # Convert to float for JSON compatibility
+        return float(val)
+    if isinstance(val, set):
+        return list(val)
+    if isinstance(val, bytes):
+        try:
+            return val.decode("utf-8")
+        except Exception:
+            return base64.b64encode(val).decode("ascii")
+    if isinstance(val, Enum):
+        return val.value
+    raise TypeError(f"Object of type {type(val).__name__} is not JSON serializable")
 
 
 def dumps(d):
-    return json.dumps(d, default=date_time_encoder)
+    return json.dumps(d, default=json_default_encoder)
 
 
 class Connection:

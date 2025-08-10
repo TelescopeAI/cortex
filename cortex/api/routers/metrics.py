@@ -21,6 +21,7 @@ from cortex.api.schemas.responses.metrics import (
 from cortex.core.semantics.metrics.metric import SemanticMetric
 from cortex.core.data.db.metric_service import MetricService
 from cortex.core.data.db.model_service import DataModelService
+from cortex.core.services.metrics import MetricExecutionService
 from cortex.core.data.modelling.model import DataModel
 
 # Create router instance
@@ -282,64 +283,28 @@ async def delete_metric(metric_id: UUID):
 async def execute_metric(metric_id: UUID, execution_request: MetricExecutionRequest):
     """Execute a metric with parameters."""
     try:
-        # Get metric
-        metric_service = MetricService()
-        try:
-            db_metric = metric_service.get_metric_by_id(metric_id)
-            if not db_metric:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Metric with ID {metric_id} not found"
-                )
-            
-            # Convert ORM to Pydantic using automatic conversion
-            metric = SemanticMetric.model_validate(db_metric)
-            
-            # Get data model for the metric
-            model_service = DataModelService()
-            try:
-                data_model = model_service.get_data_model_by_id(metric.data_model_id)
-                if not data_model:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Data model with ID {metric.data_model_id} not found"
-                    )
-                
-                # Convert ORM to Pydantic using automatic conversion
-                pydantic_model = DataModel.model_validate(data_model)
-                
-            finally:
-                model_service.close()
-            
-            # Execute the metric using QueryExecutor
-            from cortex.core.query.executor import QueryExecutor
-            from cortex.core.types.databases import DataSourceTypes
-            
-            executor = QueryExecutor()
-            
-            # Execute the metric with the new architecture
-            result = executor.execute_metric(
-                metric=metric,
-                data_model=pydantic_model,
-                parameters=execution_request.parameters,
-                limit=execution_request.limit,
-                offset=execution_request.offset,
-                source_type=DataSourceTypes.POSTGRESQL,
-                context_id=execution_request.context_id
-            )
-            
-            return MetricExecutionResponse(
-                success=result["success"],
-                data=result.get("data"),
-                metadata=result.get("metadata", {}),
-                errors=[result.get("error")] if not result["success"] else None
-            )
-            
-        finally:
-            metric_service.close()
+        # Use the shared metric execution service
+        result = MetricExecutionService.execute_metric(
+            metric_id=metric_id,
+            context_id=execution_request.context_id,
+            parameters=execution_request.parameters,
+            limit=execution_request.limit,
+            offset=execution_request.offset
+        )
         
-    except HTTPException:
-        raise
+        return MetricExecutionResponse(
+            success=result["success"],
+            data=result.get("data"),
+            metadata=result.get("metadata", {}),
+            errors=[result.get("error")] if not result["success"] else None
+        )
+        
+    except ValueError as e:
+        # Handle metric/model not found errors
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -350,7 +315,7 @@ async def execute_metric(metric_id: UUID, execution_request: MetricExecutionRequ
 @MetricsRouter.post("/metrics/{metric_id}/validate", response_model=MetricValidationResponse,
                    tags=["Metrics"])
 async def validate_metric(metric_id: UUID):
-    """Validate a metric configuration."""
+    """Validate a metric configuration and save compiled query if valid."""
     try:
         metric_service = MetricService()
         try:
@@ -397,9 +362,31 @@ async def validate_metric(metric_id: UUID):
                 
                 generator = QueryGeneratorFactory.create_generator(metric, DataSourceTypes.POSTGRESQL)
                 compiled_query = generator.generate_query()
+                
+                # If validation is successful and query compiled, save the compiled query to the database
+                if validation_result.is_valid and compiled_query:
+                    metric_service.update_metric(metric_id, {
+                        "compiled_query": compiled_query,
+                        "is_valid": True,
+                        "validation_errors": None  # Clear any previous validation errors
+                    })
+                    
             except Exception as e:
                 validation_result.errors.append(f"Query compilation failed: {str(e)}")
                 validation_result.is_valid = False
+                
+                # Mark as invalid if compilation fails
+                metric_service.update_metric(metric_id, {
+                    "is_valid": False,
+                    "validation_errors": [f"Compilation failed: {str(e)}"]
+                })
+            
+            # If validation failed for other reasons, update the database accordingly
+            if not validation_result.is_valid:
+                metric_service.update_metric(metric_id, {
+                    "is_valid": False,
+                    "validation_errors": validation_result.errors
+                })
             
             return MetricValidationResponse(
                 is_valid=validation_result.is_valid,
@@ -416,81 +403,6 @@ async def validate_metric(metric_id: UUID):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to validate metric: {str(e)}"
-        )
-
-
-@MetricsRouter.post("/metrics/{metric_id}/compile", response_model=MetricResponse,
-                   tags=["Metrics"])
-async def compile_metric(metric_id: UUID):
-    """Compile a metric to generate SQL query."""
-    try:
-        metric_service = MetricService()
-        try:
-            # Get metric
-            db_metric = metric_service.get_metric_by_id(metric_id)
-            if not db_metric:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Metric with ID {metric_id} not found"
-                )
-            
-            metric = SemanticMetric.model_validate(db_metric)
-            
-            # Generate SQL query using QueryGeneratorFactory
-            from cortex.core.query.engine.factory import QueryGeneratorFactory
-            from cortex.core.types.databases import DataSourceTypes
-            
-            try:
-                generator = QueryGeneratorFactory.create_generator(metric, DataSourceTypes.POSTGRESQL)
-                compiled_query = generator.generate_query()
-                
-                # Update the metric with the compiled query
-                updated_metric = metric_service.update_metric(metric_id, {
-                    "compiled_query": compiled_query,
-                    "is_valid": True
-                })
-                
-                if not updated_metric:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Metric with ID {metric_id} not found"
-                    )
-                
-                saved_metric = SemanticMetric.model_validate(updated_metric)
-                
-                # Get data model name
-                model_service = DataModelService()
-                try:
-                    data_model = model_service.get_data_model_by_id(saved_metric.data_model_id)
-                    data_model_name = data_model.name if data_model else "Unknown"
-                finally:
-                    model_service.close()
-                
-                return MetricResponse(
-                    **saved_metric.model_dump(),
-                    data_model_name=data_model_name
-                )
-                
-            except Exception as e:
-                # Mark as invalid if compilation fails
-                metric_service.update_metric(metric_id, {
-                    "is_valid": False,
-                    "validation_errors": [f"Compilation failed: {str(e)}"]
-                })
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Failed to compile metric: {str(e)}"
-                )
-            
-        finally:
-            metric_service.close()
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to compile metric: {str(e)}"
         )
 
 

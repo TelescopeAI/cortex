@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+
 interface BulletLegendItemInterface {
   name: string
   color: string
@@ -39,27 +41,81 @@ const props = withDefaults(defineProps<AreaChartProps>(), {
   xTickLine: false,
   legendPosition: 'top'
 })
+
+// Convert data to ECharts format
+const chartOption = computed(() => {
+  const xAxisData = props.data.map((_, index) => props.xFormatter(index))
+  
+  const series = Object.keys(props.categories).map(key => {
+    const categoryInfo = props.categories[key]
+    return {
+      name: categoryInfo?.name || key,
+      type: 'line',
+      data: props.data.map(item => item[key]),
+      smooth: true,
+      areaStyle: {
+        opacity: 0.7
+      },
+      itemStyle: {
+        color: categoryInfo?.color || '#3b82f6'
+      },
+      lineStyle: {
+        color: categoryInfo?.color || '#3b82f6'
+      }
+    }
+  })
+
+  return {
+    tooltip: {
+      show: !props.hideTooltip,
+      trigger: 'axis',
+      axisPointer: {
+        type: 'cross'
+      }
+    },
+    legend: {
+      show: !props.hideLegend,
+      [props.legendPosition]: 10,
+      data: series.map(s => s.name)
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      top: props.hideLegend ? '3%' : '15%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      name: props.xLabel,
+      data: xAxisData,
+      boundaryGap: false,
+      splitLine: {
+        show: props.xGridLine
+      },
+      axisLine: {
+        show: props.xDomainLine
+      }
+    },
+    yAxis: {
+      type: 'value',
+      name: props.yLabel,
+      splitLine: {
+        show: props.yGridLine
+      },
+      axisLine: {
+        show: props.yDomainLine
+      }
+    },
+    series: series
+  }
+})
 </script>
 
 <template>
-  <AreaChart
-    :data="data"
-    :height="height"
-    :x-label="xLabel"
-    :y-label="yLabel"
-    :categories="categories"
-    :x-formatter="xFormatter"
-    :x-num-ticks="xNumTicks"
-    :x-explicit-ticks="xExplicitTicks"
-    :min-max-ticks-only="minMaxTicksOnly"
-    :y-num-ticks="yNumTicks"
-    :hide-legend="hideLegend"
-    :hide-tooltip="hideTooltip"
-    :x-grid-line="xGridLine"
-    :x-domain-line="xDomainLine"
-    :y-grid-line="yGridLine"
-    :y-domain-line="yDomainLine"
-    :x-tick-line="xTickLine"
-    :legend-position="legendPosition"
+  <VChart 
+    :option="chartOption" 
+    :style="{ height: `${height}px` }"
+    autoresize
   />
 </template> 

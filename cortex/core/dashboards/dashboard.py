@@ -113,7 +113,7 @@ class DataMapping(TSModel):
     Defines how metric data maps to visualization axes and series.
     """
     x_axis: Dict[str, Any]  # {"field": "date", "type": "temporal"}
-    y_axis: Dict[str, Any]  # {"field": "revenue", "type": "numerical"}
+    y_axes: List[Dict[str, Any]]  # list of {"field": "revenue", "type": "numerical"}
     series: Optional[Dict[str, Any]] = None  # {"split_by": "product", "value_field": "revenue"}
     category: Optional[str] = None  # For pie charts
     value_field: Optional[str] = None  # Primary value field

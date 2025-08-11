@@ -333,19 +333,34 @@ export function useDashboards() {
                 data_mapping: {
                   x_axis: widget.visualization?.data_mapping?.x_axis ? {
                     field: widget.visualization.data_mapping.x_axis.field || 'x',
-                    data_type: widget.visualization.data_mapping.x_axis.data_type || 'category',
+                    // omit data_type to allow backend inference
                     label: widget.visualization.data_mapping.x_axis.label || null,
                     required: widget.visualization.data_mapping.x_axis.required || false
                   } : null,
-                  y_axis: widget.visualization?.data_mapping?.y_axis ? {
-                    field: widget.visualization.data_mapping.y_axis.field || 'y',
-                    data_type: widget.visualization.data_mapping.y_axis.data_type || 'numerical',
-                    label: widget.visualization.data_mapping.y_axis.label || null,
-                    required: widget.visualization.data_mapping.y_axis.required || false
-                  } : null,
-                  value_field: widget.visualization?.data_mapping?.value_field,
-                  category_field: widget.visualization?.data_mapping?.category_field,
-                  series_field: widget.visualization?.data_mapping?.series_field,
+                  // Support multi-Y via y_axes; keep y_axis for backward compat if only one
+                  y_axes: Array.isArray(widget.visualization?.data_mapping?.y_axes)
+                    ? widget.visualization.data_mapping.y_axes.map((m:any) => ({
+                        field: m.field,
+                        // omit data_type to allow backend inference
+                        label: m.label || null,
+                        required: m.required ?? true
+                      }))
+                    : [],
+                  value_field: widget.visualization?.data_mapping?.value_field ? {
+                    field: widget.visualization.data_mapping.value_field.field,
+                    label: widget.visualization.data_mapping.value_field.label || null,
+                    required: widget.visualization.data_mapping.value_field.required ?? true
+                  } : undefined,
+                  category_field: widget.visualization?.data_mapping?.category_field ? {
+                    field: widget.visualization.data_mapping.category_field.field,
+                    label: widget.visualization.data_mapping.category_field.label || null,
+                    required: widget.visualization.data_mapping.category_field.required ?? true
+                  } : undefined,
+                  series_field: widget.visualization?.data_mapping?.series_field ? {
+                    field: widget.visualization.data_mapping.series_field.field,
+                    label: widget.visualization.data_mapping.series_field.label || null,
+                    required: widget.visualization.data_mapping.series_field.required ?? false
+                  } : undefined,
                   columns: widget.visualization?.data_mapping?.columns
                 },
                 single_value_config: widget.visualization?.single_value_config,

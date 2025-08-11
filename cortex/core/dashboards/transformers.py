@@ -143,10 +143,10 @@ class DataTransformationService(TSModel):
             metadata = ChartMetadata(
                 title=f"Chart Data",  # Can be overridden by widget title
                 x_axis_title=data_mapping.x_axis.get("field", "X Axis"),
-                y_axis_title=data_mapping.y_axis.get("field", "Y Axis"),
+                y_axis_title=(data_mapping.y_axes[0].get("field") if getattr(data_mapping, 'y_axes', None) and data_mapping.y_axes else "Y Axis"),
                 data_types={
                     "x": AxisDataType(data_mapping.x_axis.get("type", "categorical")),
-                    "y": AxisDataType(data_mapping.y_axis.get("type", "numerical"))
+                    "y": AxisDataType((data_mapping.y_axes[0].get("type") if getattr(data_mapping, 'y_axes', None) and data_mapping.y_axes else "numerical"))
                 }
             )
             
@@ -188,7 +188,7 @@ class DataTransformationService(TSModel):
             return ProcessedChartData(value=0)
         
         # Get the value field from mapping or use first numeric column
-        value_field = data_mapping.value_field or data_mapping.y_axis.get("field")
+        value_field = data_mapping.value_field or (data_mapping.y_axes[0].get("field") if getattr(data_mapping, 'y_axes', None) and data_mapping.y_axes else None)
         
         if value_field:
             # Find column index
@@ -213,7 +213,7 @@ class DataTransformationService(TSModel):
             return ProcessedChartData(categories=[])
         
         category_field = data_mapping.category or data_mapping.x_axis.get("field")
-        value_field = data_mapping.value_field or data_mapping.y_axis.get("field")
+        value_field = data_mapping.value_field or (data_mapping.y_axes[0].get("field") if getattr(data_mapping, 'y_axes', None) and data_mapping.y_axes else None)
         
         try:
             category_index = metric_result.columns.index(category_field)
@@ -272,7 +272,7 @@ class DataTransformationService(TSModel):
             return ProcessedChartData(series=[])
         
         x_field = data_mapping.x_axis.get("field")
-        y_field = data_mapping.y_axis.get("field")
+        y_field = (data_mapping.y_axes[0].get("field") if getattr(data_mapping, 'y_axes', None) and data_mapping.y_axes else None)
         series_config = data_mapping.series
         
         try:

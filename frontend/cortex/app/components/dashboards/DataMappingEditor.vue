@@ -24,7 +24,7 @@ interface ColumnMapping {
 
 interface DataMapping {
   x_axis?: FieldMapping
-  y_axis?: FieldMapping
+  y_axes?: FieldMapping[]
   value_field?: FieldMapping
   category_field?: FieldMapping
   series_field?: FieldMapping
@@ -63,9 +63,7 @@ const requiresColumns = computed(() =>
   props.visualizationType === 'table'
 )
 
-const supportsSeries = computed(() => 
-  ['bar_chart', 'line_chart', 'area_chart'].includes(props.visualizationType)
-)
+const supportsSeries = computed(() => ['bar_chart', 'line_chart', 'area_chart'].includes(props.visualizationType))
 
 // Watch for changes and emit updates
 watch(currentMapping, (newMapping) => {
@@ -104,6 +102,12 @@ function updateColumn(index: number, field: string, column: { name: string; type
     currentMapping.columns[index].label = column.name
   }
 }
+
+function removeYAxis(index: number) {
+  if (currentMapping.y_axes && index >= 0 && index < currentMapping.y_axes.length) {
+    currentMapping.y_axes.splice(index, 1)
+  }
+}
 </script>
 
 <template>
@@ -115,8 +119,8 @@ function updateColumn(index: number, field: string, column: { name: string; type
       </p>
     </div>
 
-    <!-- X/Y Axis for Charts -->
-    <div v-if="requiresXY" class="grid grid-cols-2 gap-4">
+    <!-- X/Y Axis for Charts (flex-col, multi Y support) -->
+    <div v-if="requiresXY" class="flex flex-col gap-4">
       <FieldMappingSelector
         label="X Axis"
         :mapping="currentMapping.x_axis"
@@ -125,14 +129,29 @@ function updateColumn(index: number, field: string, column: { name: string; type
         required
         @update="(mapping) => updateFieldMapping('x_axis', mapping)"
       />
-      <FieldMappingSelector
-        label="Y Axis"
-        :mapping="currentMapping.y_axis"
-        :available-tables="availableTables"
-        :data-types="['numerical']"
-        required
-        @update="(mapping) => updateFieldMapping('y_axis', mapping)"
-      />
+
+      <div class="space-y-3">
+        <Label class="text-sm font-medium">Y Axes</Label>
+        <div class="space-y-3">
+          <FieldMappingSelector
+            v-for="(ym, idx) in (currentMapping.y_axes || [])"
+            :key="idx"
+            :label="`Y Axis ${idx + 1}`"
+            :mapping="ym"
+            :available-tables="availableTables"
+            :data-types="['numerical']"
+            required
+            @update="(mapping) => { (currentMapping.y_axes![idx] = mapping) }"
+            @remove="() => removeYAxis(idx)"
+          />
+        </div>
+        <div>
+          <Button size="sm" variant="outline" @click="() => { (currentMapping.y_axes = currentMapping.y_axes || []); currentMapping.y_axes.push({ field: '', data_type: 'numerical', label: '' }) }">
+            <Plus class="w-4 h-4 mr-1" />
+            Add Y Field
+          </Button>
+        </div>
+      </div>
     </div>
 
     <!-- Value Field for Single Values and Gauges -->
@@ -167,16 +186,7 @@ function updateColumn(index: number, field: string, column: { name: string; type
       />
     </div>
 
-    <!-- Series Field for Multi-Series Charts -->
-    <div v-if="supportsSeries">
-      <FieldMappingSelector
-        label="Series Field (optional)"
-        :mapping="currentMapping.series_field"
-        :available-tables="availableTables"
-        :data-types="['categorical']"
-        @update="(mapping) => updateFieldMapping('series_field', mapping)"
-      />
-    </div>
+    <!-- Series Field removed: multi-Y covers series use case -->
 
     <!-- Column Configuration for Tables -->
     <Card v-if="requiresColumns">

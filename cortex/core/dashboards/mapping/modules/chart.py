@@ -14,29 +14,31 @@ class ChartMapping(VisualizationMapping):
         self.data_mapping.validate_against_result(result_columns)
 
         if not uses_category_value:
-            # Charts require both x_axis and y_axis
+            # Charts require x and at least one y
             if not self.data_mapping.x_axis:
                 raise MappingValidationError(
                     "x_axis", 
                     "Chart visualization requires an x_axis mapping"
                 )
-            if not self.data_mapping.y_axis:
+            if not (self.data_mapping.y_axes and len(self.data_mapping.y_axes) > 0):
                 raise MappingValidationError(
                     "y_axis", 
-                    "Chart visualization requires a y_axis mapping"
+                    "Chart visualization requires at least one y-axis mapping"
                 )
         
         # Y-axis should typically be numerical unless using category/value
         if not uses_category_value:
-            if self.data_mapping.y_axis.data_type not in [AxisDataType.NUMERICAL]:
-                raise MappingValidationError(
-                    "y_axis",
-                    f"Y-axis field should be numerical, got {self.data_mapping.y_axis.data_type}"
-                )
+            y_mappings = self.data_mapping.y_axes or []
+            for ym in y_mappings:
+                if ym.data_type not in [AxisDataType.NUMERICAL]:
+                    raise MappingValidationError(
+                        "y_axis",
+                        f"Y-axis field should be numerical, got {ym.data_type}"
+                    )
     
     def get_required_fields(self) -> List[str]:
         """Get the list of fields required for chart visualization."""
-        return ["x_axis", "y_axis"]
+        return ["x_axis", "y_axes"]
     
     def transform_data(self, metric_result: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Transform metric result data for chart display."""
@@ -45,7 +47,7 @@ class ChartMapping(VisualizationMapping):
                 "series": [],
                 "metadata": {
                     "x_label": self.data_mapping.x_axis.label if self.data_mapping.x_axis else "",
-                    "y_label": self.data_mapping.y_axis.label if self.data_mapping.y_axis else ""
+                    "y_label": (self.data_mapping.y_axes[0].label if (self.data_mapping.y_axes and len(self.data_mapping.y_axes) > 0 and self.data_mapping.y_axes[0].label) else "")
                 }
             }
         
@@ -75,15 +77,24 @@ class ChartMapping(VisualizationMapping):
             }
 
         x_field = self.data_mapping.x_axis.field
-        y_field = self.data_mapping.y_axis.field
         series_field = self.data_mapping.series_field.field if self.data_mapping.series_field else None
+        # Support multiple Y
+        y_fields = []
+        y_labels = []
+        if self.data_mapping.y_axes and len(self.data_mapping.y_axes) > 0:
+            for m in self.data_mapping.y_axes:
+                y_fields.append(m.field)
+                y_labels.append(m.label or m.field)
         
         if series_field:
-            # Multi-series chart
-            return self._transform_multi_series(metric_result, x_field, y_field, series_field)
+            # Multi-series by series field (existing)
+            return self._transform_multi_series(metric_result, x_field, y_fields[0], series_field)
         else:
-            # Single series chart
-            return self._transform_single_series(metric_result, x_field, y_field)
+            # Multiple Ys as separate series
+            if len(y_fields) > 1:
+                return self._transform_multi_y(metric_result, x_field, y_fields, y_labels)
+            # Single series
+            return self._transform_single_series(metric_result, x_field, y_fields[0])
     
     def _transform_single_series(self, data: List[Dict[str, Any]], x_field: str, y_field: str) -> Dict[str, Any]:
         """Transform data for single series chart to StandardChartData shape.
@@ -109,12 +120,12 @@ class ChartMapping(VisualizationMapping):
 
         return {
             "series": [{
-                "name": self.data_mapping.y_axis.label or y_field,
+                "name": (self.data_mapping.y_axes[0].label if (self.data_mapping.y_axes and len(self.data_mapping.y_axes) > 0 and self.data_mapping.y_axes[0].label) else y_field),
                 "data": points
             }],
             "metadata": {
                 "x_label": self.data_mapping.x_axis.label or x_field,
-                "y_label": self.data_mapping.y_axis.label or y_field,
+                "y_label": (self.data_mapping.y_axes[0].label if (self.data_mapping.y_axes and len(self.data_mapping.y_axes) > 0 and self.data_mapping.y_axes[0].label) else y_field),
                 "series_type": "single"
             }
         }
@@ -153,8 +164,33 @@ class ChartMapping(VisualizationMapping):
             "series": series_list,
             "metadata": {
                 "x_label": self.data_mapping.x_axis.label or x_field,
-                "y_label": self.data_mapping.y_axis.label or y_field,
+                "y_label": y_field,
                 "series_label": self.data_mapping.series_field.label or series_field,
+                "series_type": "multi"
+            }
+        }
+
+    def _transform_multi_y(self, data: List[Dict[str, Any]], x_field: str, y_fields: List[str], y_labels: List[str]) -> Dict[str, Any]:
+        series_list = []
+        for idx, y_field in enumerate(y_fields):
+            points = []
+            for row in data:
+                x_val = row.get(x_field)
+                y_raw = row.get(y_field)
+                if y_raw is None:
+                    continue
+                if not isinstance(y_raw, (int, float)):
+                    try:
+                        y_raw = float(y_raw)
+                    except Exception:
+                        continue
+                points.append({"x": x_val, "y": y_raw})
+            series_list.append({"name": y_labels[idx] if idx < len(y_labels) else y_field, "data": points})
+        return {
+            "series": series_list,
+            "metadata": {
+                "x_label": self.data_mapping.x_axis.label or x_field,
+                "y_label": ", ".join(y_labels) if y_labels else ", ".join(y_fields),
                 "series_type": "multi"
             }
         }

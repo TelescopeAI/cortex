@@ -215,6 +215,21 @@ const availableColumns = computed(() => {
   return columns
 })
 
+// When a new table schema arrives, default the table_name to the first available table
+watch(
+  () => props.tableSchema,
+  (newSchema) => {
+    if (newSchema?.tables && newSchema.tables.length > 0) {
+      const first = newSchema.tables[0]?.name
+      const existsInNew = newSchema.tables.some((t: any) => t.name === schema.value.table_name)
+      if (!existsInNew) {
+        schema.value.table_name = first || ''
+      }
+    }
+  },
+  { immediate: true }
+)
+
 // Watch for changes and emit to parent
 watch(schema, (newSchema) => {
   emit('update:modelValue', newSchema)
@@ -252,11 +267,20 @@ watch(() => props.selectedDataSourceId, (newId) => {
   }
 }, { immediate: true })
 
-// Emit data source changes back to parent
-watch(() => schema.value.data_source_id, (newId) => {
-  console.log('MetricSchemaBuilder - schema.data_source_id changed to:', newId)
-  emit('update:selectedDataSourceId', newId)
-}, { immediate: false })
+// Emit data source changes back to parent (id only)
+watch(
+  () => schema.value.data_source_id,
+  (newId: any, oldId: any) => {
+    console.log('MetricSchemaBuilder - schema.data_source_id changed to:', newId)
+    // Clear currently selected source table when data source changes
+    if (newId !== oldId) {
+      schema.value.table_name = ''
+    }
+    // Emit only the id string upward
+    emit('update:selectedDataSourceId', typeof newId === 'object' ? (newId?.id ?? undefined) : newId)
+  },
+  { immediate: false }
+)
 
 // Auto-load schema when selectedDataSourceId changes
 watch(() => props.selectedDataSourceId, (newDataSourceId, oldDataSourceId) => {

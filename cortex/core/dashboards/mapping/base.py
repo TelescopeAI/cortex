@@ -69,7 +69,8 @@ class DataMapping(TSModel):
     
     # Core field mappings - optional to support different visualization types
     x_axis: Optional[FieldMapping] = None
-    y_axis: Optional[FieldMapping] = None
+    # Only multi-Y support
+    y_axes: Optional[List[FieldMapping]] = None
     value_field: Optional[FieldMapping] = None
     category_field: Optional[FieldMapping] = None
     series_field: Optional[FieldMapping] = None
@@ -83,8 +84,8 @@ class DataMapping(TSModel):
         
         if self.x_axis:
             fields.append(self.x_axis.field)
-        if self.y_axis:
-            fields.append(self.y_axis.field)
+        if self.y_axes:
+            fields.extend([m.field for m in self.y_axes])
         if self.value_field:
             fields.append(self.value_field.field)
         if self.category_field:
@@ -100,8 +101,9 @@ class DataMapping(TSModel):
         """Validate all field mappings against metric result columns."""
         if self.x_axis:
             self.x_axis.validate_against_result(result_columns)
-        if self.y_axis:
-            self.y_axis.validate_against_result(result_columns)
+        if self.y_axes:
+            for m in self.y_axes:
+                m.validate_against_result(result_columns)
         if self.value_field:
             self.value_field.validate_against_result(result_columns)
         if self.category_field:

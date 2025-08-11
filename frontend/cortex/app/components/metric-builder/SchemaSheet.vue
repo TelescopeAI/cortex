@@ -40,7 +40,7 @@
           <Button
             variant="outline"
             size="sm"
-            @click="loadSchemaFromDataSource"
+            @click="() => loadSchemaFromDataSource()"
             :disabled="!selectedDataSourceId || schemaLoading"
           >
             <Database class="h-4 w-4 mr-2" />
@@ -81,7 +81,7 @@
         <!-- Edit Mode -->
         <div v-if="isEditing">
           <MetricSchemaBuilder
-            :selected-data-source-id="selectedDataSourceId"
+            :selected-data-source-id="selectedDataSourceIdLocal"
             :model-value="schema"
             :table-schema="tableSchema"
             @update:model-value="handleSchemaUpdate"
@@ -158,6 +158,9 @@ onMounted(() => {
 
 
 
+// Local reactive copy of selected data source id (do not mutate prop directly)
+const selectedDataSourceIdLocal = ref<string | undefined>(undefined)
+
 // Schema data structure
 const schema = ref({
   table_name: '',
@@ -188,17 +191,19 @@ watch(() => props.metric, (newMetric) => {
       parameters: newMetric.parameters || {}
     }
     
+    // Initialize local data source id
+    selectedDataSourceIdLocal.value = newMetric.data_source_id || props.selectedDataSourceId
     // Auto-load schema if we have a data source ID and no schema loaded yet
-    if (newMetric.data_source_id && !tableSchema.value) {
-      loadSchemaFromDataSource(newMetric.data_source_id)
+    if (selectedDataSourceIdLocal.value && !tableSchema.value) {
+      loadSchemaFromDataSource(selectedDataSourceIdLocal.value)
     }
   }
 }, { immediate: true })
 
-// Auto-load schema when selectedDataSourceId changes
-watch(() => props.selectedDataSourceId, (newDataSourceId) => {
-  if (newDataSourceId && !tableSchema.value) {
-    loadSchemaFromDataSource(newDataSourceId)
+// Sync prop -> local for initial mount
+watch(() => props.selectedDataSourceId, (newId) => {
+  if (newId) {
+    selectedDataSourceIdLocal.value = newId
   }
 }, { immediate: true })
 
@@ -218,17 +223,24 @@ const generatedJson = computed(() => {
   return JSON.stringify(cleanSchema, null, 2)
 })
 
-// Load schema from data source
-const loadSchemaFromDataSource = async (dataSourceId?: string) => {
-  const sourceId = dataSourceId || props.selectedDataSourceId
-  if (!sourceId) {
+// Load schema from data source (use function declaration for hoisting)
+async function loadSchemaFromDataSource(dataSourceId?: string) {
+  const src = dataSourceId || selectedDataSourceIdLocal.value || props.selectedDataSourceId
+  if (!src) {
     toast.error('Please select a data source first')
     return
   }
 
   schemaLoading.value = true
   try {
-    tableSchema.value = await getDataSourceSchema(sourceId)
+    tableSchema.value = await getDataSourceSchema(src)
+    // After loading a new schema, default the table to the first available table
+    const firstTable = tableSchema.value?.tables?.[0]?.name
+    if (firstTable) {
+      schema.value.table_name = firstTable
+    } else {
+      schema.value.table_name = ''
+    }
     toast.success('Schema loaded successfully')
   } catch (error) {
     console.error('Failed to load schema:', error)
@@ -251,14 +263,20 @@ const handleSchemaUpdate = (newSchema: any) => {
   schema.value = { ...schema.value, ...newSchema }
 }
 
-// Handle data source updates
+// Handle data source updates from child. Do not save automatically; update local and load schema.
 const handleDataSourceUpdate = (newDataSourceId: string | undefined) => {
-  emit('save', { ...schema.value, data_source_id: newDataSourceId })
+  selectedDataSourceIdLocal.value = newDataSourceId
+  // Load schema for the newly selected data source
+  if (newDataSourceId) {
+    loadSchemaFromDataSource(newDataSourceId)
+  }
 }
 
 // Handle save
 const handleSave = () => {
-  emit('save', schema.value)
+  // Persist with current selected data source id
+  const payload = { ...schema.value, data_source_id: selectedDataSourceIdLocal.value }
+  emit('save', payload)
   emit('update:open', false)
   isEditing.value = false
 }

@@ -19,6 +19,7 @@ import DataMappingEditor from './DataMappingEditor.vue'
 import type { DashboardWidget } from '~/types/dashboards'
 import { useMetrics, type SemanticMetric } from '~/composables/useMetrics'
 import { useDashboards } from '~/composables/useDashboards'
+import PreviewChartRenderer from './PreviewChartRenderer.vue'
 
 interface Props {
   open: boolean
@@ -80,6 +81,7 @@ const currentMode = ref<'edit' | 'view'>('edit')
 const previewData = ref<any>(null)
 const previewLoading = ref(false)
 const previewError = ref<string | null>(null)
+const previewTab = ref<'charts' | 'json'>('charts')
 
 // Screen size detection
 const windowWidth = ref(0)
@@ -478,8 +480,26 @@ onMounted(() => {
               </div>
               
               <div v-else-if="previewData" class="min-h-32">
-                <!-- Preview content would render here based on previewData -->
-                <pre class="text-xs bg-muted p-3 rounded overflow-auto max-h-64">{{ JSON.stringify(previewData, null, 2) }}</pre>
+                <Tabs v-model="previewTab" class="w-full">
+                  <TabsList class="grid w-full grid-cols-2">
+                    <TabsTrigger value="charts">Charts</TabsTrigger>
+                    <TabsTrigger value="json">JSON</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="charts" class="mt-4">
+                    <div class="w-full max-h-[36rem]">
+                      <PreviewChartRenderer 
+                        :processed="previewData.processed" 
+                        :metadata="previewData.metadata"
+                        :type="form.type"
+                        :gauge-config="gauge"
+                      />
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="json" class="mt-4">
+                    <pre class="text-xs bg-muted p-3 rounded overflow-auto max-h-64">{{ JSON.stringify(previewData, null, 2) }}</pre>
+                  </TabsContent>
+                </Tabs>
               </div>
               
               <div v-else class="flex items-center justify-center h-32">
@@ -532,8 +552,26 @@ onMounted(() => {
               </div>
               
               <div v-else-if="previewData" class="min-h-64">
-                <!-- Preview content would render here based on previewData -->
-                <pre class="text-xs bg-muted p-3 rounded overflow-auto max-h-96">{{ JSON.stringify(previewData, null, 2) }}</pre>
+                <Tabs v-model="previewTab" class="w-full">
+                  <TabsList class="grid w-full grid-cols-2">
+                    <TabsTrigger value="charts">Charts</TabsTrigger>
+                    <TabsTrigger value="json">JSON</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="charts" class="mt-4">
+                    <div class="w-full max-h-[40rem]">
+                      <PreviewChartRenderer 
+                        :processed="previewData.processed" 
+                        :metadata="previewData.metadata"
+                        :type="form.type"
+                        :gauge-config="gauge"
+                      />
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="json" class="mt-4">
+                    <pre class="text-xs bg-muted p-3 rounded overflow-auto max-h-96">{{ JSON.stringify(previewData, null, 2) }}</pre>
+                  </TabsContent>
+                </Tabs>
               </div>
               
               <div v-else class="flex items-center justify-center h-64">

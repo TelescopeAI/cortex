@@ -4,6 +4,8 @@ import { Label } from '~/components/ui/label'
 import { Input } from '~/components/ui/input'
 import { Select as UiSelect, SelectContent as UiSelectContent, SelectItem as UiSelectItem, SelectTrigger as UiSelectTrigger, SelectValue as UiSelectValue } from '~/components/ui/select'
 import ColumnSelector from '~/components/ColumnSelector.vue'
+import { Button } from '~/components/ui/button'
+import { Trash2 } from 'lucide-vue-next'
 
 interface FieldMapping {
   field: string
@@ -22,6 +24,7 @@ interface Props {
 
 interface Emits {
   (e: 'update', mapping: FieldMapping): void
+  (e: 'remove'): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -74,6 +77,10 @@ function updateDataType(newType: string) {
   currentMapping.value.data_type = newType
   emit('update', currentMapping.value)
 }
+
+function removeField() {
+  emit('remove')
+}
 </script>
 
 <template>
@@ -94,33 +101,23 @@ function updateDataType(newType: string) {
         />
       </div>
       
-      <!-- Data Type Selection -->
-      <div v-if="currentMapping.field">
-        <Label class="text-xs text-muted-foreground">Data Type</Label>
-        <UiSelect :model-value="currentMapping.data_type" @update:model-value="(v:any) => updateDataType(String(v || ''))">
-          <UiSelectTrigger>
-            <UiSelectValue />
-          </UiSelectTrigger>
-          <UiSelectContent>
-            <UiSelectItem 
-              v-for="type in dataTypes" 
-              :key="type" 
-              :value="type"
-            >
-              {{ type.charAt(0).toUpperCase() + type.slice(1) }}
-            </UiSelectItem>
-          </UiSelectContent>
-        </UiSelect>
-      </div>
+      <!-- Data type selection removed; inferred automatically -->
       
-      <!-- Custom Label -->
+      <!-- Custom Label and Remove -->
       <div v-if="currentMapping.field">
-        <Label class="text-xs text-muted-foreground">Display Label (optional)</Label>
-        <Input 
-          :model-value="currentMapping.label" 
-          @update:model-value="(v:any) => updateLabel(String(v ?? ''))"
-          :placeholder="currentMapping.field"
-        />
+        <div class="flex items-center gap-2">
+          <div class="flex-1">
+            <Label class="text-xs text-muted-foreground">Display Label (optional)</Label>
+            <Input 
+              :model-value="currentMapping.label" 
+              @update:model-value="(v:any) => updateLabel(String(v ?? ''))"
+              :placeholder="currentMapping.field"
+            />
+          </div>
+          <Button variant="ghost" size="icon" class="text-destructive" @click="removeField">
+            <Trash2 class="w-4 h-4" />
+          </Button>
+        </div>
       </div>
     </div>
   </div>

@@ -41,7 +41,8 @@ class ColumnMappingRequest(TSModel):
 class DataMappingRequest(TSModel):
     """Request model for data mapping configuration."""
     x_axis: Optional[FieldMappingRequest] = None
-    y_axis: Optional[FieldMappingRequest] = None
+    # Only multi-Y support
+    y_axes: Optional[List[FieldMappingRequest]] = None
     value_field: Optional[FieldMappingRequest] = None
     category_field: Optional[FieldMappingRequest] = None
     series_field: Optional[FieldMappingRequest] = None

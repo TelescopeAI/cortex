@@ -75,7 +75,7 @@ class SeriesMapping(TSModel):
 
 class DataMapping(TSModel):
     x_axis: AxisMapping
-    y_axis: AxisMapping
+    y_axes: list[AxisMapping]
     series: Optional[SeriesMapping] = None
     category: Optional[str] = None
     value_field: Optional[str] = None

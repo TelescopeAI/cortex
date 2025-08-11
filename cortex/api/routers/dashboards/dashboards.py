@@ -574,12 +574,14 @@ def _transform_widget_data_with_mapping(widget, metric_result):
                 label=request_mapping.x_axis.label,
                 required=(request_mapping.x_axis.required or False)
             ) if request_mapping.x_axis else None,
-            y_axis=FieldMapping(
-                field=request_mapping.y_axis.field,
-                data_type=_normalize_axis_type(request_mapping.y_axis.data_type, "numerical"),
-                label=request_mapping.y_axis.label,
-                required=(request_mapping.y_axis.required or False)
-            ) if request_mapping.y_axis else None,
+            y_axes=[
+                FieldMapping(
+                    field=ym.field,
+                    data_type=_normalize_axis_type(getattr(ym, 'data_type', None), "numerical"),
+                    label=getattr(ym, 'label', None),
+                    required=(getattr(ym, 'required', False) or False)
+                ) for ym in getattr(request_mapping, 'y_axes', []) or []
+            ] or None,
             value_field=FieldMapping(
                 field=request_mapping.value_field.field,
                 data_type=_normalize_axis_type(request_mapping.value_field.data_type, "numerical"),
@@ -651,33 +653,28 @@ def _transform_widget_data_with_mapping(widget, metric_result):
         try:
             if domain_data_mapping.x_axis:
                 x_type = getattr(domain_data_mapping.x_axis.data_type, 'value', domain_data_mapping.x_axis.data_type)
-            if domain_data_mapping.y_axis:
-                y_type = getattr(domain_data_mapping.y_axis.data_type, 'value', domain_data_mapping.y_axis.data_type)
+            if domain_data_mapping.y_axes and len(domain_data_mapping.y_axes) > 0:
+                y_type = getattr(domain_data_mapping.y_axes[0].data_type, 'value', domain_data_mapping.y_axes[0].data_type)
         except Exception:
             pass
         x_type = x_type or _normalize_axis_type(getattr(request_mapping.x_axis, 'data_type', None), 'categorical')
-        y_type = y_type or _normalize_axis_type(getattr(request_mapping.y_axis, 'data_type', None), 'numerical')
+        if not y_type and getattr(request_mapping, 'y_axes', None):
+            first_y = request_mapping.y_axes[0]
+            y_type = _normalize_axis_type(getattr(first_y, 'data_type', None), 'numerical')
 
         # Convert to StandardChartData format with all required metadata
         return StandardChartData(
             raw={"columns": metric_result.columns, "data": metric_result.data},
             processed=transformed_data,
-            metadata={
-                "execution_time_ms": metric_result.execution_time_ms,
-                "total_rows": metric_result.total_rows,
-                "visualization_type": widget.visualization.type.value,
-                "field_mappings": request_mapping.model_dump(),
-                "preview_mode": True,
-                "title": widget.title if hasattr(widget, 'title') else "Preview Widget",
-                "description": widget.description if hasattr(widget, 'description') else "",
-                "x_axis_title": (
-                    request_mapping.x_axis.label if request_mapping.x_axis and request_mapping.x_axis.label else "X Axis"),
-                "y_axis_title": (
-                    request_mapping.y_axis.label if request_mapping.y_axis and request_mapping.y_axis.label else "Y Axis"),
-                "data_types": {"x_axis": x_type, "y_axis": y_type},
-                "formatting": {},
-                "ranges": {}
-            }
+            metadata=ChartMetadata(
+                title=(widget.title if hasattr(widget, 'title') else "Preview Widget"),
+                description=(widget.description if hasattr(widget, 'description') else ""),
+                x_axis_title=(request_mapping.x_axis.label if request_mapping.x_axis and request_mapping.x_axis.label else "X Axis"),
+                y_axis_title=(request_mapping.y_axes[0].label if getattr(request_mapping, 'y_axes', None) and request_mapping.y_axes and request_mapping.y_axes[0].label else "Y Axis"),
+                data_types={"x_axis": x_type, "y_axis": y_type},
+                formatting={},
+                ranges={},
+            )
         ).model_dump()
 
     except Exception as e:

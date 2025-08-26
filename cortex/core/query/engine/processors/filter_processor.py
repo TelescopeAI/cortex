@@ -4,6 +4,7 @@ from pydantic import ConfigDict
 from cortex.core.types.telescope import TSModel
 from cortex.core.semantics.filters import SemanticFilter
 from cortex.core.types.semantics.filter import FilterOperator, FilterType
+from cortex.core.query.engine.processors.output_processor import OutputProcessor
 
 
 class FilterProcessor(TSModel):
@@ -15,7 +16,8 @@ class FilterProcessor(TSModel):
     @staticmethod
     def process_filters(filters: Optional[List[SemanticFilter]], 
                        parameters: Optional[Dict[str, Any]] = None,
-                       table_prefix: Optional[str] = None) -> tuple[Optional[str], Optional[str]]:
+                       table_prefix: Optional[str] = None,
+                       formatting_map: Optional[Dict[str, List]] = None) -> tuple[Optional[str], Optional[str]]:
         """
         Process a list of semantic filters and return WHERE and HAVING clauses.
         
@@ -39,7 +41,7 @@ class FilterProcessor(TSModel):
                 
             # Generate SQL condition for this filter
             condition = FilterProcessor._build_filter_condition(
-                filter_obj, parameters, table_prefix
+                filter_obj, parameters, table_prefix, formatting_map
             )
             
             if condition:
@@ -57,7 +59,8 @@ class FilterProcessor(TSModel):
     @staticmethod
     def _build_filter_condition(filter_obj: SemanticFilter, 
                                parameters: Optional[Dict[str, Any]] = None,
-                               table_prefix: Optional[str] = None) -> Optional[str]:
+                               table_prefix: Optional[str] = None,
+                               formatting_map: Optional[Dict[str, List]] = None) -> Optional[str]:
         """
         Build a single filter condition as SQL string.
         
@@ -79,6 +82,12 @@ class FilterProcessor(TSModel):
         column = FilterProcessor._get_qualified_column_name(
             filter_obj.query, filter_obj.table, table_prefix
         )
+        
+        # Apply any IN_QUERY formatting to the column
+        if formatting_map and filter_obj.name in formatting_map:
+            column = OutputProcessor.apply_semantic_formatting_to_column(
+                column, filter_obj.name, formatting_map
+            )
         
         # Get the value (could be a $CORTEX_ placeholder that was already substituted)
         value = filter_obj.value

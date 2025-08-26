@@ -7,3 +7,9 @@ export { default as SingleValue } from './SingleValue.vue'
 export { default as Gauge } from './Gauge.vue'
 export { default as Table } from './Table.vue'
 export { default as Scatter } from './Scatter.vue'
+
+// Stacked chart components
+export { default as StackedBarChart } from './StackedBarChart.vue'
+export { default as StackedLineChart } from './StackedLineChart.vue'
+export { default as NormalStackedArea } from './NormalStackedArea.vue'
+export { default as GradientStackedArea } from './GradientStackedArea.vue'

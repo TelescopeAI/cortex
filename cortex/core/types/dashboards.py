@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
 from cortex.core.types.telescope import TSModel
 
 
@@ -63,19 +63,29 @@ class AxisDataType(str, Enum):
     CATEGORICAL = "categorical"
 
 
-class AxisMapping(TSModel):
-    field: str
-    type: str  # one of AxisDataType
+class ValueSelectionMode(str, Enum):
+    """How to select a single value from multiple rows."""
+    FIRST = "first"
+    LAST = "last"
+    NTH = "nth"
+    AGGREGATE = "aggregate"
+    CONCAT = "concat"
+    MIN = "min"
+    MAX = "max"
+    MEAN = "mean"
+    MEDIAN = "median"
+    MODE = "mode"
 
 
-class SeriesMapping(TSModel):
-    field: Optional[str] = None
-    type: Optional[str] = None
+"""
+Note: AxisMapping and the duplicate DataMapping used to live here. We now use
+the canonical FieldMapping and DataMapping from cortex.core.dashboards.mapping.base.
+Leftover imports that referenced these should be updated.
+"""
 
 
-class DataMapping(TSModel):
-    x_axis: AxisMapping
-    y_axes: list[AxisMapping]
-    series: Optional[SeriesMapping] = None
-    category: Optional[str] = None
-    value_field: Optional[str] = None
+class ValueSelectionConfig(TSModel):
+    """Typed configuration for selecting a value from multiple rows."""
+    n: Optional[int] = None              # For NTH
+    aggregate_by: Optional[str] = None   # 'sum'|'mean'|'median'|'min'|'max'
+    delimiter: Optional[str] = None      # For CONCAT

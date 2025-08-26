@@ -1,15 +1,16 @@
 from datetime import datetime
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any, Literal
 from uuid import UUID, uuid4
 
 import pytz
 from pydantic import Field
 
-from cortex.core.types.telescope import TSModel
+from cortex.core.dashboards.mapping.base import DataMapping as MappingDataMapping
 from cortex.core.types.dashboards import (
-    DashboardType, VisualizationType, ColorScheme, 
-    NumberFormat, ComparisonType, AxisDataType
+    DashboardType, VisualizationType, ColorScheme,
+    NumberFormat, ComparisonType, ValueSelectionMode, ValueSelectionConfig
 )
+from cortex.core.types.telescope import TSModel
 
 
 class Dashboard(TSModel):
@@ -108,15 +109,8 @@ class MetricExecutionOverrides(TSModel):
     limit: Optional[int] = None
 
 
-class DataMapping(TSModel):
-    """
-    Defines how metric data maps to visualization axes and series.
-    """
-    x_axis: Dict[str, Any]  # {"field": "date", "type": "temporal"}
-    y_axes: List[Dict[str, Any]]  # list of {"field": "revenue", "type": "numerical"}
-    series: Optional[Dict[str, Any]] = None  # {"split_by": "product", "value_field": "revenue"}
-    category: Optional[str] = None  # For pie charts
-    value_field: Optional[str] = None  # Primary value field
+class DataMapping(MappingDataMapping):
+    pass
 
 
 class ChartConfig(TSModel):
@@ -128,6 +122,7 @@ class ChartConfig(TSModel):
     bar_width: Optional[float] = None
     stack_bars: bool = False
     smooth_lines: bool = False
+    area_stacking_type: Optional[Literal['normal', 'gradient']] = None
 
 
 class TableConfig(TSModel):
@@ -166,6 +161,9 @@ class SingleValueConfig(TSModel):
     show_title: bool = True
     show_description: bool = False
     compact_mode: bool = False
+    # New: selection strategy when multiple rows exist
+    selection_mode: ValueSelectionMode = ValueSelectionMode.FIRST
+    selection_config: Optional[ValueSelectionConfig] = None
 
 
 class GaugeConfig(TSModel):
@@ -180,6 +178,9 @@ class GaugeConfig(TSModel):
     show_target: bool = True
     gauge_type: str = "arc"  # arc, linear
     thickness: int = 10
+    # Optional value selection like SingleValue
+    selection_mode: ValueSelectionMode = ValueSelectionMode.FIRST
+    selection_config: Optional[ValueSelectionConfig] = None
 
 
 class VisualizationConfig(TSModel):

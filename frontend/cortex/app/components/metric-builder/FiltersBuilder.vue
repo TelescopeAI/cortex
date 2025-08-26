@@ -295,6 +295,13 @@
             </p>
           </div>
         </div>
+
+        <!-- Output Formatting -->
+        <OutputFormatEditor
+          v-model="filter.formatting"
+          object-type="filter"
+          @update:model-value="updateFilter(index, 'formatting', $event)"
+        />
       </div>
     </div>
   </div>
@@ -321,6 +328,7 @@ import {
   DropdownMenuTrigger
 } from '~/components/ui/dropdown-menu'
 import { Plus, Filter, Trash2, Database } from 'lucide-vue-next'
+import OutputFormatEditor from './OutputFormatEditor.vue'
 
 interface Filter {
   name: string
@@ -337,6 +345,7 @@ interface Filter {
   values?: any[]
   min_value?: any
   max_value?: any
+  formatting?: any[]
 }
 
 interface Props {
@@ -381,7 +390,8 @@ const addFilter = () => {
     filter_type: 'where',
     is_active: true,
     custom_expression: '',
-    use_custom_expression: false
+    use_custom_expression: false,
+    formatting: []
   }
   filters.value.push(newFilter)
 }

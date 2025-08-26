@@ -6,13 +6,13 @@
         {{ buttonText }}
       </Button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent class="w-80">
+    <DropdownMenuContent class="w-80 z-[100001]">
       <DropdownMenuSub v-for="table in availableTables" :key="table.name">
         <DropdownMenuSubTrigger>
           <Database class="h-4 w-4 mr-2" />
           {{ table.name }}
         </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent>
+        <DropdownMenuSubContent class="z-[100001]">
           <DropdownMenuItem
             v-for="column in table.columns"
             :key="`${table.name}.${column.name}`"

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { reactive, computed, watch, ref, onMounted } from 'vue'
-import { refDebounced } from '@vueuse/core'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '~/components/ui/sheet'
 import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
@@ -19,7 +18,7 @@ import DataMappingEditor from './DataMappingEditor.vue'
 import type { DashboardWidget } from '~/types/dashboards'
 import { useMetrics, type SemanticMetric } from '~/composables/useMetrics'
 import { useDashboards } from '~/composables/useDashboards'
-import PreviewChartRenderer from './PreviewChartRenderer.vue'
+import PreviewWidgetViz from './PreviewWidgetViz.vue'
 
 interface Props {
   open: boolean
@@ -49,7 +48,7 @@ const form = reactive({
 
 const selectedMetric = ref<SemanticMetric | null>(null)
 const availableTables = ref<Array<{ name: string; columns: Array<{ name: string; type: string }> }>>([])
-const dataMapping = reactive<any>({})
+const dataMapping = ref<any>({})
 const singleValue = reactive<any>({
   number_format: 'auto',
   prefix: '',
@@ -60,9 +59,19 @@ const singleValue = reactive<any>({
   show_sparkline: false,
   show_title: true,
   show_description: false,
-  compact_mode: false,
+  compact_mode: false
 })
 
+// Chart configuration
+const chartConfig = reactive<any>({
+  show_points: true,
+  line_width: 2,
+  bar_width: undefined,
+  stack_bars: false,
+  smooth_lines: false
+})
+
+// Gauge configuration
 const gauge = reactive<any>({
   min_value: 0,
   max_value: 100,
@@ -71,7 +80,7 @@ const gauge = reactive<any>({
   show_value: true,
   show_target: true,
   gauge_type: 'arc',
-  thickness: 10,
+  thickness: 10
 })
 
 // Current mode: 'edit' or 'view'
@@ -82,67 +91,199 @@ const previewData = ref<any>(null)
 const previewLoading = ref(false)
 const previewError = ref<string | null>(null)
 const previewTab = ref<'charts' | 'json'>('charts')
+const isUpdatingPreview = ref(false) // Flag to prevent recursive updates
+
+// Area stacking type (when stack_bars is enabled)
+const areaStackingType = ref<'normal' | 'gradient'>('normal')
+
+// Watch for area stacking type changes and update chart config
+watch(areaStackingType, (newType) => {
+  if (chartConfig.stack_bars && form.type === 'area_chart') {
+    chartConfig.area_stacking_type = newType
+  }
+})
+
+// Watch for stack_bars changes and update area stacking type if needed
+watch(() => chartConfig.stack_bars, (newStackBars) => {
+  if (newStackBars && form.type === 'area_chart' && !areaStackingType.value) {
+    areaStackingType.value = 'normal'
+  }
+})
+
+// Watch for chart type changes and reset area stacking type
+watch(() => form.type, (newType) => {
+  if (newType !== 'area_chart') {
+    areaStackingType.value = 'normal'
+  } else if (chartConfig.stack_bars && !areaStackingType.value) {
+    // Set default area stacking type when switching to area chart with stacking enabled
+    areaStackingType.value = 'normal'
+  }
+})
 
 // Screen size detection
 const windowWidth = ref(0)
 const isSmallScreen = computed(() => windowWidth.value < 768)
 
-// Create debounced version of form data for preview
-const debouncedFormData = refDebounced(
-  computed(() => ({
-    ...form,
-    dataMapping: { ...dataMapping },
-    singleValue: { ...singleValue },
-    gauge: { ...gauge }
-  })),
-  500 // 500ms delay as suggested by VueUse docs
-)
+
+
+const isInitialLoad = ref(true)
 
 // Watch for changes and initialize
-watch(() => props.widget, (widget) => {
+watch(() => props.widget, (widget, oldWidget) => {
+  console.log('WidgetEditSheet: Widget prop changed', { 
+    widget: widget?.alias, 
+    oldWidget: oldWidget?.alias,
+    widgetType: widget?.visualization?.type,
+    oldWidgetType: oldWidget?.visualization?.type
+  })
+  
   if (widget) {
+    console.log('Loading widget data:', widget)
+    console.log('Widget visualization:', widget.visualization)
+    console.log('Widget data_mapping:', widget.visualization?.data_mapping)
+    
+    // Load basic form data
     form.title = widget.title || ''
     form.metric_id = widget.metric_id || ''
     form.type = widget.visualization?.type || 'single_value'
     form.columns = widget.grid_config?.columns || 3
     form.rows = widget.grid_config?.rows || 1
     
+    // Load data mapping from widget
     if (widget.visualization?.data_mapping) {
-      Object.assign(dataMapping, widget.visualization.data_mapping)
+      const dm = widget.visualization.data_mapping
+      console.log('Loading data mapping:', dm)
+      
+      // Build a single mapping object; assign once
+      const nextMapping: any = {}
+      
+      // Map x_axis
+      if (dm.x_axis) {
+        nextMapping.x_axis = {
+          field: dm.x_axis.field || '',
+          data_type: dm.x_axis.data_type || 'categorical',
+          label: dm.x_axis.label || '',
+          required: dm.x_axis.required !== false
+        }
+      }
+      
+      // Map y_axes
+      if (dm.y_axes && Array.isArray(dm.y_axes)) {
+        nextMapping.y_axes = dm.y_axes.map((y: any) => ({
+          field: y.field || '',
+          data_type: y.data_type || 'numerical',
+          label: y.label || '',
+          required: y.required !== false
+        }))
+      }
+      
+      // Map other fields
+      if (dm.value_field) {
+        nextMapping.value_field = {
+          field: dm.value_field.field || '',
+          data_type: dm.value_field.data_type || 'numerical',
+          label: dm.value_field.label || '',
+          required: dm.value_field.required !== false
+        }
+      }
+      
+      if (dm.category_field) {
+        nextMapping.category_field = {
+          field: dm.category_field.field || '',
+          data_type: dm.category_field.data_type || 'categorical',
+          label: dm.category_field.label || '',
+          required: dm.category_field.required !== false
+        }
+      }
+      
+      if (dm.series_field) {
+        nextMapping.series_field = {
+          field: dm.series_field.field || '',
+          data_type: dm.series_field.data_type || 'categorical',
+          label: dm.series_field.label || '',
+          required: dm.series_field.required !== false
+        }
+      }
+      
+      if (dm.columns && Array.isArray(dm.columns)) {
+        nextMapping.columns = dm.columns.map((col: any) => ({
+          field: col.field || '',
+          label: col.label || '',
+          width: col.width,
+          sortable: col.sortable !== false,
+          filterable: col.filterable !== false,
+          alignment: col.alignment || 'left'
+        }))
+      }
+      
+      // Replace the mapping only here (new widget load)
+      dataMapping.value = nextMapping
+      
+      console.log('Built next mapping:', nextMapping)
+      console.log('dataMapping after set:', dataMapping.value)
     }
+    
+    // Load single value config
     if (widget.visualization?.single_value_config) {
       Object.assign(singleValue, widget.visualization.single_value_config)
     }
+    
+    // Load chart config
+    if (widget.visualization?.chart_config) {
+      Object.assign(chartConfig, widget.visualization.chart_config)
+      // Set area stacking type if available
+      if (widget.visualization.chart_config.area_stacking_type) {
+        areaStackingType.value = widget.visualization.chart_config.area_stacking_type
+      } else if (widget.visualization.chart_config.stack_bars && widget.visualization.type === 'area_chart') {
+        // Default to normal if stacking is enabled but no type specified
+        areaStackingType.value = 'normal'
+      }
+    }
+    
+    // Load gauge config
     if (widget.visualization?.gauge_config) {
       Object.assign(gauge, widget.visualization.gauge_config)
     }
     
-    // Load metric details
+    console.log('Loaded data mapping:', dataMapping.value)
+    console.log('Loaded single value config:', singleValue)
+    console.log('Loaded chart config:', chartConfig)
+    console.log('Loaded gauge config:', gauge)
+    
+    // Load metric details and trigger preview when ready
     if (widget.metric_id) {
       getMetric(widget.metric_id).then(m => {
         if (m) {
           selectedMetric.value = m
           buildAvailableTablesFromMetric(m)
+          // Auto-trigger preview after everything is loaded
+          if (props.open && form.metric_id && dataMapping.value && Object.keys(dataMapping.value).length > 0) {
+            updatePreview()
+          }
         }
       })
     }
+    
+    // Mark initial load as complete
+    isInitialLoad.value = false
   }
-}, { immediate: true })
+}, { immediate: true, deep: false })
 
-// Watch debounced form data for preview updates
-watch(debouncedFormData, async (newData) => {
-  if (props.open && selectedMetric.value) {
-    await updatePreview()
-  }
-})
 
-// Reset mapping/config when visualization type changes to keep payload clean
+
+
+
+// Reset config when visualization type changes to keep payload clean
 watch(() => form.type, (newType, oldType) => {
   if (newType === oldType) return
-  // Clear all mapping/config states
-  Object.keys(dataMapping).forEach(k => delete (dataMapping as any)[k])
-  Object.assign(singleValue, { number_format: 'decimal', prefix: '', suffix: '', show_comparison: true, show_trend: true, trend_period: 'previous_period', show_sparkline: false, show_title: true, show_description: false, compact_mode: false })
-  Object.assign(gauge, { min_value: 0, max_value: 100, target_value: undefined, color_ranges: undefined, show_value: true, show_target: true, gauge_type: 'arc', thickness: 10 })
+  
+  // Only clear configs if we're actually changing types (not during initial load)
+  if (oldType && newType && oldType !== '' && !isInitialLoad.value) {
+    console.log('Visualization type changed from', oldType, 'to', newType, '- resetting configs only')
+    // Only reset configs, preserve data mapping
+    Object.assign(singleValue, { number_format: 'decimal', prefix: '', suffix: '', show_comparison: true, show_trend: true, trend_period: 'previous_period', show_sparkline: false, show_title: true, show_description: false, compact_mode: false })
+    Object.assign(gauge, { min_value: 0, max_value: 100, target_value: undefined, color_ranges: undefined, show_value: true, show_target: true, gauge_type: 'arc', thickness: 10 })
+  }
 })
 
 const selectedMetricLabel = computed(() => {
@@ -173,7 +314,7 @@ function onMetricSelect(metric: any) {
 }
 
 function updateDataMapping(mapping: any) {
-  Object.assign(dataMapping, mapping)
+  dataMapping.value = { ...(dataMapping.value || {}), ...(mapping || {}) }
 }
 
 function close() {
@@ -187,7 +328,8 @@ function save() {
     grid_config: { columns: form.columns, rows: form.rows },
     visualization: { 
       type: form.type as any,
-      data_mapping: dataMapping,
+      data_mapping: dataMapping.value,
+      chart_config: ['bar_chart', 'line_chart', 'area_chart'].includes(form.type) ? chartConfig : undefined,
       single_value_config: form.type === 'single_value' ? singleValue : undefined,
       gauge_config: form.type === 'gauge' ? gauge : undefined
     }
@@ -206,8 +348,9 @@ function copyPreview() {
 }
 
 async function updatePreview() {
-  if (!props.widget || !form.metric_id) return
+  if (!props.widget || !form.metric_id || isUpdatingPreview.value) return
   
+  isUpdatingPreview.value = true
   previewLoading.value = true
   previewError.value = null
   
@@ -224,7 +367,8 @@ async function updatePreview() {
             title: form.title || 'Preview Widget',
             visualization: {
               type: form.type,
-              data_mapping: dataMapping,
+              data_mapping: dataMapping.value,
+              chart_config: ['bar_chart', 'line_chart', 'area_chart'].includes(form.type) ? chartConfig : undefined,
               single_value_config: form.type === 'single_value' ? singleValue : undefined,
               gauge_config: form.type === 'gauge' ? gauge : undefined
             },
@@ -243,14 +387,11 @@ async function updatePreview() {
     previewError.value = error instanceof Error ? error.message : 'Failed to generate preview'
   } finally {
     previewLoading.value = false
+    isUpdatingPreview.value = false
   }
 }
 
 onMounted(() => {
-  if (props.open && props.widget) {
-    updatePreview()
-  }
-  
   // Update window width on mount and resize
   if (process.client) {
     windowWidth.value = window.innerWidth
@@ -268,6 +409,7 @@ onMounted(() => {
       :class="[
         'flex flex-col',
         'p-4',
+        'z-[100000]',
         isSmallScreen 
           ? '!w-full !h-[90vh]' 
           :'!w-[95vw] sm:!w-[85vw] md:!w-[75vw] lg:!w-[65vw] xl:!w-[50vw] !max-w-[50vw] sm:!max-w-none'
@@ -322,7 +464,7 @@ onMounted(() => {
                     <UiSelectTrigger>
                       <UiSelectValue placeholder="Type" />
                     </UiSelectTrigger>
-                    <UiSelectContent>
+                    <UiSelectContent class="z-[100001]">
                       <UiSelectItem value="single_value">Single Value</UiSelectItem>
                       <UiSelectItem value="gauge">Gauge</UiSelectItem>
                       <UiSelectItem value="bar_chart">Bar</UiSelectItem>
@@ -356,6 +498,38 @@ onMounted(() => {
                   </NumberField>
                 </div>
               </div>
+              
+              <!-- Chart Configuration Options -->
+              <div v-if="['bar_chart', 'line_chart', 'area_chart'].includes(form.type)" class="space-y-3">
+                <Label class="text-base font-medium">Chart Options</Label>
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="space-y-2">
+                    <Label class="text-xs">Stack Columns</Label>
+                    <div class="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        v-model="chartConfig.stack_bars"
+                        class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span class="text-sm text-gray-600">Enable stacking</span>
+                    </div>
+                  </div>
+                  
+                  <!-- Area Stacking Type (only show when stacking is enabled for area charts) -->
+                  <div v-if="form.type === 'area_chart' && chartConfig.stack_bars" class="space-y-2">
+                    <Label class="text-xs">Stacking Style</Label>
+                    <UiSelect v-model="areaStackingType" :teleported="false">
+                      <UiSelectTrigger>
+                        <UiSelectValue placeholder="Select style" />
+                      </UiSelectTrigger>
+                      <UiSelectContent class="z-[100001]">
+                        <UiSelectItem value="normal">Normal</UiSelectItem>
+                        <UiSelectItem value="gradient">Gradient</UiSelectItem>
+                      </UiSelectContent>
+                    </UiSelect>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <Separator />
@@ -369,6 +543,21 @@ onMounted(() => {
             />
 
             <Separator />
+
+            <!-- Debug info in development -->
+            <div class="space-y-2">
+              <Label class="text-xs text-muted-foreground">Debug - Data Mapping</Label>
+              <pre class="text-xs bg-muted p-2 rounded overflow-auto max-h-32">{{ JSON.stringify(dataMapping, null, 2) }}</pre>
+            </div>
+            
+                         <!-- Debug Chart Config -->
+             <div v-if="['bar_chart', 'line_chart', 'area_chart'].includes(form.type)" class="space-y-2">
+               <Label class="text-xs text-muted-foreground">Debug - Chart Config</Label>
+               <pre class="text-xs bg-muted p-2 rounded overflow-auto max-h-32">{{ JSON.stringify(chartConfig, null, 2) }}</pre>
+               <div v-if="form.type === 'area_chart' && chartConfig.stack_bars" class="text-xs text-muted-foreground mt-1">
+                 Area Stacking Type: {{ areaStackingType }}
+               </div>
+             </div>
 
             <!-- Visualization-specific config -->
             <div v-if="form.type === 'single_value'" class="space-y-3">
@@ -384,11 +573,11 @@ onMounted(() => {
                 </div>
             <div class="space-y-2">
               <Label class="text-xs">Number format</Label>
-              <UiSelect v-model="singleValue.number_format">
+                  <UiSelect v-model="singleValue.number_format" :teleported="false">
                 <UiSelectTrigger>
                   <UiSelectValue placeholder="Select format" />
                 </UiSelectTrigger>
-                <UiSelectContent>
+                <UiSelectContent class="z-[100001]">
                   <UiSelectItem value="integer">Integer</UiSelectItem>
                   <UiSelectItem value="decimal">Decimal</UiSelectItem>
                   <UiSelectItem value="percentage">Percentage</UiSelectItem>
@@ -398,6 +587,61 @@ onMounted(() => {
                 </UiSelectContent>
               </UiSelect>
             </div>
+              </div>
+              <!-- Selection Mode -->
+              <div class="grid grid-cols-3 gap-3">
+                <div class="space-y-2">
+                  <Label class="text-xs">Selection Mode</Label>
+                  <UiSelect v-model="singleValue.selection_mode">
+                    <UiSelectTrigger>
+                      <UiSelectValue placeholder="Select mode" />
+                    </UiSelectTrigger>
+                    <UiSelectContent class="z-[100001]">
+                      <UiSelectItem value="first">First</UiSelectItem>
+                      <UiSelectItem value="last">Last</UiSelectItem>
+                      <UiSelectItem value="nth">Nth</UiSelectItem>
+                      <UiSelectItem value="aggregate">Aggregate</UiSelectItem>
+                      <UiSelectItem value="concat">Concatenate</UiSelectItem>
+                      <UiSelectItem value="min">Min</UiSelectItem>
+                      <UiSelectItem value="max">Max</UiSelectItem>
+                      <UiSelectItem value="mean">Mean</UiSelectItem>
+                      <UiSelectItem value="median">Median</UiSelectItem>
+                      <UiSelectItem value="mode">Mode</UiSelectItem>
+                    </UiSelectContent>
+                  </UiSelect>
+                </div>
+                <div class="space-y-2" v-if="singleValue.selection_mode === 'nth'">
+                  <Label class="text-xs">N</Label>
+                  <NumberField v-model="(singleValue.selection_config ||= {}).n" :min="1" :step="1">
+                    <NumberFieldContent>
+                      <NumberFieldDecrement />
+                      <NumberFieldInput />
+                      <NumberFieldIncrement />
+                    </NumberFieldContent>
+                  </NumberField>
+                </div>
+                <div class="space-y-2" v-if="singleValue.selection_mode === 'aggregate'">
+                  <Label class="text-xs">Aggregate By</Label>
+                  <UiSelect v-model="(singleValue.selection_config ||= {}).aggregate_by" :teleported="false">
+                    <UiSelectTrigger>
+                      <UiSelectValue placeholder="sum" />
+                    </UiSelectTrigger>
+                    <UiSelectContent class="z-[100001]">
+                      <UiSelectItem value="sum">Sum</UiSelectItem>
+                      <UiSelectItem value="mean">Mean</UiSelectItem>
+                      <UiSelectItem value="median">Median</UiSelectItem>
+                      <UiSelectItem value="min">Min</UiSelectItem>
+                      <UiSelectItem value="max">Max</UiSelectItem>
+                    </UiSelectContent>
+                  </UiSelect>
+                </div>
+                <div class="space-y-2" v-if="singleValue.selection_mode === 'concat'">
+                  <Label class="text-xs">Delimiter</Label>
+                  <Input v-model="(singleValue.selection_config ||= {}).delimiter" placeholder="," />
+                </div>
+                <div class="col-span-3 text-xs text-muted-foreground" v-if="singleValue.selection_mode === 'concat'">
+                  Concatenate returns a string result; numeric formatting is skipped in preview.
+                </div>
               </div>
             </div>
 
@@ -433,6 +677,61 @@ onMounted(() => {
                       <NumberFieldIncrement />
                     </NumberFieldContent>
                   </NumberField>
+                </div>
+              </div>
+              <!-- Selection Mode -->
+              <div class="grid grid-cols-3 gap-3">
+                <div class="space-y-2">
+                  <Label class="text-xs">Selection Mode</Label>
+                  <UiSelect v-model="gauge.selection_mode" :teleported="false">
+                    <UiSelectTrigger>
+                      <UiSelectValue placeholder="Select mode" />
+                    </UiSelectTrigger>
+                    <UiSelectContent class="z-[100001]">
+                      <UiSelectItem value="first">First</UiSelectItem>
+                      <UiSelectItem value="last">Last</UiSelectItem>
+                      <UiSelectItem value="nth">Nth</UiSelectItem>
+                      <UiSelectItem value="aggregate">Aggregate</UiSelectItem>
+                      <UiSelectItem value="concat">Concatenate</UiSelectItem>
+                      <UiSelectItem value="min">Min</UiSelectItem>
+                      <UiSelectItem value="max">Max</UiSelectItem>
+                      <UiSelectItem value="mean">Mean</UiSelectItem>
+                      <UiSelectItem value="median">Median</UiSelectItem>
+                      <UiSelectItem value="mode">Mode</UiSelectItem>
+                    </UiSelectContent>
+                  </UiSelect>
+                </div>
+                <div class="space-y-2" v-if="gauge.selection_mode === 'nth'">
+                  <Label class="text-xs">N</Label>
+                  <NumberField v-model="(gauge.selection_config ||= {}).n" :min="1" :step="1">
+                    <NumberFieldContent>
+                      <NumberFieldDecrement />
+                      <NumberFieldInput />
+                      <NumberFieldIncrement />
+                    </NumberFieldContent>
+                  </NumberField>
+                </div>
+                <div class="space-y-2" v-if="gauge.selection_mode === 'aggregate'">
+                  <Label class="text-xs">Aggregate By</Label>
+                  <UiSelect v-model="(gauge.selection_config ||= {}).aggregate_by" :teleported="false">
+                    <UiSelectTrigger>
+                      <UiSelectValue placeholder="sum" />
+                    </UiSelectTrigger>
+                    <UiSelectContent class="z-[100001]">
+                      <UiSelectItem value="sum">Sum</UiSelectItem>
+                      <UiSelectItem value="mean">Mean</UiSelectItem>
+                      <UiSelectItem value="median">Median</UiSelectItem>
+                      <UiSelectItem value="min">Min</UiSelectItem>
+                      <UiSelectItem value="max">Max</UiSelectItem>
+                    </UiSelectContent>
+                  </UiSelect>
+                </div>
+                <div class="space-y-2" v-if="gauge.selection_mode === 'concat'">
+                  <Label class="text-xs">Delimiter</Label>
+                  <Input v-model="(gauge.selection_config ||= {}).delimiter" placeholder="," />
+                </div>
+                <div class="col-span-3 text-xs text-muted-foreground" v-if="gauge.selection_mode === 'concat'">
+                  Concatenate returns a string result; numeric formatting is skipped in preview.
                 </div>
               </div>
             </div>
@@ -486,15 +785,19 @@ onMounted(() => {
                     <TabsTrigger value="json">JSON</TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="charts" class="mt-4">
-                    <div class="w-full max-h-[36rem]">
-                      <PreviewChartRenderer 
-                        :processed="previewData.processed" 
-                        :metadata="previewData.metadata"
+                  <TabsContent value="charts" class="w-full h-full">
+                    <div v-if="previewData?.metadata?.title === 'Error'" class="mb-3 rounded border border-destructive/30 bg-destructive/10 p-2 text-destructive text-xs">
+                        {{ previewData?.metadata?.description || 'Preview failed' }}
+                      </div>
+                      <PreviewWidgetViz 
                         :type="form.type"
+                        :data="previewData"
+                        :loading="previewLoading"
+                        :error="previewError"
                         :gauge-config="gauge"
+                        :single-value-config="singleValue"
+                        :chart-config="chartConfig"
                       />
-                    </div>
                   </TabsContent>
                   <TabsContent value="json" class="mt-4">
                     <pre class="text-xs bg-muted p-3 rounded overflow-auto max-h-64">{{ JSON.stringify(previewData, null, 2) }}</pre>
@@ -560,11 +863,14 @@ onMounted(() => {
 
                   <TabsContent value="charts" class="mt-4">
                     <div class="w-full max-h-[40rem]">
-                      <PreviewChartRenderer 
-                        :processed="previewData.processed" 
-                        :metadata="previewData.metadata"
+                      <PreviewWidgetViz 
                         :type="form.type"
+                        :data="previewData"
+                        :loading="previewLoading"
+                        :error="previewError"
                         :gauge-config="gauge"
+                        :single-value-config="singleValue"
+                        :chart-config="chartConfig"
                       />
                     </div>
                   </TabsContent>

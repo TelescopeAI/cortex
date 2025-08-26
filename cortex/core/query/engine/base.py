@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from pydantic import Field
 
 from cortex.core.semantics.metrics.metric import SemanticMetric
 from cortex.core.types.databases import DataSourceTypes
+from cortex.core.semantics.output_formats import FormattingMap
 from cortex.core.types.telescope import TSModel
 
 
@@ -12,10 +13,11 @@ class BaseQueryGenerator(TSModel, ABC):
     metric: SemanticMetric
     source_type: DataSourceTypes = Field(description="Database Source Type (Postgres, MySQL, BigQuery, etc.)")
     generated_query: Optional[str] = Field(None, description="The generated query string")
+    formatting_map: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Mapping of semantic object names to their formatting lists")
 
     @abstractmethod
-    def generate_query(self, parameters: Optional[Dict[str, Any]] = None, limit: Optional[int] = None, offset: Optional[int] = None) -> str:
-        """Generate the complete query based on the metric with optional parameters and limit/offset"""
+    def generate_query(self, parameters: Optional[Dict[str, Any]] = None, limit: Optional[int] = None, offset: Optional[int] = None, grouped: Optional[bool] = None) -> str:
+        """Generate the complete query based on the metric with optional parameters, limit/offset, and grouping control"""
         pass
 
     @abstractmethod
@@ -34,7 +36,7 @@ class BaseQueryGenerator(TSModel, ABC):
         pass
 
     @abstractmethod
-    def _build_group_by_clause(self) -> Optional[str]:
+    def _build_group_by_clause(self, grouped: bool) -> Optional[str]:
         """Build the GROUP BY clause for the query if applicable"""
         pass
 
@@ -61,4 +63,9 @@ class BaseQueryGenerator(TSModel, ABC):
     @abstractmethod
     def _substitute_parameters(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> str:
         """Substitute parameters in the query string"""
+        pass
+
+    @abstractmethod
+    def _apply_database_formatting(self, column_expression: str, object_name: str, formatting_map: FormattingMap) -> str:
+        """Apply database-specific formatting to a column expression"""
         pass

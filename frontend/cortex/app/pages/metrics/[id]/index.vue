@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
@@ -55,6 +55,10 @@ const contextId = ref<string>('')
 const useLimit = ref(false)
 const limitValue = ref<number>(100)
 const offsetValue = ref<number>(0)
+
+// Grouping state
+const useGrouped = ref(false)
+const groupedValue = ref(false)
 
 // Schema sheet functions
 const onOpenSchema = () => {
@@ -231,6 +235,11 @@ const onExecute = async () => {
       }
     }
     
+    // Add grouping if enabled
+    if (useGrouped.value) {
+      executionRequest.grouped = groupedValue.value
+    }
+    
     const result = await executeMetric(metricId, executionRequest) as any
     executionResults.value = result
     
@@ -338,6 +347,14 @@ const initializeParameters = () => {
     executionParams.value = params
   }
 }
+
+// Watch for metric changes to initialize grouped value
+watch(() => metric.value, (newMetric) => {
+  if (newMetric) {
+    // Initialize groupedValue based on metric's grouped setting
+    groupedValue.value = newMetric.grouped !== undefined ? newMetric.grouped : true
+  }
+}, { immediate: true })
 
 // Initialize
 onMounted(() => {
@@ -454,6 +471,19 @@ onMounted(() => {
               <div v-if="parentModel?.data_source" class="space-y-2">
                 <div class="text-sm font-medium text-muted-foreground">Data Source</div>
                 <div class="text-sm font-mono bg-muted p-2 rounded">{{ parentModel.data_source.name }}</div>
+              </div>
+
+              <!-- Grouping Configuration -->
+              <div class="space-y-2">
+                <div class="text-sm font-medium text-muted-foreground">Grouping Configuration</div>
+                <div class="flex items-center space-x-2">
+                  <Badge :variant="metric.grouped ? 'default' : 'secondary'">
+                    {{ metric.grouped ? '📊 Grouped' : '📋 Ungrouped' }}
+                  </Badge>
+                  <span class="text-sm text-muted-foreground">
+                    {{ metric.grouped ? 'Results will be grouped by dimensions' : 'Results will not be grouped' }}
+                  </span>
+                </div>
               </div>
 
               <!-- Description -->
@@ -674,6 +704,49 @@ onMounted(() => {
                     </div>
                   </div>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <!-- Grouping Control -->
+          <Card>
+            <CardHeader>
+              <CardTitle>Query Grouping</CardTitle>
+            </CardHeader>
+            <CardContent class="space-y-4">
+              <div class="flex items-center space-x-2">
+                <Switch
+                  id="use-grouped"
+                  v-model="useGrouped"
+                />
+                <Label for="use-grouped">Override metric grouping</Label>
+              </div>
+              
+              <div v-if="useGrouped" class="space-y-4">
+                <div class="flex items-center space-x-3">
+                  <Switch
+                    id="grouped-value"
+                    v-model="groupedValue"
+                  />
+                  <Label for="grouped-value">
+                    {{ groupedValue ? 'Enable grouping' : 'Disable grouping' }}
+                  </Label>
+                </div>
+                <div class="text-xs text-muted-foreground">
+                  <p v-if="groupedValue">
+                    Results will be grouped by dimensions (applies GROUP BY clause).
+                  </p>
+                  <p v-else>
+                    Results will not be grouped (no GROUP BY clause applied).
+                  </p>
+                  <p class="mt-1">
+                    Current metric setting: <span class="font-medium">{{ metric?.grouped ? 'Grouped' : 'Ungrouped' }}</span>
+                  </p>
+                </div>
+              </div>
+              
+              <div v-else class="text-xs text-muted-foreground">
+                Using metric's default grouping setting: <span class="font-medium">{{ metric?.grouped ? 'Grouped' : 'Ungrouped' }}</span>
               </div>
             </CardContent>
           </Card>

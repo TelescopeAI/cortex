@@ -66,7 +66,7 @@ async def create_metric(metric_data: MetricCreateRequest):
             joins=metric_data.joins,
             aggregations=metric_data.aggregations,
             filters=metric_data.filters,
-            output_formats=metric_data.output_formats,
+
             parameters=metric_data.parameters,
             public=metric_data.public,
             refresh_key=metric_data.refresh_key,
@@ -289,7 +289,8 @@ async def execute_metric(metric_id: UUID, execution_request: MetricExecutionRequ
             context_id=execution_request.context_id,
             parameters=execution_request.parameters,
             limit=execution_request.limit,
-            offset=execution_request.offset
+            offset=execution_request.offset,
+            grouped=execution_request.grouped
         )
         
         return MetricExecutionResponse(
@@ -361,7 +362,7 @@ async def validate_metric(metric_id: UUID):
                 from cortex.core.types.databases import DataSourceTypes
                 
                 generator = QueryGeneratorFactory.create_generator(metric, DataSourceTypes.POSTGRESQL)
-                compiled_query = generator.generate_query()
+                compiled_query = generator.generate_query(grouped=metric.grouped if metric.grouped is not None else True)
                 
                 # If validation is successful and query compiled, save the compiled query to the database
                 if validation_result.is_valid and compiled_query:

@@ -22,7 +22,7 @@ class ChartMapping(VisualizationMapping):
                 )
             if not (self.data_mapping.y_axes and len(self.data_mapping.y_axes) > 0):
                 raise MappingValidationError(
-                    "y_axis", 
+                    "y_axes", 
                     "Chart visualization requires at least one y-axis mapping"
                 )
         
@@ -30,15 +30,23 @@ class ChartMapping(VisualizationMapping):
         if not uses_category_value:
             y_mappings = self.data_mapping.y_axes or []
             for ym in y_mappings:
-                if ym.data_type not in [AxisDataType.NUMERICAL]:
+                # Only validate data type if it's explicitly provided
+                if ym.data_type and ym.data_type not in [AxisDataType.NUMERICAL]:
                     raise MappingValidationError(
-                        "y_axis",
+                        "y_axes",
                         f"Y-axis field should be numerical, got {ym.data_type}"
                     )
     
     def get_required_fields(self) -> List[str]:
         """Get the list of fields required for chart visualization."""
         return ["x_axis", "y_axes"]
+    
+    def _get_chart_config(self) -> Dict[str, Any]:
+        """Get chart configuration including stacking options."""
+        config = {}
+        if hasattr(self, 'chart_config') and self.chart_config:
+            config.update(self.chart_config)
+        return config
     
     def transform_data(self, metric_result: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Transform metric result data for chart display."""
@@ -118,6 +126,7 @@ class ChartMapping(VisualizationMapping):
                 "y": y_raw
             })
 
+        chart_config = self._get_chart_config()
         return {
             "series": [{
                 "name": (self.data_mapping.y_axes[0].label if (self.data_mapping.y_axes and len(self.data_mapping.y_axes) > 0 and self.data_mapping.y_axes[0].label) else y_field),
@@ -126,7 +135,8 @@ class ChartMapping(VisualizationMapping):
             "metadata": {
                 "x_label": self.data_mapping.x_axis.label or x_field,
                 "y_label": (self.data_mapping.y_axes[0].label if (self.data_mapping.y_axes and len(self.data_mapping.y_axes) > 0 and self.data_mapping.y_axes[0].label) else y_field),
-                "series_type": "single"
+                "series_type": "single",
+                "chart_config": chart_config
             }
         }
     
@@ -141,32 +151,34 @@ class ChartMapping(VisualizationMapping):
         series_list = []
         for series_name, rows in grouped.items():
             points = []
-        for row in rows:
-            x_val = row.get(x_field)
-            y_raw = row.get(y_field)
-            if y_raw is None:
-                continue
-            if not isinstance(y_raw, (int, float)):
-                try:
-                    y_raw = float(y_raw)
-                except Exception:
+            for row in rows:
+                x_val = row.get(x_field)
+                y_raw = row.get(y_field)
+                if y_raw is None:
                     continue
-            points.append({
-                "x": x_val,
-                "y": y_raw
-            })
+                if not isinstance(y_raw, (int, float)):
+                    try:
+                        y_raw = float(y_raw)
+                    except Exception:
+                        continue
+                points.append({
+                    "x": x_val,
+                    "y": y_raw
+                })
             series_list.append({
                 "name": str(series_name),
                 "data": points
             })
 
+        chart_config = self._get_chart_config()
         return {
             "series": series_list,
             "metadata": {
                 "x_label": self.data_mapping.x_axis.label or x_field,
                 "y_label": y_field,
                 "series_label": self.data_mapping.series_field.label or series_field,
-                "series_type": "multi"
+                "series_type": "multi",
+                "chart_config": chart_config
             }
         }
 
@@ -186,11 +198,13 @@ class ChartMapping(VisualizationMapping):
                         continue
                 points.append({"x": x_val, "y": y_raw})
             series_list.append({"name": y_labels[idx] if idx < len(y_labels) else y_field, "data": points})
+        chart_config = self._get_chart_config()
         return {
             "series": series_list,
             "metadata": {
                 "x_label": self.data_mapping.x_axis.label or x_field,
                 "y_label": ", ".join(y_labels) if y_labels else ", ".join(y_fields),
-                "series_type": "multi"
+                "series_type": "multi",
+                "chart_config": chart_config
             }
         }

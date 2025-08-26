@@ -28,6 +28,7 @@
               v-model:query="schema.query"
               v-model:data-source-id="schema.data_source_id"
               v-model:limit="schema.limit"
+              v-model:grouped="schema.grouped"
               :available-tables="availableTables"
               :table-schema="props.tableSchema"
             />
@@ -183,6 +184,7 @@ const schema = ref({
   query: '',
   data_source_id: undefined as string | undefined,
   limit: undefined as number | undefined,
+  grouped: true,
   measures: [],
   dimensions: [],
   joins: [],

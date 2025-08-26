@@ -52,6 +52,40 @@ Wrapper for `DonutChart` with props:
 - `type`: Type of donut chart to render (optional)
 - `hideLegend`: If true, hides the chart legend (optional)
 
+### Stacked Chart Components
+
+#### StackedBarChart.vue
+Wrapper for stacked bar charts with props similar to `BarChart`:
+- `data`: Array of data objects
+- `categories`: Record mapping category keys to `BulletLegendItemInterface` objects
+- `yAxis`: Array of property keys from the data object to be used for y-axis values
+- `xFormatter`: Function that formats x-axis tick labels
+- Automatically enables stacking with `stack: 'total'` in ECharts
+
+#### StackedLineChart.vue
+Wrapper for stacked line charts with props similar to `LineChart`:
+- `data`: Array of data objects
+- `categories`: Record mapping category keys to `BulletLegendItemInterface` objects
+- `xFormatter`: Function that formats x-axis tick labels
+- Automatically enables stacking with `stack: 'total'` in ECharts
+- Includes subtle area styling for better visual separation
+
+#### NormalStackedArea.vue
+Wrapper for stacked area charts with props similar to `AreaChart`:
+- `data`: Array of data objects
+- `categories`: Record mapping category keys to `BulletLegendItemInterface` objects
+- `xFormatter`: Function that formats x-axis tick labels
+- Automatically enables stacking with `stack: 'total'` in ECharts
+- Uses solid area styling for clear data representation
+
+#### GradientStackedArea.vue
+Wrapper for gradient stacked area charts with enhanced visual appeal:
+- `data`: Array of data objects
+- `categories`: Record mapping category keys to `BulletLegendItemInterface` objects
+- `xFormatter`: Function that formats x-axis tick labels
+- Automatically enables stacking with `stack: 'total'` in ECharts
+- Includes gradient area styling from solid color to transparent for modern aesthetics
+
 ## Usage
 
 ### Basic Usage
@@ -155,6 +189,8 @@ const donutData = [
 - **Data Validation**: Automatic detection of numeric fields for Y-axis
 - **Responsive Design**: Built-in responsive behavior
 - **Debug Information**: Optional debug panel for troubleshooting
+- **Automatic Stacking**: ChartWidget.vue automatically selects stacked variants when `ChartConfig.stack_bars` is enabled
+- **Seamless Integration**: Stacked charts work with existing data structures without requiring changes to backend processes
 
 ## Dependencies
 

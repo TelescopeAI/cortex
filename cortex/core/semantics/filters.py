@@ -2,6 +2,7 @@ from typing import Optional, Any, Union, List
 from pydantic import ConfigDict
 
 from cortex.core.types.semantics.filter import FilterOperator, FilterType, FilterValueType
+from cortex.core.semantics.output_formats import OutputFormat
 from cortex.core.types.telescope import TSModel
 
 
@@ -44,5 +45,6 @@ class SemanticFilter(TSModel):
     
     # For dynamic filters that can be parameterized using $CORTEX_ prefix
     # Any field starting with $CORTEX_ will be treated as a parameter
+    formatting: Optional[List[OutputFormat]] = None
 
     model_config = ConfigDict(use_enum_values=True) 

@@ -10,7 +10,6 @@ from cortex.core.semantics.measures import SemanticMeasure
 from cortex.core.semantics.joins import SemanticJoin
 from cortex.core.semantics.aggregations import SemanticAggregation
 from cortex.core.semantics.filters import SemanticFilter
-from cortex.core.semantics.output_formats import OutputFormat
 from cortex.core.semantics.refresh_keys import RefreshKey
 from cortex.core.semantics.parameters import ParameterDefinition
 from cortex.core.types.telescope import TSModel
@@ -33,7 +32,6 @@ class SemanticMetric(TSModel):
         dimensions: List of categorical attributes by which the measures can be grouped
         joins: List of joins to be applied in the query
         aggregations: List of aggregations to be applied to the data
-        output_formats: List of output format transformations
         parameters: Runtime parameters for dynamic query generation
     """
     model_config = ConfigDict(from_attributes=True)
@@ -51,6 +49,7 @@ class SemanticMetric(TSModel):
     table_name: Optional[str] = None  # Source table
     data_source_id: Optional[UUID] = None  # Foreign key to the data source
     limit: Optional[int] = None  # Default limit for query results
+    grouped: Optional[bool] = Field(default=True, description="Whether to apply GROUP BY when dimensions are present")
     
     # Metric components
     measures: Optional[List[SemanticMeasure]] = None
@@ -58,7 +57,6 @@ class SemanticMetric(TSModel):
     joins: Optional[List[SemanticJoin]] = None
     aggregations: Optional[List[SemanticAggregation]] = None
     filters: Optional[List[SemanticFilter]] = None
-    output_formats: Optional[List[OutputFormat]] = None
     
     # Parameters for dynamic query generation
     parameters: Optional[Dict[str, ParameterDefinition]] = None

@@ -105,6 +105,23 @@
       </p>
     </div>
 
+    <!-- Grouping Toggle -->
+    <div class="space-y-2">
+      <Label>Group Results</Label>
+      <div class="flex items-center space-x-3">
+        <Switch
+          :model-value="groupedEnabled"
+          @update:model-value="handleGroupedToggle"
+        />
+        <span class="text-sm text-muted-foreground">
+          {{ groupedEnabled ? 'Enabled' : 'Disabled' }}
+        </span>
+      </div>
+      <p class="text-xs text-muted-foreground">
+        When enabled, applies GROUP BY clause for dimensions. Can be overridden at execution time.
+      </p>
+    </div>
+
     <!-- Info Alert -->
     <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
       <div class="flex items-start space-x-3">
@@ -141,6 +158,7 @@ interface Props {
   query?: string
   dataSourceId?: string
   limit?: number
+  grouped?: boolean
   availableTables?: Array<{ name: string; columns: any[] }>
   tableSchema?: any
 }
@@ -151,6 +169,7 @@ const emit = defineEmits<{
   'update:query': [value: string]
   'update:dataSourceId': [value: string]
   'update:limit': [value: number | undefined]
+  'update:grouped': [value: boolean]
 }>()
 
 // Debug availableTables
@@ -178,6 +197,11 @@ const useCustomQuery = computed(() => {
   return !!(props.query && props.query.trim())
 })
 
+// Computed property for grouped toggle
+const groupedEnabled = computed(() => {
+  return props.grouped !== undefined ? props.grouped : true
+})
+
 // Handle limit toggle
 const handleLimitToggle = (enabled: boolean) => {
   if (enabled) {
@@ -197,6 +221,11 @@ const handleQuerySourceToggle = (enabled: boolean) => {
     // Switch to table selection - clear custom query
     emit('update:query', '')
   }
+}
+
+// Handle grouped toggle
+const handleGroupedToggle = (enabled: boolean) => {
+  emit('update:grouped', enabled)
 }
 
 // Handle data source change

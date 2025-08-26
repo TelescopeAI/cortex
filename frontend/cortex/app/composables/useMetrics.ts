@@ -15,6 +15,7 @@ export interface SemanticMetric {
   query?: string
   table_name?: string
   limit?: number
+  grouped?: boolean
   parameters?: MetricParameter[]
   public: boolean
   model_version?: number
@@ -56,6 +57,7 @@ export interface ExecutionRequest {
   context_id?: string
   limit?: number
   offset?: number
+  grouped?: boolean
 }
 
 export const useMetrics = () => {

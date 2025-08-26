@@ -57,9 +57,19 @@ export interface WidgetGridConfig {
   min_rows?: number
 }
 
+export interface ChartConfig {
+  show_points?: boolean
+  line_width?: number
+  bar_width?: number
+  stack_bars?: boolean
+  smooth_lines?: boolean
+  area_stacking_type?: 'normal' | 'gradient'
+}
+
 export interface VisualizationConfig {
   type: VisualizationType
   data_mapping: DataMapping
+  chart_config?: ChartConfig
   single_value_config?: SingleValueConfig
   gauge_config?: GaugeConfig
   show_legend?: boolean
@@ -69,12 +79,29 @@ export interface VisualizationConfig {
   custom_colors?: string[]
 }
 
+export interface FieldMapping {
+  field: string
+  data_type?: string
+  label?: string
+  required?: boolean
+}
+
+export interface ColumnMapping {
+  field: string
+  label?: string
+  width?: number
+  sortable?: boolean
+  filterable?: boolean
+  alignment?: string
+}
+
 export interface DataMapping {
-  x_axis: { field: string; type: string }
-  y_axis: { field: string; type: string }
-  series?: { split_by?: string; value_field?: string }
-  category?: string
-  value_field?: string
+  x_axis?: FieldMapping
+  y_axes?: FieldMapping[]
+  value_field?: FieldMapping
+  category_field?: FieldMapping
+  series_field?: FieldMapping
+  columns?: ColumnMapping[]
 }
 
 export interface SingleValueConfig {
@@ -88,6 +115,8 @@ export interface SingleValueConfig {
   show_title?: boolean
   show_description?: boolean
   compact_mode?: boolean
+  selection_mode?: string
+  selection_config?: Record<string, any>
 }
 
 export interface GaugeConfig {
@@ -99,6 +128,11 @@ export interface GaugeConfig {
   show_target?: boolean
   gauge_type?: string
   thickness?: number
+  selection_mode?: string
+  selection_config?: Record<string, any>
+  show_legend?: boolean
+  show_grid?: boolean
+  show_axes_labels?: boolean
 }
 
 export interface MetricExecutionOverrides {
@@ -167,7 +201,7 @@ export interface ChartMetadata {
   title?: string
   description?: string
   x_axis_title?: string
-  y_axis_title?: string
+  y_axes_title?: string
   data_types: Record<string, string>
   formatting: Record<string, string>
   ranges?: Record<string, number[]>

@@ -1,6 +1,20 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed } from 'vue'
 import type { DashboardWidget as DashboardWidgetType, StandardChartData, VisualizationType } from '~/types/dashboards'
+import {
+  BarChart,
+  LineChart,
+  AreaChart,
+  DonutChart,
+  SingleValue,
+  Gauge,
+  Table,
+  Scatter,
+  StackedBarChart,
+  StackedLineChart,
+  NormalStackedArea,
+  GradientStackedArea
+} from '~/components/charts'
 
 interface Props {
   widget: DashboardWidgetType
@@ -10,225 +24,232 @@ interface Props {
 
 const props = defineProps<Props>()
 
-// Chart options for different chart types
-const chartOption = computed(() => {
-  const { processed, metadata } = props.data
+// Determine which chart component to use based on visualization type and config
+const chartComponent = computed(() => {
   const vizType = props.widget.visualization.type
+  const chartConfig = props.widget.visualization.chart_config
+  const stackBars = chartConfig?.stack_bars || false
   
-  // Base configuration
-  const baseOption = {
-    title: {
-      text: metadata.title || props.widget.title,
-      left: 'center',
-      textStyle: {
-        fontSize: 14,
-        fontWeight: 'normal'
-      }
-    },
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: 'rgba(0, 0, 0, 0.8)',
-      borderColor: 'transparent',
-      textStyle: {
-        color: '#fff'
-      }
-    },
-    legend: {
-      show: props.widget.visualization.show_legend !== false,
-      bottom: 0,
-      textStyle: {
-        fontSize: 12
-      }
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: props.widget.visualization.show_legend !== false ? '15%' : '3%',
-      top: metadata.title ? '15%' : '3%',
-      containLabel: true
+  // For chart types that support stacking, check if stacking is enabled
+  if (stackBars) {
+    switch (vizType) {
+      case 'bar_chart':
+        return StackedBarChart
+      case 'line_chart':
+        return StackedLineChart
+      case 'area_chart':
+        // For area charts, check the stacking type preference
+        const areaStackingType = chartConfig?.area_stacking_type || 'normal'
+        return areaStackingType === 'gradient' ? GradientStackedArea : NormalStackedArea
+      default:
+        break
     }
   }
-
-  // Handle different chart types
+  
+  // Default chart components (non-stacked)
   switch (vizType) {
     case 'bar_chart':
-      return {
-        ...baseOption,
-        xAxis: {
-          type: metadata.data_types.x === 'temporal' ? 'time' : 'category',
-          name: metadata.x_axis_title,
-          nameLocation: 'middle',
-          nameGap: 30,
-          show: props.widget.visualization.show_axes_labels !== false,
-          data: processed.series?.[0]?.data.map(d => d.x) || []
-        },
-        yAxis: {
-          type: 'value',
-          name: metadata.y_axis_title,
-          nameLocation: 'middle',
-          nameGap: 50,
-          show: props.widget.visualization.show_axes_labels !== false
-        },
-        series: processed.series?.map(series => ({
-          name: series.name,
-          type: 'bar',
-          data: series.data.map(d => d.y),
-          itemStyle: {
-            color: series.color || getColorFromScheme(props.widget.visualization.color_scheme)
-          }
-        })) || []
-      }
-
+      return BarChart
     case 'line_chart':
-      return {
-        ...baseOption,
-        xAxis: {
-          type: metadata.data_types.x === 'temporal' ? 'time' : 'category',
-          name: metadata.x_axis_title,
-          nameLocation: 'middle',
-          nameGap: 30,
-          show: props.widget.visualization.show_axes_labels !== false,
-          data: processed.series?.[0]?.data.map(d => d.x) || []
-        },
-        yAxis: {
-          type: 'value',
-          name: metadata.y_axis_title,
-          nameLocation: 'middle',
-          nameGap: 50,
-          show: props.widget.visualization.show_axes_labels !== false
-        },
-        series: processed.series?.map(series => ({
-          name: series.name,
-          type: 'line',
-          data: series.data.map(d => d.y),
-          smooth: true,
-          itemStyle: {
-            color: series.color || getColorFromScheme(props.widget.visualization.color_scheme)
-          },
-          lineStyle: {
-            color: series.color || getColorFromScheme(props.widget.visualization.color_scheme)
-          }
-        })) || []
-      }
-
+      return LineChart
     case 'area_chart':
-      return {
-        ...baseOption,
-        xAxis: {
-          type: metadata.data_types.x === 'temporal' ? 'time' : 'category',
-          name: metadata.x_axis_title,
-          nameLocation: 'middle',
-          nameGap: 30,
-          show: props.widget.visualization.show_axes_labels !== false,
-          data: processed.series?.[0]?.data.map(d => d.x) || []
-        },
-        yAxis: {
-          type: 'value',
-          name: metadata.y_axis_title,
-          nameLocation: 'middle',
-          nameGap: 50,
-          show: props.widget.visualization.show_axes_labels !== false
-        },
-        series: processed.series?.map(series => ({
-          name: series.name,
-          type: 'line',
-          data: series.data.map(d => d.y),
-          smooth: true,
-          areaStyle: {
-            opacity: 0.7
-          },
-          itemStyle: {
-            color: series.color || getColorFromScheme(props.widget.visualization.color_scheme)
-          },
-          lineStyle: {
-            color: series.color || getColorFromScheme(props.widget.visualization.color_scheme)
-          }
-        })) || []
-      }
-
+      return AreaChart
     case 'pie_chart':
     case 'donut_chart':
-      return {
-        ...baseOption,
-        tooltip: {
-          trigger: 'item',
-          formatter: '{a} <br/>{b}: {c} ({d}%)'
-        },
-        series: [{
-          name: metadata.title || 'Data',
-          type: 'pie',
-          radius: vizType === 'donut_chart' ? ['40%', '70%'] : '70%',
-          center: ['50%', '50%'],
-          data: processed.categories?.map(cat => ({
-            name: cat.name,
-            value: cat.value,
-            itemStyle: {
-              color: cat.color || getColorFromScheme(props.widget.visualization.color_scheme)
-            }
-          })) || [],
-          emphasis: {
-            itemStyle: {
-              shadowBlur: 10,
-              shadowOffsetX: 0,
-              shadowColor: 'rgba(0, 0, 0, 0.5)'
-            }
-          }
-        }]
-      }
-
+      return DonutChart
     case 'scatter_plot':
-      return {
-        ...baseOption,
-        xAxis: {
-          type: 'value',
-          name: metadata.x_axis_title,
-          nameLocation: 'middle',
-          nameGap: 30,
-          show: props.widget.visualization.show_axes_labels !== false
-        },
-        yAxis: {
-          type: 'value',
-          name: metadata.y_axis_title,
-          nameLocation: 'middle',
-          nameGap: 50,
-          show: props.widget.visualization.show_axes_labels !== false
-        },
-        series: processed.series?.map(series => ({
-          name: series.name,
-          type: 'scatter',
-          data: series.data.map(d => [d.x, d.y]),
-          symbolSize: 8,
-          itemStyle: {
-            color: series.color || getColorFromScheme(props.widget.visualization.color_scheme)
-          }
-        })) || []
-      }
-
+      return Scatter
+    case 'single_value':
+      return SingleValue
+    case 'gauge':
+      return Gauge
+    case 'table':
+      return Table
     default:
-      return baseOption
+      return null
   }
 })
 
-// Color scheme helper
-function getColorFromScheme(scheme?: string) {
-  const colorSchemes = {
-    blue: '#3b82f6',
-    green: '#10b981',
-    red: '#ef4444',
-    purple: '#8b5cf6',
-    orange: '#f97316',
-    default: '#6b7280'
+// Prepare data for chart components
+const chartData = computed(() => {
+  const { processed, metadata } = props.data
+  
+  if (!processed.series || processed.series.length === 0) {
+    return []
   }
-  return colorSchemes[scheme as keyof typeof colorSchemes] || colorSchemes.default
+  
+  // Convert series data to the format expected by chart components
+  const firstSeries = processed.series[0]
+  if (!firstSeries || !firstSeries.data || firstSeries.data.length === 0) {
+    return []
+  }
+  
+  // Create data array with x-axis values and y-axis values for each series
+  return firstSeries.data.map((point, index) => {
+    const dataPoint: Record<string, any> = {
+      index,
+      x: point.x
+    }
+    
+    // Add y values for each series
+    processed.series?.forEach(series => {
+      if (series.data[index]) {
+        dataPoint[series.name] = series.data[index].y
+      }
+    })
+    
+    return dataPoint
+  })
+})
+
+// Prepare categories for chart components
+const chartCategories = computed(() => {
+  const { processed } = props.data
+  
+  if (!processed.series || processed.series.length === 0) {
+    return {}
+  }
+  
+  const categories: Record<string, { name: string; color: string }> = {}
+  
+  processed.series.forEach((series, index) => {
+    const colors = ['#3b82f6', '#ef4444', '#22c55e', '#f97316', '#8b5cf6', '#d946ef']
+    if (series.name) {
+      categories[series.name as string] = {
+        name: series.name,
+        color: series.color || colors[index % colors.length]
+      }
+    }
+  })
+  
+  return categories
+})
+
+// X-axis formatter
+const xFormatter = (i: number): string | number => {
+  return chartData.value[i]?.x || ''
 }
+
+// Y-axis keys for bar charts
+const yAxisKeys = computed(() => {
+  if (!chartData.value.length) return []
+  const firstRow = chartData.value[0]
+  if (!firstRow) return []
+  return Object.keys(firstRow).filter(key => key !== 'index' && key !== 'x')
+})
+
+// Get chart props based on component type
+const chartProps = computed(() => {
+  const vizType = props.widget.visualization.type
+  const { metadata } = props.data
+  
+  const baseProps = {
+    data: chartData.value,
+    categories: chartCategories.value,
+    xFormatter,
+    hideLegend: props.widget.visualization.show_legend === false,
+    yGridLine: props.widget.visualization.show_grid !== false
+  }
+  
+  switch (vizType) {
+    case 'bar_chart':
+      return {
+        ...baseProps,
+        yAxis: yAxisKeys.value,
+        xNumTicks: 7,
+        radius: 4,
+        legendPosition: 'top'
+      }
+    
+    case 'line_chart':
+      return {
+        ...baseProps,
+        yLabel: metadata.y_axes_title,
+        xNumTicks: 7,
+        yNumTicks: 4,
+        curveType: 'smooth',
+        legendPosition: 'top'
+      }
+    
+    case 'area_chart':
+      return {
+        ...baseProps,
+        xLabel: metadata.x_axis_title,
+        yLabel: metadata.y_axes_title,
+        xNumTicks: 7,
+        yNumTicks: 4,
+        legendPosition: 'top'
+      }
+    
+    case 'pie_chart':
+    case 'donut_chart':
+      return {
+        data: props.data.processed.categories?.map(cat => cat.value) || [],
+        labels: props.data.processed.categories?.map(cat => ({
+          name: cat.name,
+          color: cat.color || '#3b82f6'
+        })) || [],
+        radius: vizType === 'donut_chart' ? 70 : 0,
+        hideLegend: props.widget.visualization.show_legend === false
+      }
+    
+    case 'scatter_plot':
+      return {
+        series: props.data.processed.series?.map(series => ({
+          name: series.name,
+          data: series.data.map(point => ({ x: point.x, y: point.y }))
+        })) || []
+      }
+    
+    case 'single_value':
+      return {
+        title: metadata.title || props.widget.title,
+        description: metadata.description,
+        value: props.data.processed.value,
+        config: props.widget.visualization.single_value_config
+      }
+    
+    case 'gauge':
+      return {
+        value: props.data.processed.value || 0,
+        min: props.widget.visualization.gauge_config?.min_value || 0,
+        max: props.widget.visualization.gauge_config?.max_value || 100,
+        thickness: props.widget.visualization.gauge_config?.thickness || 10,
+        targetValue: props.widget.visualization.gauge_config?.target_value,
+        colorRanges: props.widget.visualization.gauge_config?.color_ranges,
+        showValue: props.widget.visualization.gauge_config?.show_value !== false,
+        showTarget: props.widget.visualization.gauge_config?.show_target !== false,
+        gaugeType: props.widget.visualization.gauge_config?.gauge_type || 'arc',
+        title: (metadata.title || props.widget.title) || '',
+        showLegend: props.widget.visualization.show_legend !== false,
+        showGrid: props.widget.visualization.show_grid !== false,
+        showAxesLabels: props.widget.visualization.show_axes_labels !== false
+      }
+    
+    case 'table':
+      return {
+        columns: props.data.processed.table?.columns || [],
+        rows: props.data.processed.table?.rows || []
+      }
+    
+    default:
+      return baseProps
+  }
+})
 </script>
 
 <template>
   <div class="h-full min-h-[200px]">
-    <VChart 
-      :option="chartOption" 
-      autoresize
-      class="h-full w-full"
+    <!-- Render the appropriate chart component dynamically -->
+    <component
+      v-if="chartComponent"
+      :is="chartComponent"
+      v-bind="chartProps"
     />
+    
+    <!-- Fallback for unsupported chart types -->
+    <div v-else class="flex items-center justify-center h-full text-muted-foreground">
+      <p>Unsupported chart type: {{ widget.visualization.type }}</p>
+    </div>
   </div>
 </template>

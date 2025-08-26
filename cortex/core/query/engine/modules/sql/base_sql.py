@@ -1,22 +1,30 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import re
+from abc import abstractmethod
 
 from cortex.core.query.engine.base import BaseQueryGenerator
 from cortex.core.query.engine.processors.join_processor import JoinProcessor
 from cortex.core.query.engine.processors.aggregation_processor import AggregationProcessor
 from cortex.core.query.engine.processors.filter_processor import FilterProcessor
+from cortex.core.query.engine.processors.output_processor import OutputProcessor
 from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.measures import SemanticMeasure
 from cortex.core.types.semantics.measure import SemanticMeasureType
+from cortex.core.semantics.output_formats import FormattingMap
 
 
 class SQLQueryGenerator(BaseQueryGenerator):
     """Base implementation for SQL query generators with common functionality"""
 
-    def generate_query(self, parameters: Optional[Dict[str, Any]] = None, limit: Optional[int] = None, offset: Optional[int] = None) -> str:
+    def generate_query(self, parameters: Optional[Dict[str, Any]] = None, limit: Optional[int] = None, offset: Optional[int] = None, grouped: Optional[bool] = None) -> str:
         """Generate a complete SQL query based on the metric with optional parameters and limit/offset"""
         # Use metric's default limit if no limit provided in execution request
         effective_limit = limit if limit is not None else self.metric.limit
+        
+        # Determine if grouping should be applied
+        # If grouped parameter is explicitly set in request, use that
+        # Otherwise, use the metric's default grouped setting
+        effective_grouped = grouped if grouped is not None else (self.metric.grouped if self.metric.grouped is not None else True)
         
         # If custom query is provided, substitute parameters and add limit if specified
         if self.metric.query:
@@ -31,7 +39,7 @@ class SQLQueryGenerator(BaseQueryGenerator):
         from_clause = self._build_from_clause()
         join_clause = self._build_join_clause()
         where_clause = self._build_where_clause()
-        group_by_clause = self._build_group_by_clause()
+        group_by_clause = self._build_group_by_clause(effective_grouped)
         having_clause = self._build_having_clause()
         order_by_clause = self._build_order_by_clause()
         limit_clause = self._build_limit_clause(effective_limit, offset)
@@ -71,15 +79,22 @@ class SQLQueryGenerator(BaseQueryGenerator):
         if not self.metric.measures and not self.metric.dimensions and not self.metric.aggregations:
             return "SELECT *"
 
+        # Collect all formatting from semantic objects and store as instance variable
+        self.formatting_map = OutputProcessor.collect_semantic_formatting(
+            measures=self.metric.measures,
+            dimensions=self.metric.dimensions,
+            filters=self.metric.filters
+        )
+
         # Add measures
         if self.metric.measures:
             for measure in self.metric.measures:
-                select_parts.append(self._format_measure(measure))
+                select_parts.append(self._format_measure(measure, self.formatting_map))
 
         # Add dimensions
         if self.metric.dimensions:
             for dimension in self.metric.dimensions:
-                select_parts.append(self._format_dimension(dimension))
+                select_parts.append(self._format_dimension(dimension, self.formatting_map))
         
         # Add aggregations
         if self.metric.aggregations:
@@ -115,24 +130,31 @@ class SQLQueryGenerator(BaseQueryGenerator):
         table_prefix = table_name or self.metric.table_name
         return f"{table_prefix}.{column_query}"
 
-    def _format_measure(self, measure: SemanticMeasure) -> str:
-        """Format a measure for the SELECT clause based on its type"""
+    def _format_measure(self, measure: SemanticMeasure, formatting_map: FormattingMap) -> str:
+        """Format a measure for the SELECT clause based on its type and formatting"""
         # Get the qualified column name (with table prefix if joins are present)
         qualified_query = self._get_qualified_column_name(measure.query, measure.table)
         
+        # Apply any IN_QUERY formatting using database-specific implementation
+        formatted_query = self._apply_database_formatting(qualified_query, measure.name, formatting_map)
+        
         if measure.type == SemanticMeasureType.COUNT:
-            return f'COUNT({qualified_query}) AS "{measure.name}"'
+            return f'COUNT({formatted_query}) AS "{measure.name}"'
         elif measure.type == SemanticMeasureType.SUM:
-            return f'SUM({qualified_query}) AS "{measure.name}"'
+            return f'SUM({formatted_query}) AS "{measure.name}"'
         elif measure.type == SemanticMeasureType.AVG:
-            return f'AVG({qualified_query}) AS "{measure.name}"'
+            return f'AVG({formatted_query}) AS "{measure.name}"'
         # Default case
-        return f'{qualified_query} AS "{measure.name}"'
+        return f'{formatted_query} AS "{measure.name}"'
 
-    def _format_dimension(self, dimension: SemanticDimension) -> str:
-        """Format a dimension for the SELECT clause"""
+    def _format_dimension(self, dimension: SemanticDimension, formatting_map: FormattingMap) -> str:
+        """Format a dimension for the SELECT clause with formatting"""
         qualified_query = self._get_qualified_column_name(dimension.query, dimension.table)
-        return f"{qualified_query} AS \"{dimension.name}\""
+        
+        # Apply any IN_QUERY formatting using database-specific implementation
+        formatted_query = self._apply_database_formatting(qualified_query, dimension.name, formatting_map)
+        
+        return f"{formatted_query} AS \"{dimension.name}\""
 
     def _build_from_clause(self) -> str:
         """Build the FROM clause based on metric's table"""
@@ -145,16 +167,17 @@ class SQLQueryGenerator(BaseQueryGenerator):
         
         where_clause, _ = FilterProcessor.process_filters(
             self.metric.filters, 
-            table_prefix=self.metric.table_name
+            table_prefix=self.metric.table_name,
+            formatting_map=self.formatting_map
         )
         
         if where_clause:
             return f"WHERE {where_clause}"
         return None
 
-    def _build_group_by_clause(self) -> Optional[str]:
-        """Build GROUP BY clause if dimensions are present"""
-        if not self.metric.dimensions:
+    def _build_group_by_clause(self, grouped: bool) -> Optional[str]:
+        """Build GROUP BY clause if dimensions are present and grouping is enabled"""
+        if not self.metric.dimensions or not grouped:
             return None
 
         # Use qualified column names when joins are present
@@ -183,7 +206,8 @@ class SQLQueryGenerator(BaseQueryGenerator):
         
         _, having_clause = FilterProcessor.process_filters(
             self.metric.filters, 
-            table_prefix=self.metric.table_name
+            table_prefix=self.metric.table_name,
+            formatting_map=self.formatting_map
         )
         
         if having_clause:
@@ -246,3 +270,8 @@ class SQLQueryGenerator(BaseQueryGenerator):
             substituted_query = substituted_query.replace(pattern, str(param_value))
         
         return substituted_query
+
+    @abstractmethod
+    def _apply_database_formatting(self, column_expression: str, object_name: str, formatting_map: FormattingMap) -> str:
+        """Apply database-specific formatting to a column expression"""
+        pass

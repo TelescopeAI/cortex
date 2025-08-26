@@ -8,7 +8,7 @@ interface BulletLegendItemInterface {
 
 interface LineChartProps {
   data: Record<string, any>[]
-  height: number
+  height?: number // Make height optional
   categories: Record<string, BulletLegendItemInterface>
   xFormatter: (i: number, idx?: number) => string | number
   yLabel?: string
@@ -18,6 +18,7 @@ interface LineChartProps {
   legendPosition?: string
   hideLegend?: boolean
   yGridLine?: boolean
+  dataZoom?: boolean
 }
 
 const props = withDefaults(defineProps<LineChartProps>(), {
@@ -65,10 +66,56 @@ const chartOption = computed(() => {
     grid: {
       left: '3%',
       right: '4%',
-      bottom: '3%',
+      bottom: props.dataZoom ? '20%' : '3%',
       top: props.hideLegend ? '3%' : '15%',
       containLabel: true
     },
+    toolbox: {
+      show: true,
+      feature: {
+        dataZoom: {
+          show: true,
+          title: {
+            zoom: 'Zoom',
+            back: 'Reset Zoom'
+          }
+        },
+        restore: {
+          show: true,
+          title: 'Restore'
+        },
+        saveAsImage: {
+          show: true,
+          title: 'Save as Image'
+        }
+      },
+      right: '5%',
+      top: '5%'
+    },
+    dataZoom: props.dataZoom ? [
+      {
+        type: 'inside',
+        xAxisIndex: [0],
+        filterMode: 'none'
+      },
+      {
+        type: 'slider',
+        xAxisIndex: [0],
+        bottom: '5%',
+        height: '12%',
+        filterMode: 'none',
+        showDetail: false,
+        showDataShadow: true,
+        handleSize: '110%',
+        handleStyle: {
+          color: '#fff',
+          shadowBlur: 3,
+          shadowColor: 'rgba(0,0,0,0.6)',
+          shadowOffsetX: 2,
+          shadowOffsetY: 2
+        }
+      }
+    ] : undefined,
     xAxis: {
       type: 'category',
       data: xAxisData,
@@ -87,9 +134,11 @@ const chartOption = computed(() => {
 </script>
 
 <template>
-  <VChart 
-    :option="chartOption" 
-    :style="{ height: `${height}px` }"
-    autoresize
-  />
+  <div class="h-full w-full">
+    <VChart 
+      :option="chartOption" 
+      autoresize
+      class="h-full w-full min-h-[24rem]"
+    />
+  </div>
 </template> 

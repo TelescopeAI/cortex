@@ -334,7 +334,8 @@ class DashboardExecutionService(TSModel):
                     "execution_time_ms": metric_result.execution_time_ms,
                     "total_rows": metric_result.total_rows,
                     "visualization_type": widget.visualization.type.value,
-                    "field_mappings": widget.visualization.data_mapping.model_dump()
+                    "field_mappings": widget.visualization.data_mapping.model_dump(),
+                    "chart_config": widget.visualization.chart_config.model_dump() if widget.visualization.chart_config else None
                 }
             )
             
@@ -346,7 +347,8 @@ class DashboardExecutionService(TSModel):
                 metadata={
                     "execution_time_ms": metric_result.execution_time_ms,
                     "total_rows": metric_result.total_rows,
-                    "error": str(e)
+                    "error": str(e),
+                    "chart_config": widget.visualization.chart_config.model_dump() if widget.visualization.chart_config else None
                 }
             )
         except Exception as e:
@@ -357,6 +359,7 @@ class DashboardExecutionService(TSModel):
                 metadata={
                     "execution_time_ms": metric_result.execution_time_ms,
                     "total_rows": metric_result.total_rows,
-                    "error": str(e)
+                    "error": str(e),
+                    "chart_config": widget.visualization.chart_config.model_dump() if widget.visualization.chart_config else None
                 }
             )

@@ -128,17 +128,60 @@ function cleanDashboardForUpdate(dashboard: any): any {
             title: section.title,
             description: section.description,
             position: section.position,
-            widgets: section.widgets?.map((widget: any) => ({
-              alias: widget.alias || `widget_${Date.now()}`,
-              section_alias: widget.section_alias || widget.section_id || sectionAlias,
-              metric_id: widget.metric_id,
-              position: widget.position,
-              grid_config: widget.grid_config,
-              title: widget.title || 'Widget',
-              description: widget.description,
-              visualization: widget.visualization,
-              metric_overrides: widget.metric_overrides
-            })) || []
+            widgets: section.widgets?.map((widget: any) => {
+              const vz = widget.visualization || {}
+              const dm = vz.data_mapping || {}
+              const cleanedDM = {
+                x_axis: dm.x_axis ? {
+                  field: dm.x_axis.field,
+                  data_type: dm.x_axis.data_type ?? dm.x_axis.type ?? null,
+                  label: dm.x_axis.label ?? null,
+                  required: dm.x_axis.required ?? false
+                } : null,
+                y_axes: Array.isArray(dm.y_axes)
+                  ? dm.y_axes.map((m:any) => ({
+                      field: m.field,
+                      data_type: m.data_type ?? m.type ?? 'numerical',
+                      label: m.label ?? null,
+                      required: m.required ?? true
+                    }))
+                  : null,
+                value_field: dm.value_field ? {
+                  field: dm.value_field.field,
+                  data_type: dm.value_field.data_type ?? dm.value_field.type ?? 'numerical',
+                  label: dm.value_field.label ?? null,
+                  required: dm.value_field.required ?? true
+                } : null,
+                category_field: dm.category_field ? {
+                  field: dm.category_field.field,
+                  data_type: dm.category_field.data_type ?? dm.category_field.type ?? 'categorical',
+                  label: dm.category_field.label ?? null,
+                  required: dm.category_field.required ?? true
+                } : null,
+                series_field: dm.series_field ? {
+                  field: dm.series_field.field,
+                  data_type: dm.series_field.data_type ?? dm.series_field.type ?? 'categorical',
+                  label: dm.series_field.label ?? null,
+                  required: dm.series_field.required ?? false
+                } : null,
+                columns: dm.columns ?? null
+              }
+
+              return {
+                alias: widget.alias || `widget_${Date.now()}`,
+                section_alias: widget.section_alias || widget.section_id || sectionAlias,
+                metric_id: widget.metric_id,
+                position: widget.position,
+                grid_config: widget.grid_config,
+                title: widget.title || 'Widget',
+                description: widget.description,
+                visualization: {
+                  ...vz,
+                  data_mapping: cleanedDM
+                },
+                metric_overrides: widget.metric_overrides
+              }
+            }) || []
           }
           
           console.log('Cleaned section:', cleanedSection)
@@ -367,11 +410,11 @@ function onWidgetSubmit(partial: any) {
   
   console.log('Updated addWidgetForm:', addWidgetForm)
   
-  // Call the add widget function
-  addWidget()
+  // Call the add widget function with the full partial to preserve mapping/config
+  addWidget(partial)
 }
 
-async function addWidget() {
+async function addWidget(partial?: any) {
   console.log('addWidget called')
   console.log('Dashboard:', dashboard.value)
   console.log('Current view:', currentView.value)
@@ -399,6 +442,43 @@ async function addWidget() {
     console.log('Section not found, returning early')
     return
   }
+  const incomingViz = partial?.visualization || {}
+  const incomingDM = incomingViz.data_mapping || {}
+  // Normalize mapping: default x as categorical, y as numerical
+  const normalizedDM = {
+    x_axis: incomingDM.x_axis ? {
+      field: incomingDM.x_axis.field,
+      data_type: incomingDM.x_axis.data_type ?? incomingDM.x_axis.type ?? 'categorical',
+      label: incomingDM.x_axis.label ?? null,
+      required: incomingDM.x_axis.required ?? true
+    } : null,
+    y_axes: Array.isArray(incomingDM.y_axes) ? incomingDM.y_axes.map((m:any) => ({
+      field: m.field,
+      data_type: m.data_type ?? m.type ?? 'numerical',
+      label: m.label ?? null,
+      required: m.required ?? true
+    })) : null,
+    value_field: incomingDM.value_field ? {
+      field: incomingDM.value_field.field,
+      data_type: incomingDM.value_field.data_type ?? incomingDM.value_field.type ?? 'numerical',
+      label: incomingDM.value_field.label ?? null,
+      required: incomingDM.value_field.required ?? true
+    } : null,
+    category_field: incomingDM.category_field ? {
+      field: incomingDM.category_field.field,
+      data_type: incomingDM.category_field.data_type ?? incomingDM.category_field.type ?? 'categorical',
+      label: incomingDM.category_field.label ?? null,
+      required: incomingDM.category_field.required ?? true
+    } : null,
+    series_field: incomingDM.series_field ? {
+      field: incomingDM.series_field.field,
+      data_type: incomingDM.series_field.data_type ?? incomingDM.series_field.type ?? 'categorical',
+      label: incomingDM.series_field.label ?? null,
+      required: incomingDM.series_field.required ?? false
+    } : null,
+    columns: incomingDM.columns ?? null,
+  }
+
   const newWidget: DashboardWidget = {
     alias: `widget_${Date.now()}`, // Generate a temporary alias
     section_alias: addWidgetForm.sectionId,
@@ -409,7 +489,9 @@ async function addWidget() {
     description: undefined,
     visualization: {
       type: addWidgetForm.type as any,
-      data_mapping: { x_axis: { field: 'x', type: 'category' }, y_axis: { field: 'y', type: 'number' } }
+      data_mapping: normalizedDM,
+      single_value_config: (incomingViz.type === 'single_value') ? incomingViz.single_value_config : undefined,
+      gauge_config: (incomingViz.type === 'gauge') ? incomingViz.gauge_config : undefined,
     } as any
   }
   const widgets = sectionList[sIdx].widgets || []
@@ -547,7 +629,7 @@ useHead({
 
     <!-- Dashboard Info -->
     <Card v-if="dashboard">
-      <CardContent class="p-4">
+      <CardContent class="p-4 card-content-bg">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-4">
             <Badge>{{ dashboard.type }}</Badge>
@@ -579,7 +661,7 @@ useHead({
 
     <!-- Error State -->
     <Card v-else-if="error" class="border-destructive">
-      <CardContent class="p-6 text-center">
+      <CardContent class="p-6 text-center card-content-bg">
         <h3 class="text-lg font-semibold text-destructive mb-2">Error Loading Dashboard</h3>
         <p class="text-muted-foreground mb-4">{{ error }}</p>
         <Button @click="loadDashboard" variant="outline">
@@ -612,7 +694,7 @@ useHead({
 
     <!-- No View Selected -->
     <Card v-else-if="dashboardForUi && !currentView">
-      <CardContent class="p-12 text-center">
+      <CardContent class="p-12 text-center card-content-bg">
         <Layout class="w-12 h-12 mx-auto text-muted-foreground mb-4" />
         <h3 class="text-lg font-semibold mb-2">No View Selected</h3>
         <p class="text-muted-foreground">

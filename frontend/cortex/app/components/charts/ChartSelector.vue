@@ -7,6 +7,10 @@ import LineChart from './LineChart.vue'
 import BarChart from './BarChart.vue'
 import AreaChart from './AreaChart.vue'
 import DonutChart from './DonutChart.vue'
+import StackedBarChart from './StackedBarChart.vue'
+import StackedLineChart from './StackedLineChart.vue'
+import NormalStackedArea from './NormalStackedArea.vue'
+import GradientStackedArea from './GradientStackedArea.vue'
 
 // Define props
 const props = defineProps<{
@@ -17,6 +21,8 @@ const props = defineProps<{
 const chartType = ref('bar')
 const xAxisKey = ref<string>('')
 const yAxisKey = ref<string>('')
+const useStacked = ref(false)
+const useDataZoom = ref(false)
 
 const chartTypes = [
   { value: 'bar', label: 'Bar Chart' },
@@ -110,7 +116,7 @@ const donutChartLabels = computed(() => {
       <CardTitle>Execution Result Chart</CardTitle>
     </CardHeader>
     <CardContent>
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
         <!-- Chart Type -->
         <div class="space-y-2">
           <Label for="chart-type">Chart Type</Label>
@@ -124,6 +130,37 @@ const donutChartLabels = computed(() => {
               </SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <!-- Stacked Toggle -->
+        <div class="space-y-2">
+          <Label for="stacked-toggle">Stacked</Label>
+          <div class="flex items-center space-x-2">
+            <input
+              id="stacked-toggle"
+              type="checkbox"
+              v-model="useStacked"
+              class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span class="text-sm text-gray-600">Enable stacking</span>
+          </div>
+        </div>
+
+        <!-- Data Zoom Toggle -->
+        <div class="space-y-2">
+          <Label for="data-zoom-toggle">Data Zoom & Toolbox</Label>
+          <div class="flex items-center space-x-2">
+            <input
+              id="data-zoom-toggle"
+              type="checkbox"
+              v-model="useDataZoom"
+              class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span class="text-sm text-gray-600">Enable zoom controls & toolbox</span>
+          </div>
+          <p class="text-xs text-muted-foreground">
+            Adds zoom sliders and toolbox with zoom/restore/save features
+          </p>
         </div>
 
         <!-- X-Axis (Labels) -->
@@ -165,6 +202,8 @@ const donutChartLabels = computed(() => {
         <p>Numeric keys: {{ numericKeys.join(', ') }}</p>
         <p>X-Axis: {{ xAxisKey || 'Not selected' }}</p>
         <p>Y-Axis: {{ yAxisKey || 'Not selected' }}</p>
+        <p>Stacked: {{ useStacked ? 'Yes' : 'No' }}</p>
+        <p>Data Zoom & Toolbox: {{ useDataZoom ? 'Enabled' : 'Disabled' }}</p>
         <p>Can render: {{ canRenderChart }}</p>
       </div>
 
@@ -172,7 +211,7 @@ const donutChartLabels = computed(() => {
         <div v-if="canRenderChart" class="h-96">
           <!-- Line Chart -->
           <LineChart
-            v-if="chartType === 'line'"
+            v-if="chartType === 'line' && !useStacked"
             :data="chartData"
             :height="384"
             :y-label="yAxisKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())"
@@ -183,10 +222,26 @@ const donutChartLabels = computed(() => {
             :y-grid-line="true"
             :legend-position="'top'"
             :hide-legend="false"
+            :data-zoom="useDataZoom"
+          />
+          <!-- Stacked Line Chart -->
+          <StackedLineChart
+            v-else-if="chartType === 'line' && useStacked"
+            :data="chartData"
+            :height="384"
+            :y-label="yAxisKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())"
+            :categories="categories"
+            :x-formatter="xFormatter"
+            :y-num-ticks="4"
+            :x-num-ticks="7"
+            :y-grid-line="true"
+            :legend-position="'top'"
+            :hide-legend="false"
+            :data-zoom="useDataZoom"
           />
           <!-- Bar Chart -->
           <BarChart
-            v-else-if="chartType === 'bar'"
+            v-else-if="chartType === 'bar' && !useStacked"
             :data="chartData"
             :height="384"
             :categories="categories"
@@ -198,10 +253,27 @@ const donutChartLabels = computed(() => {
             :y-grid-line="true"
             :legend-position="'top'"
             :hide-legend="false"
+            :data-zoom="useDataZoom"
+          />
+          <!-- Stacked Bar Chart -->
+          <StackedBarChart
+            v-else-if="chartType === 'bar' && useStacked"
+            :data="chartData"
+            :height="384"
+            :categories="categories"
+            :y-axis="[yAxisKey]"
+            :x-formatter="xFormatter"
+            :y-formatter="yFormatter"
+            :x-num-ticks="7"
+            :radius="4"
+            :y-grid-line="true"
+            :legend-position="'top'"
+            :hide-legend="false"
+            :data-zoom="useDataZoom"
           />
           <!-- Area Chart -->
           <AreaChart
-            v-else-if="chartType === 'area'"
+            v-else-if="chartType === 'area' && !useStacked"
             :data="chartData"
             :height="384"
             :x-label="xAxisKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())"
@@ -213,6 +285,23 @@ const donutChartLabels = computed(() => {
             :y-grid-line="true"
             :legend-position="'top'"
             :hide-legend="false"
+            :data-zoom="useDataZoom"
+          />
+          <!-- Stacked Area Chart -->
+          <NormalStackedArea
+            v-else-if="chartType === 'area' && useStacked"
+            :data="chartData"
+            :height="384"
+            :x-label="xAxisKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())"
+            :y-label="yAxisKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())"
+            :categories="categories"
+            :x-formatter="xFormatter"
+            :y-num-ticks="4"
+            :x-num-ticks="7"
+            :y-grid-line="true"
+            :legend-position="'top'"
+            :hide-legend="false"
+            :data-zoom="useDataZoom"
           />
           <!-- Donut Chart -->
           <DonutChart

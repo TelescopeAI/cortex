@@ -3,7 +3,7 @@ from typing import Optional, List, Dict, Any, Union
 from uuid import UUID
 
 from cortex.core.types.telescope import TSModel
-from cortex.core.types.dashboards import DashboardType, VisualizationType, ColorScheme, NumberFormat
+from cortex.core.types.dashboards import DashboardType, VisualizationType, ColorScheme, NumberFormat, ValueSelectionMode
 
 
 class DashboardLayoutResponse(TSModel):
@@ -41,11 +41,28 @@ class ColumnMappingResponse(TSModel):
 class DataMappingResponse(TSModel):
     """Response model for data mapping configuration."""
     x_axis: Optional[FieldMappingResponse] = None
-    y_axis: Optional[FieldMappingResponse] = None
+    y_axes: Optional[List[FieldMappingResponse]] = None
     value_field: Optional[FieldMappingResponse] = None
     category_field: Optional[FieldMappingResponse] = None
     series_field: Optional[FieldMappingResponse] = None
     columns: Optional[List[ColumnMappingResponse]] = None
+
+
+class ChartConfigResponse(TSModel):
+    """Response model for chart configuration."""
+    show_points: bool
+    line_width: int
+    bar_width: Optional[float]
+    stack_bars: bool
+    smooth_lines: bool
+    area_stacking_type: Optional[str]
+
+
+class ValueSelectionConfigResponse(TSModel):
+    """Response model for value selection configuration."""
+    n: Optional[int] = None
+    aggregate_by: Optional[str] = None
+    delimiter: Optional[str] = None
 
 
 class SingleValueConfigResponse(TSModel):
@@ -60,6 +77,8 @@ class SingleValueConfigResponse(TSModel):
     show_title: bool
     show_description: bool
     compact_mode: bool
+    selection_mode: Optional[ValueSelectionMode]
+    selection_config: Optional[ValueSelectionConfigResponse]
 
 
 class GaugeConfigResponse(TSModel):
@@ -72,12 +91,15 @@ class GaugeConfigResponse(TSModel):
     show_target: bool
     gauge_type: str
     thickness: int
+    selection_mode: Optional[ValueSelectionMode]
+    selection_config: Optional[ValueSelectionConfigResponse]
 
 
 class VisualizationConfigResponse(TSModel):
     """Response model for visualization configuration."""
     type: VisualizationType
     data_mapping: DataMappingResponse
+    chart_config: Optional["ChartConfigResponse"]
     single_value_config: Optional[SingleValueConfigResponse]
     gauge_config: Optional[GaugeConfigResponse]
     show_legend: bool
@@ -214,7 +236,7 @@ class ChartMetadataResponse(TSModel):
     title: Optional[str]
     description: Optional[str]
     x_axis_title: Optional[str]
-    y_axis_title: Optional[str]
+    y_axes_title: Optional[str]
     data_types: Dict[str, str]
     formatting: Dict[str, str]
     ranges: Optional[Dict[str, List[float]]]

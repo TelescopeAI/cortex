@@ -3,8 +3,21 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
-  devtools: { enabled: true },
-  modules: ['shadcn-nuxt', '@vueuse/nuxt', 'nuxt-charts', 'nuxt-shiki', 'nuxt-echarts'],
+  devtools: {
+    enabled: true,
+
+    timeline: {
+      enabled: true
+    }
+  },
+  modules: [
+    'shadcn-nuxt',
+    '@vueuse/nuxt',
+    'nuxt-charts',
+    'nuxt-shiki',
+    'nuxt-echarts',
+    '@nuxt/image'
+  ],
   css: [
     './app/assets/css/tailwind.css',
     './app/assets/css/global.css'
@@ -44,7 +57,9 @@ export default defineNuxtConfig({
       'LegendComponent',
       'GridComponent',
       'DatasetComponent',
-      'TransformComponent'
+      'TransformComponent',
+      'DataZoomComponent',
+      'ToolboxComponent'
     ],
     /**
      * Features to include
@@ -65,5 +80,8 @@ export default defineNuxtConfig({
      */
     bundledThemes: ['aurora-x', 'andromeeda', 'night-owl', 'one-light'],
     defaultTheme: 'one-light'
-  }
+  },
+  image: {
+    dir: 'assets/images'
+  },
 })

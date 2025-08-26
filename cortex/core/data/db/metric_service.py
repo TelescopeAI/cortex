@@ -40,7 +40,7 @@ class MetricService:
                 joins=metric.joins,
                 aggregations=metric.aggregations,
                 filters=metric.filters,
-                output_formats=metric.output_formats,
+
                 parameters=metric.parameters,
                 model_version=metric.model_version,
                 extends=metric.extends,

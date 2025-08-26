@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, nextTick } from 'vue'
+import { twMerge } from 'tailwind-merge'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
@@ -65,7 +66,7 @@ function onSectionDragEnd() {
 }
 
 function onSectionDrop(targetSection: DashboardSection) {
-  if (!draggedSection.value || draggedSection.value.id === targetSection.id) {
+  if (!draggedSection.value || draggedSection.value.alias === targetSection.alias) {
     return
   }
 
@@ -101,7 +102,7 @@ function getWidgetExecutionResult(widgetId: string) {
         <div class="flex items-center justify-between">
           <div>
             <CardTitle class="flex items-center gap-2">
-              {{ view.name }}
+              {{ view.title }}
               <Badge v-if="view.context_id" variant="outline" class="text-xs">
                 Context: {{ view.context_id }}
               </Badge>
@@ -158,13 +159,15 @@ function getWidgetExecutionResult(widgetId: string) {
       </Button>
     </div>
 
-    <div v-else class="space-y-6">
-      <DashboardSectionComponent
+    <div v-else :class="twMerge('space-y-6')">
+        <DashboardSectionComponent
         v-for="section in sortedSections"
-        :key="section.id"
+        :key="section.alias"
         :section="section"
         :execution-results="executionResults"
-        :draggable="true"
+        :draggable="false"
+        :dashboard-id="props.dashboard.id as any"
+        :view-alias="props.view.alias"
         @execute-widget="executeWidget"
         @widget-updated="handleWidgetUpdate"
         @section-updated="handleSectionUpdate"

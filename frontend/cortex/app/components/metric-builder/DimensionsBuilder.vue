@@ -87,6 +87,13 @@
               @update:model-value="updateDimensions"
             />
           </div>
+
+          <!-- Output Formatting -->
+          <OutputFormatEditor
+            v-model="dimension.formatting"
+            object-type="dimension"
+            @update:model-value="updateDimensions"
+          />
         </div>
       </Card>
     </div>
@@ -94,7 +101,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Card } from '~/components/ui/card'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
@@ -112,12 +119,14 @@ import {
 } from '~/components/ui/dropdown-menu'
 import { Grid, X } from 'lucide-vue-next'
 import ColumnSelector from '~/components/ColumnSelector.vue'
+import OutputFormatEditor from './OutputFormatEditor.vue'
 
 interface Dimension {
   name: string
   description?: string
   query: string
   table?: string
+  formatting?: any[]
 }
 
 interface Props {
@@ -156,7 +165,8 @@ const addDimension = (tableName: string, column: any) => {
     name: column.name,
     description: `Dimension based on ${tableName}.${column.name}`,
     query: column.name,
-    table: tableName
+    table: tableName,
+    formatting: []
   }
   
   dimensions.value.push(newDimension)

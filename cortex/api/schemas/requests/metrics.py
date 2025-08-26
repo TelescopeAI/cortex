@@ -1,13 +1,12 @@
 from typing import Optional, Dict, Any, List
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from cortex.core.semantics.measures import SemanticMeasure
 from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.joins import SemanticJoin
 from cortex.core.semantics.aggregations import SemanticAggregation
 from cortex.core.semantics.filters import SemanticFilter
-from cortex.core.semantics.output_formats import OutputFormat
 from cortex.core.semantics.refresh_keys import RefreshKey
 from cortex.core.semantics.parameters import ParameterDefinition
 
@@ -23,12 +22,12 @@ class MetricCreateRequest(BaseModel):
     table_name: Optional[str] = None
     data_source_id: Optional[UUID] = None
     limit: Optional[int] = None
+    grouped: Optional[bool] = Field(default=True, description="Whether to apply GROUP BY when dimensions are present")
     measures: Optional[List[SemanticMeasure]] = None
     dimensions: Optional[List[SemanticDimension]] = None
     joins: Optional[List[SemanticJoin]] = None
     aggregations: Optional[List[SemanticAggregation]] = None
     filters: Optional[List[SemanticFilter]] = None
-    output_formats: Optional[List[OutputFormat]] = None
     parameters: Optional[Dict[str, ParameterDefinition]] = None
     extends: Optional[UUID] = None
     public: Optional[bool] = True
@@ -46,12 +45,12 @@ class MetricUpdateRequest(BaseModel):
     table_name: Optional[str] = None
     data_source_id: Optional[UUID] = None
     limit: Optional[int] = None
+    grouped: Optional[bool] = None
     measures: Optional[List[SemanticMeasure]] = None
     dimensions: Optional[List[SemanticDimension]] = None
     joins: Optional[List[SemanticJoin]] = None
     aggregations: Optional[List[SemanticAggregation]] = None
     filters: Optional[List[SemanticFilter]] = None
-    output_formats: Optional[List[OutputFormat]] = None
     parameters: Optional[Dict[str, ParameterDefinition]] = None
     extends: Optional[UUID] = None
     public: Optional[bool] = None
@@ -61,8 +60,6 @@ class MetricUpdateRequest(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
 
-
-
 class MetricExecutionRequest(BaseModel):
     """Request schema for executing a metric"""
     parameters: Optional[Dict[str, Any]] = None
@@ -70,6 +67,7 @@ class MetricExecutionRequest(BaseModel):
     limit: Optional[int] = None
     offset: Optional[int] = None
     context_id: Optional[str] = None
+    grouped: Optional[bool] = Field(default=True, description="Whether to apply GROUP BY when dimensions are present")
 
 
 class MetricCloneRequest(BaseModel):

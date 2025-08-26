@@ -1,6 +1,6 @@
 # cortex
 
-## AI-Enhanced Modular Analytics Platform
+## Lightweight Modular Analytics Platform
 
 A modular, lightweight analytics engine built in Python to power customer-facing analytics applications. The platform provides a unified semantic layer for defining business data models, a dynamic query engine that integrates with heterogeneous data sources, and a robust user management and authorization system—all accessible via a FastAPI-powered REST API. The semantic layer is designed to support advanced AI agent integration for intelligent analytics, natural language querying, and automated insights generation.
 
@@ -11,33 +11,24 @@ This platform is designed to abstract complex data sources into a business-frien
 ### Key Features
 
 - **Semantic Layer**
-  - Define and manage data models in JSON
+  - Define and manage data models in JSON with measures, dimensions, and filters
   - Dynamic schema generation with plugin support
-  - Versioning and audit trails (integrated with Git)
+  - Advanced output formatting with IN_QUERY and POST_QUERY transformation modes
+  - Versioning and audit trails
 
 - **Query Engine**
   - Translates semantic definitions into optimized queries
   - Supports multi-source queries (SQL, NoSQL, files, APIs)
-  - Integration with caching for enhanced performance
+  - Real-time output formatting during query execution and post-processing
+  - Integration with caching for enhanced performance [PLANNED]
 
 - **Data Source Integration**
   - Connectors for PostgreSQL, MySQL, BigQuery, Snowflake, MongoDB
-  - Support for file-based sources (CSV, Excel, Google Sheets)
-
-- **User Management & Authentication**
-  - Admin/dev authentication using FastAPI and fastapi-users
-  - End user authentication via JWT, mapped to local user records
-
-- **Authorization**
-  - Out-of-the-box RBAC with extensible hooks for dynamic, rule-based (ABAC-like) policies
-  - Plugin interface for custom authorization logic
+  - Support for file-based sources (CSV, Excel, Google Sheets) [PLANNED]
 
 - **API-First Approach**
   - All functionality exposed via FastAPI-based REST endpoints
   - Clear separation of admin and end-user API flows
-
-- **Caching & Performance**
-  - Redis integration for caching query results and configuration data
 
 - **Monitoring & Metrics**
   - Event logging and metrics aggregation to track system health
@@ -48,29 +39,23 @@ This platform is designed to abstract complex data sources into a business-frien
 - **Multi-Tenancy & Environment Isolation**
   - Workspace and environment-level isolation to support multiple tenants
 
-- **AI Agent Integration Ready**
-  - Semantic layer optimized for AI agent integration
-  - Natural language query processing capabilities
-  - Context-aware personalization and recommendations
-  - Automated metric discovery and data model generation
-  - Intelligent query optimization and performance tuning
-
 ## Architecture
 
 The project follows a layered architecture within a monorepo, ensuring modularity, ease of maintenance, and independent evolution of key components.
 
-### Semantic Layer for AI Integration
+### Semantic Layer
 
-The semantic layer is designed with AI agent integration in mind, providing:
+This semantic layer is designed with AI agent integration in mind, providing:
 
 - **Structured Semantic Models**: JSON-based metric definitions with measures, dimensions, joins, and aggregations
+- **Advanced Output Formatting**: Support for data transformations at both query time (IN_QUERY) and post-execution (POST_QUERY)
 - **Context-Aware Execution**: Consumer properties and environment isolation for personalized data access
 - **Query Abstraction**: Database-agnostic query generation from semantic definitions
 - **Execution Logging**: Comprehensive query execution logs for AI training and optimization
 - **Parameter System**: Dynamic parameter substitution for flexible query generation
 - **Validation Pipeline**: Automated validation and compilation of semantic models
 
-This foundation enables AI agents to:
+This foundation will enable AI agents to:
 - Translate natural language queries into semantic metric definitions
 - Recommend relevant metrics and dimensions based on user context
 - Optimize query performance through pattern analysis
@@ -89,18 +74,19 @@ This foundation enables AI agents to:
 ## Getting Started
 
 ### Prerequisites
-- Python 3.9+
+- Python 3.12+
 - PostgreSQL (or other supported database)
-- Redis (for caching)
 
 ### Installation
+
+#### Basic Installation (Core Only)
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/TelescopeAI/cortex
 cd cortex
 
-# Install dependencies
-poetry install
+# Install core dependencies only
+poetry install --only main
 
 # Set up environment variables
 cp .env.example .env
@@ -109,8 +95,33 @@ cp .env.example .env
 # Run database migrations
 alembic upgrade head
 
-# Start the development server
+# Start the development server (core only)
+poetry run python -m cortex.core.main
+```
+
+#### Full Installation with API Extras
+```bash
+# Install with all dependencies including FastAPI
+poetry install --with api
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your configuration
+
+# Run database migrations
+alembic upgrade head
+
+# Start the development server with API
 poetry run uvicorn cortex.api.main:app --reload
+```
+
+#### Using pip with Extras
+```bash
+# Install core package
+pip install .
+
+# Install with API extras
+pip install .[api]
 ```
 
 ### Quick Start - Creating Your First Semantic Model
@@ -129,7 +140,7 @@ poetry run uvicorn cortex.api.main:app --reload
 }
 ```
 
-2. **Create a Semantic Metric**:
+2. **Create a Semantic Metric with Output Formatting**:
 ```json
 {
   "name": "monthly_revenue",
@@ -139,13 +150,29 @@ poetry run uvicorn cortex.api.main:app --reload
     {
       "name": "revenue",
       "type": "sum",
-      "query": "amount"
+      "query": "amount",
+      "formatting": [
+        {
+          "name": "currency_format",
+          "type": "format",
+          "mode": "post_query",
+          "format_string": "${:,.2f}"
+        }
+      ]
     }
   ],
   "dimensions": [
     {
       "name": "month",
-      "query": "DATE_TRUNC('month', sale_date)"
+      "query": "DATE_TRUNC('month', sale_date)",
+      "formatting": [
+        {
+          "name": "date_format",
+          "type": "cast",
+          "mode": "in_query",
+          "target_type": "date"
+        }
+      ]
     }
   ]
 }
@@ -164,29 +191,40 @@ result = executor.execute_metric(
 )
 ```
 
-## Roadmap
+## Frontend
 
-### Phase 1: AI Foundation
-- [ ] Natural language query interface
-- [ ] Semantic metric discovery and search
-- [ ] Basic recommendation engine
-- [ ] Enhanced query logging for AI training
+The platform includes a modern Vue.js frontend built with Nuxt.js for creating and managing dashboards, metrics, and data visualizations.
 
-### Phase 2: Intelligent Analytics
-- [ ] Automated data model generation from schema analysis
-- [ ] AI-powered query optimization
-- [ ] Context-aware personalization
-- [ ] Anomaly detection and data quality monitoring
+### Frontend Features
+- **Metric Builder**: Visual interface for creating semantic metrics with measures, dimensions, and filters
+- **Output Format Editor**: Configure data transformations for each semantic object
+- **Dashboard Builder**: Drag-and-drop dashboard creation with multiple chart types
+- **Advanced Charting**: ECharts integration with support for stacked charts, data zoom, and toolbox features
+- **Real-time Preview**: Instant visualization of metric results during development
 
-### Phase 3: Advanced AI Capabilities
-- [ ] Multi-agent orchestration system
-- [ ] Semantic knowledge graph
-- [ ] Predictive analytics and forecasting
-- [ ] Collaborative intelligence features
+### Frontend Setup
+```bash
+cd frontend/cortex
+yarn install
+yarn dev
+```
 
-### Phase 4: Enterprise AI
-- [ ] Domain-specific AI models
-- [ ] Advanced governance and compliance
-- [ ] Real-time insights generation
-- [ ] Federated learning across tenants
+## Development
+
+### Project Structure
+```
+cortex/
+├── cortex/                   # Core Python package
+│   ├── api/                  # FastAPI REST API (optional)
+│   ├── core/                 # Core semantic layer and query engine
+├── frontend/                 # Nuxt based admin interface
+└── pyproject.toml            # Poetry configuration
+```
+
+### Key Components
+- **Semantic Models**: Core data modeling with measures, dimensions, and filters
+- **Query Engine**: SQL generation and execution across multiple data sources
+- **Output Processing**: Real-time data transformation and formatting
+- **Dashboard Engine**: Widget execution and visualization rendering
+- **Frontend Components**: Vue.js components for metric and dashboard management
 

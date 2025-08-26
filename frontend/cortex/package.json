@@ -10,6 +10,8 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "@formkit/drag-and-drop": "^0.5.3",
+    "@nuxt/image": "1.11.0",
     "@tailwindcss/vite": "^4.1.11",
     "@tanstack/vue-table": "^8.21.3",
     "@unovis/ts": "^1.5.2",
@@ -35,5 +37,8 @@
     "vue-sonner": "^2.0.1",
     "zod": "^4.0.5"
   },
-  "packageManager": "yarn@1.22.19+sha1.4ba7fc5c6e704fce2066ecbfb0b0d8976fe62447"
+  "packageManager": "yarn@1.22.19+sha1.4ba7fc5c6e704fce2066ecbfb0b0d8976fe62447",
+  "devDependencies": {
+    "@nuxtjs/color-mode": "^3.5.2"
+  }
 }

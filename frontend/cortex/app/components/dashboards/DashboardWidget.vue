@@ -19,6 +19,8 @@ import { toast } from 'vue-sonner'
 interface Props {
   widget: WidgetType
   executionResult?: any
+  dashboardId?: string
+  viewAlias?: string
 }
 
 interface Emits {
@@ -131,6 +133,10 @@ function getVisualizationIcon() {
         </div>
         
         <div class="flex items-center gap-1">
+          <!-- Drag-anywhere mode enabled; keep icon as visual affordance only -->
+          <span class="h-6 w-6 rounded hover:bg-muted flex items-center justify-center text-muted-foreground" title="Drag">
+            <span class="block w-3 h-3 m-auto bg-[linear-gradient(#999_2px,transparent_2px),linear-gradient(90deg,#999_2px,transparent_2px)] bg-[length:4px_4px]" />
+          </span>
           <!-- Execution Status -->
           <Badge 
             v-if="executionTime" 
@@ -145,6 +151,10 @@ function getVisualizationIcon() {
             variant="ghost" 
             size="icon" 
             class="h-6 w-6"
+            draggable="false"
+            @mousedown.stop
+            @pointerdown.stop
+            @touchstart.stop
             @click="executeWidget"
             :disabled="isExecuting"
           >
@@ -154,11 +164,20 @@ function getVisualizationIcon() {
           <!-- Widget Actions -->
           <DropdownMenu>
             <DropdownMenuTrigger as-child>
-              <Button variant="ghost" size="icon" class="h-6 w-6">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                class="h-6 w-6"
+                draggable="false"
+                @mousedown.stop
+                @pointerdown.stop
+                @touchstart.stop
+                @click.stop
+              >
                 <MoreHorizontal class="w-3 h-3" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" class="z-[9999]">
               <DropdownMenuItem @click="editWidget">
                 <Edit class="w-4 h-4 mr-2" />
                 Edit Widget
@@ -178,7 +197,7 @@ function getVisualizationIcon() {
     </CardHeader>
 
     <!-- Widget Content -->
-    <CardContent class="flex-1 pb-4">
+    <CardContent class="flex-1 pb-4 card-content-bg">
       <!-- Loading State -->
       <div v-if="isLoading" class="flex items-center justify-center h-32">
         <div class="text-center">

@@ -56,7 +56,8 @@ class QueryExecutor(TSModel):
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         source_type: DataSourceTypes = DataSourceTypes.POSTGRESQL,
-        context_id: Optional[str] = None
+        context_id: Optional[str] = None,
+        grouped: Optional[bool] = None
     ) -> Dict[str, Any]:
         """
         Execute a specific metric from a data model with comprehensive logging.
@@ -90,17 +91,30 @@ class QueryExecutor(TSModel):
             
             # Generate the query
             query_generator = QueryGeneratorFactory.create_generator(resolved_metric, source_type)
-            generated_query = query_generator.generate_query(enhanced_parameters, limit, offset)
+            generated_query = query_generator.generate_query(enhanced_parameters, limit, offset, grouped)
             log_entry.query = generated_query
             
             # Execute the query (placeholder - would integrate with actual database execution)
             query_results = self._execute_database_query(generated_query, metric.data_source_id)
             
+            # Collect all formatting from semantic objects
+            all_formats = OutputProcessor.collect_semantic_formatting(
+                measures=resolved_metric.measures,
+                dimensions=resolved_metric.dimensions,
+                filters=resolved_metric.filters
+            )
+            
+            # Flatten all formats into a single list for processing
+            flat_formats = []
+            for format_list in all_formats.values():
+                if format_list:
+                    flat_formats.extend(format_list)
+            
             # Apply output format transformations if defined
-            if resolved_metric.output_formats:
+            if flat_formats:
                 transformed_results = OutputProcessor.process_output_formats(
                     query_results, 
-                    resolved_metric.output_formats
+                    flat_formats
                 )
             else:
                 transformed_results = query_results

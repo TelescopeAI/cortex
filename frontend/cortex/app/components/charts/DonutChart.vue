@@ -3,7 +3,7 @@ import { computed } from 'vue'
 
 interface DonutChartProps {
   data: number[]
-  height: number
+  height?: number // Make height optional
   radius: number
   labels: Array<{ name: string; color: string }>
   type?: string
@@ -58,9 +58,11 @@ const chartOption = computed(() => {
 </script>
 
 <template>
-  <VChart 
-    :option="chartOption" 
-    :style="{ height: `${height}px` }"
-    autoresize
-  />
+  <div class="h-full w-full">
+    <VChart 
+      :option="chartOption" 
+      autoresize
+      class="h-full w-full min-h-[24rem]"
+    />
+  </div>
 </template> 

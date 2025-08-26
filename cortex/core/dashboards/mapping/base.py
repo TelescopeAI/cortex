@@ -30,7 +30,7 @@ class FieldMapping(TSModel):
     """Maps a field from metric results to visualization requirements."""
     
     field: str  # Column name from metric execution result
-    data_type: AxisDataType  # Expected data type
+    data_type: Optional[AxisDataType] = None  # Expected data type, optional for backend inference
     label: Optional[str] = None  # Display name for the field
     format: Optional[FieldFormat] = None  # Formatting options
     required: bool = True  # Whether this field is required for the visualization

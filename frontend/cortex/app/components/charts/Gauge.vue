@@ -9,8 +9,14 @@ const props = defineProps<{
   thickness?: number
   colorRanges?: Array<{ min: number; max: number; color: string }>
   showValue?: boolean
+  showTarget?: boolean
+  targetValue?: number
+  gaugeType?: string
   height?: number
   title?: string
+  showLegend?: boolean
+  showGrid?: boolean
+  showAxesLabels?: boolean
 }>()
 
 const { width } = useWindowSize()
@@ -27,36 +33,97 @@ const option = computed(() => {
   const min = props.min ?? 0
   const max = props.max ?? 100
   const thickness = props.thickness ?? 10
+  const gaugeType = props.gaugeType ?? 'arc'
   const ranges = props.colorRanges ?? [
     { min, max: min + (max - min) * 0.3, color: '#ef4444' },
     { min: min + (max - min) * 0.3, max: min + (max - min) * 0.7, color: '#f97316' },
     { min: min + (max - min) * 0.7, max, color: '#10b981' }
   ]
+  
   const colorStops = [] as { offset: number; color: string }[]
   for (const r of ranges) {
     colorStops.push({ offset: (r.min - min) / (max - min), color: r.color })
   }
   colorStops.push({ offset: 1, color: ranges[ranges.length - 1]?.color || '#10b981' })
-  return {
+  
+  // Base gauge configuration
+  const baseConfig = {
     tooltip: { trigger: 'item' },
+    legend: { show: props.showLegend !== false },
+    grid: { show: props.showGrid !== false },
     series: [{
       type: 'gauge',
       center: ['50%', '62%'],
       radius: '90%',
       min, max,
-      progress: { show: true, width: thickness, itemStyle: { color: { type: 'linear', x: 0, y: 0, x2: 1, y2: 0, colorStops } } },
-      axisLine: { lineStyle: { width: thickness, color: [[1, '#E6EBF8']] } },
+      progress: { 
+        show: true, 
+        width: thickness, 
+        itemStyle: { 
+          color: { 
+            type: 'linear', 
+            x: 0, y: 0, x2: 1, y2: 0, 
+            colorStops 
+          } 
+        } 
+      },
+      axisLine: { 
+        lineStyle: { 
+          width: thickness, 
+          color: [[1, '#E6EBF8']] 
+        } 
+      },
+      axisTick: { 
+        show: props.showAxesLabels !== false,
+        length: 8,
+        lineStyle: { color: '#999', width: 2 }
+      },
+      splitLine: { 
+        show: props.showGrid !== false,
+        length: 30,
+        lineStyle: { color: '#999', width: 3 }
+      },
+      axisLabel: { 
+        show: props.showAxesLabels !== false,
+        distance: 5,
+        color: '#999',
+        fontSize: 12
+      },
       pointer: { show: true, width: 4, length: '70%' },
-      title: { show: true, offsetCenter: [0, '18%'], color: '#6b7280' },
-      detail: { show: props.showValue !== false, valueAnimation: true, offsetCenter: [0, '40%'], fontSize: 24, fontWeight: 'bold', formatter: (v:number)=> v.toLocaleString() },
+      title: { 
+        show: true, 
+        offsetCenter: [0, '18%'], 
+        color: '#6b7280',
+        fontSize: 14
+      },
+      detail: { 
+        show: props.showValue !== false, 
+        valueAnimation: true, 
+        offsetCenter: [0, '40%'], 
+        fontSize: 24, 
+        fontWeight: 'bold', 
+        formatter: (v:number)=> v.toLocaleString() 
+      },
       data: [{ value: props.value, name: props.title || '' }]
     }]
   }
+  
+  // Add target line if target value is provided and showTarget is true
+  if (props.showTarget !== false && typeof props.targetValue === 'number') {
+    (baseConfig.series[0] as any).markLine = {
+      silent: true,
+      symbol: 'none',
+      lineStyle: { color: '#ff6b6b', width: 2, type: 'dashed' },
+      data: [{ yAxis: props.targetValue }]
+    }
+  }
+  
+  return baseConfig
 })
 </script>
 
 <template>
-  <VChart :option="option" :style="{ height: `${resolvedHeight}px` }" autoresize class="w-full" />
+  <VChart :option="option" :style="{ height: `${resolvedHeight}px` }" autoresize class="w-full min-h-[24rem]" />
   
 </template>
 

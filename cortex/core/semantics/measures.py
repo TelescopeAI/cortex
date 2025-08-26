@@ -1,8 +1,9 @@
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import ConfigDict
 
-from cortex.core.types.semantics.measure import SemanticMeasureType, SemanticMeasureOutputFormat
+from cortex.core.types.semantics.measure import SemanticMeasureType
+from cortex.core.semantics.output_formats import OutputFormat
 from cortex.core.types.telescope import TSModel
 
 
@@ -27,7 +28,7 @@ class SemanticMeasure(TSModel):
     name: str
     description: Optional[str]
     type: SemanticMeasureType
-    format: Optional[SemanticMeasureOutputFormat] = None
+    formatting: Optional[List[OutputFormat]] = None
     alias: Optional[str] = None
     query: Optional[str] = None
     table: Optional[str] = None

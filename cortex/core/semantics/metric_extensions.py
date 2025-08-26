@@ -20,7 +20,6 @@ class MetricAdditions(TSModel):
     dimensions: Optional[List[Dict[str, Any]]] = None  # List of SemanticDimension dicts
     joins: Optional[List[Dict[str, Any]]] = None  # List of SemanticJoin dicts
     aggregations: Optional[List[Dict[str, Any]]] = None  # List of SemanticAggregation dicts
-    output_formats: Optional[List[Dict[str, Any]]] = None  # List of OutputFormat dicts
     filters: Optional[List[Dict[str, Any]]] = None  # List of SemanticFilter dicts
     limit: Optional[int] = None  # Override default limit
 
@@ -34,7 +33,6 @@ class MetricOverrides(TSModel):
     joins: Optional[Dict[str, Dict[str, Any]]] = None  # join_name -> SemanticJoin dict
     aggregations: Optional[Dict[str, Dict[str, Any]]] = None  # aggregation_name -> SemanticAggregation dict
     filters: Optional[Dict[str, Dict[str, Any]]] = None  # filter_name -> SemanticFilter dict
-    output_formats: Optional[Dict[str, Dict[str, Any]]] = None  # format_name -> OutputFormat dict
     limit: Optional[int] = None  # Override default limit
 
 

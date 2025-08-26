@@ -65,7 +65,7 @@ class ChartMetadata(TSModel):
     title: Optional[str] = None
     description: Optional[str] = None
     x_axis_title: Optional[str] = None
-    y_axis_title: Optional[str] = None
+    y_axes_title: Optional[str] = None
     data_types: Dict[str, AxisDataType]
     formatting: Dict[str, str] = {}
     ranges: Optional[Dict[str, List[float]]] = None
@@ -143,7 +143,7 @@ class DataTransformationService(TSModel):
             metadata = ChartMetadata(
                 title=f"Chart Data",  # Can be overridden by widget title
                 x_axis_title=data_mapping.x_axis.get("field", "X Axis"),
-                y_axis_title=(data_mapping.y_axes[0].get("field") if getattr(data_mapping, 'y_axes', None) and data_mapping.y_axes else "Y Axis"),
+                y_axes_title=(data_mapping.y_axes[0].get("field") if getattr(data_mapping, 'y_axes', None) and data_mapping.y_axes else "Y Axis"),
                 data_types={
                     "x": AxisDataType(data_mapping.x_axis.get("type", "categorical")),
                     "y": AxisDataType((data_mapping.y_axes[0].get("type") if getattr(data_mapping, 'y_axes', None) and data_mapping.y_axes else "numerical"))

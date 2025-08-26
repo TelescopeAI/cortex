@@ -8,7 +8,7 @@ from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.joins import SemanticJoin
 from cortex.core.semantics.aggregations import SemanticAggregation
 from cortex.core.semantics.filters import SemanticFilter
-from cortex.core.semantics.output_formats import OutputFormat
+
 from cortex.core.semantics.refresh_keys import RefreshKey
 from cortex.core.semantics.parameters import ParameterDefinition
 
@@ -21,16 +21,17 @@ class MetricResponse(BaseModel):
     alias: Optional[str]
     description: Optional[str]
     title: Optional[str]
+    # Query definition
     query: Optional[str]
     table_name: Optional[str]
     data_source_id: Optional[UUID]
     limit: Optional[int]
+    grouped: Optional[bool]
     measures: Optional[List[SemanticMeasure]] = None
     dimensions: Optional[List[SemanticDimension]] = None
     joins: Optional[List[SemanticJoin]] = None
     aggregations: Optional[List[SemanticAggregation]] = None
     filters: Optional[List[SemanticFilter]] = None
-    output_formats: Optional[List[OutputFormat]] = None
     parameters: Optional[Dict[str, ParameterDefinition]] = None
     model_version: int
     public: bool

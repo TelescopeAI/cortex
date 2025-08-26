@@ -80,6 +80,7 @@ class MetricORM(BaseDBModel):
     table_name = mapped_column(String, nullable=True)  # Source table
     data_source_id = mapped_column(UUID, ForeignKey("data_sources.id"), nullable=True, index=True)
     limit = mapped_column(Integer, nullable=True)  # Default limit for query results
+    grouped = mapped_column(Boolean, nullable=True, default=True)  # Whether to apply GROUP BY when dimensions are present
     
     # Metric components (stored as JSON)
     measures = mapped_column(JSONB, nullable=True)  # Array of SemanticMeasure objects
@@ -87,7 +88,6 @@ class MetricORM(BaseDBModel):
     joins = mapped_column(JSONB, nullable=True)  # Array of SemanticJoin objects
     aggregations = mapped_column(JSONB, nullable=True)  # Array of SemanticAggregation objects
     filters = mapped_column(JSONB, nullable=True)  # Array of SemanticFilter objects
-    output_formats = mapped_column(JSONB, nullable=True)  # Array of OutputFormat objects
     
     # Configuration
     parameters = mapped_column(JSONB, nullable=True)  # Parameter definitions

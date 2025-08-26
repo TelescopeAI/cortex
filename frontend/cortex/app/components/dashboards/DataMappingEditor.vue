@@ -27,7 +27,7 @@ interface DataMapping {
   y_axes?: FieldMapping[]
   value_field?: FieldMapping
   category_field?: FieldMapping
-  series_field?: FieldMapping
+  series_by?: FieldMapping
   columns?: ColumnMapping[]
 }
 
@@ -43,8 +43,6 @@ interface Emits {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
-
-const currentMapping = reactive<DataMapping>(props.mapping || {})
 
 // Visualization type requirements
 const requiresXY = computed(() => 
@@ -65,47 +63,82 @@ const requiresColumns = computed(() =>
 
 const supportsSeries = computed(() => ['bar_chart', 'line_chart', 'area_chart'].includes(props.visualizationType))
 
-// Watch for changes and emit updates
-watch(currentMapping, (newMapping) => {
-  emit('update', newMapping)
-}, { deep: true })
+// Work directly with props and emit changes
+const currentMapping = computed(() => props.mapping || {})
 
 function updateFieldMapping(field: keyof DataMapping, mapping: FieldMapping) {
   if (field === 'columns') {
     // Skip for columns as it has different type
     return
   }
-  (currentMapping as any)[field] = mapping
+  const updatedMapping = { ...currentMapping.value, [field]: mapping }
+  emit('update', updatedMapping)
 }
 
 function addColumn() {
-  if (!currentMapping.columns) {
-    currentMapping.columns = []
+  const columns = currentMapping.value.columns || []
+  const updatedMapping = { 
+    ...currentMapping.value, 
+    columns: [...columns, {
+      field: '',
+      label: '',
+      sortable: true,
+      filterable: true
+    }]
   }
-  currentMapping.columns.push({
-    field: '',
-    label: '',
-    sortable: true,
-    filterable: true
-  })
+  emit('update', updatedMapping)
 }
 
 function removeColumn(index: number) {
-  if (currentMapping.columns) {
-    currentMapping.columns.splice(index, 1)
+  const columns = currentMapping.value.columns || []
+  if (index >= 0 && index < columns.length) {
+    const newColumns = [...columns]
+    newColumns.splice(index, 1)
+    const updatedMapping = { ...currentMapping.value, columns: newColumns }
+    emit('update', updatedMapping)
   }
 }
 
 function updateColumn(index: number, field: string, column: { name: string; type: string }) {
-  if (currentMapping.columns && currentMapping.columns[index]) {
-    currentMapping.columns[index].field = column.name
-    currentMapping.columns[index].label = column.name
+  const columns = currentMapping.value.columns || []
+  if (index >= 0 && index < columns.length) {
+    const newColumns = [...columns]
+    newColumns[index] = { ...newColumns[index], field: column.name, label: column.name }
+    const updatedMapping = { ...currentMapping.value, columns: newColumns }
+    emit('update', updatedMapping)
+  }
+}
+
+function addYAxis() {
+  const yAxes = currentMapping.value.y_axes || []
+  const updatedMapping = { 
+    ...currentMapping.value, 
+    y_axes: [...yAxes, { 
+      field: '', 
+      data_type: 'numerical', 
+      label: '' 
+    }]
+  }
+  emit('update', updatedMapping)
+}
+
+function updateYAxisMapping(index: number, mapping: FieldMapping) {
+  const yAxes = currentMapping.value.y_axes || []
+  if (index >= 0 && index < yAxes.length) {
+    const newYAxes = [...yAxes]
+    newYAxes[index] = mapping
+    const updatedMapping = { ...currentMapping.value, y_axes: newYAxes }
+    emit('update', updatedMapping)
   }
 }
 
 function removeYAxis(index: number) {
-  if (currentMapping.y_axes && index >= 0 && index < currentMapping.y_axes.length) {
-    currentMapping.y_axes.splice(index, 1)
+  const yAxes = currentMapping.value.y_axes || []
+  if (index >= 0 && index < yAxes.length) {
+    const newYAxes = [...yAxes]
+    newYAxes.splice(index, 1)
+    const updatedMapping = { ...currentMapping.value, y_axes: newYAxes }
+    emit('update', updatedMapping)
   }
 }
 </script>
@@ -141,12 +174,12 @@ function removeYAxis(index: number) {
             :available-tables="availableTables"
             :data-types="['numerical']"
             required
-            @update="(mapping) => { (currentMapping.y_axes![idx] = mapping) }"
+            @update="(mapping) => updateYAxisMapping(idx, mapping)"
             @remove="() => removeYAxis(idx)"
           />
         </div>
         <div>
-          <Button size="sm" variant="outline" @click="() => { (currentMapping.y_axes = currentMapping.y_axes || []); currentMapping.y_axes.push({ field: '', data_type: 'numerical', label: '' }) }">
+          <Button size="sm" variant="outline" @click="addYAxis">
             <Plus class="w-4 h-4 mr-1" />
             Add Y Field
           </Button>
@@ -154,15 +187,15 @@ function removeYAxis(index: number) {
       </div>
     </div>
 
-    <!-- Value Field for Single Values and Gauges -->
+    <!-- Value Field for Single Values and Gauges (maps to x_axis) -->
     <div v-if="requiresValue">
       <FieldMappingSelector
         label="Value Field"
-        :mapping="currentMapping.value_field"
+        :mapping="currentMapping.x_axis"
         :available-tables="availableTables"
         :data-types="['numerical']"
         required
-        @update="(mapping) => updateFieldMapping('value_field', mapping)"
+        @update="(mapping) => updateFieldMapping('x_axis', mapping)"
       />
     </div>
 
@@ -186,7 +219,16 @@ function removeYAxis(index: number) {
       />
     </div>
 
-    <!-- Series Field removed: multi-Y covers series use case -->
+    <!-- Optional: Series split (long form) -->
+    <div v-if="supportsSeries">
+      <FieldMappingSelector
+        label="Split Series By (optional)"
+        :mapping="currentMapping.series_by"
+        :available-tables="availableTables"
+        :data-types="['categorical']"
+        @update="(mapping) => updateFieldMapping('series_by', mapping)"
+      />
+    </div>
 
     <!-- Column Configuration for Tables -->
     <Card v-if="requiresColumns">

@@ -24,6 +24,14 @@ const props = withDefaults(defineProps<{
 const formattedValue = computed(() => {
   if (props.value === null || props.value === undefined) return 'N/A'
   const cfg = props.config || {}
+
+  // If value is a non-numeric string (e.g., concatenate mode), render as-is with prefix/suffix
+  const isNumber = typeof props.value === 'number' || (typeof props.value === 'string' && props.value.trim() !== '' && !Number.isNaN(Number(props.value)))
+  if (!isNumber) {
+    const text = String(props.value)
+    return `${cfg.prefix ?? ''}${text}${cfg.suffix ?? ''}`
+  }
+
   const num = typeof props.value === 'number' ? props.value : Number(props.value)
   let out = ''
   if (cfg.prefix) out += cfg.prefix

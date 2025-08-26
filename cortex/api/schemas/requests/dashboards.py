@@ -2,7 +2,14 @@ from typing import Optional, List, Dict, Any, Union
 from uuid import UUID
 
 from cortex.core.types.telescope import TSModel
-from cortex.core.types.dashboards import DashboardType, VisualizationType, ColorScheme, NumberFormat
+from cortex.core.types.dashboards import (
+    DashboardType,
+    VisualizationType,
+    ColorScheme,
+    NumberFormat,
+    ValueSelectionMode,
+    ValueSelectionConfig,
+)
 
 
 class DashboardLayoutRequest(TSModel):
@@ -41,7 +48,7 @@ class ColumnMappingRequest(TSModel):
 class DataMappingRequest(TSModel):
     """Request model for data mapping configuration."""
     x_axis: Optional[FieldMappingRequest] = None
-    # Only multi-Y support
+    # Only multi-Y support; optional to allow incomplete drafts
     y_axes: Optional[List[FieldMappingRequest]] = None
     value_field: Optional[FieldMappingRequest] = None
     category_field: Optional[FieldMappingRequest] = None
@@ -61,6 +68,19 @@ class SingleValueConfigRequest(TSModel):
     show_title: bool = True
     show_description: bool = False
     compact_mode: bool = False
+    # Value selection
+    selection_mode: Optional[ValueSelectionMode] = None
+    selection_config: Optional[ValueSelectionConfig] = None
+
+
+class ChartConfigRequest(TSModel):
+    """Request model for chart configuration."""
+    show_points: Optional[bool] = None
+    line_width: Optional[int] = None
+    bar_width: Optional[float] = None
+    stack_bars: Optional[bool] = None
+    smooth_lines: Optional[bool] = None
+    area_stacking_type: Optional[str] = None
 
 
 class GaugeConfigRequest(TSModel):
@@ -73,12 +93,16 @@ class GaugeConfigRequest(TSModel):
     show_target: bool = True
     gauge_type: str = "arc"
     thickness: int = 10
+    # Optional value selection as in single value
+    selection_mode: Optional[ValueSelectionMode] = None
+    selection_config: Optional[ValueSelectionConfig] = None
 
 
 class VisualizationConfigRequest(TSModel):
     """Request model for visualization configuration."""
     type: VisualizationType
     data_mapping: DataMappingRequest
+    chart_config: Optional["ChartConfigRequest"] = None
     single_value_config: Optional[SingleValueConfigRequest] = None
     gauge_config: Optional[GaugeConfigRequest] = None
     show_legend: bool = True

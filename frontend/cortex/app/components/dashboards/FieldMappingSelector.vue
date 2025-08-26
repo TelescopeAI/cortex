@@ -73,11 +73,6 @@ function updateLabel(newLabel: string) {
   emit('update', currentMapping.value)
 }
 
-function updateDataType(newType: string) {
-  currentMapping.value.data_type = newType
-  emit('update', currentMapping.value)
-}
-
 function removeField() {
   emit('remove')
 }
@@ -100,8 +95,6 @@ function removeField() {
           @select="onFieldSelect"
         />
       </div>
-      
-      <!-- Data type selection removed; inferred automatically -->
       
       <!-- Custom Label and Remove -->
       <div v-if="currentMapping.field">

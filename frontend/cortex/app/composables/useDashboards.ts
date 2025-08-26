@@ -48,7 +48,7 @@ export interface CreateDashboardWidgetRequest {
     type: string
     data_mapping: {
       x_axis: { field: string; type: string }
-      y_axis: { field: string; type: string }
+      y_axes: { field: string; type: string }[]
       series?: { split_by?: string; value_field?: string }
       category?: string
       value_field?: string
@@ -337,7 +337,7 @@ export function useDashboards() {
                     label: widget.visualization.data_mapping.x_axis.label || null,
                     required: widget.visualization.data_mapping.x_axis.required || false
                   } : null,
-                  // Support multi-Y via y_axes; keep y_axis for backward compat if only one
+                  // Support multi-Y via y_axes
                   y_axes: Array.isArray(widget.visualization?.data_mapping?.y_axes)
                     ? widget.visualization.data_mapping.y_axes.map((m:any) => ({
                         field: m.field,

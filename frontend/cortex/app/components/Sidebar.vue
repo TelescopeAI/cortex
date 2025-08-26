@@ -3,6 +3,7 @@ import { useWorkspaces } from '~/composables/useWorkspaces';
 import { useEnvironments } from '~/composables/useEnvironments';
 import { useRouter } from 'vue-router';
 import { computed, watch } from 'vue';
+import { useDark } from '@vueuse/core';
 import type { Workspace, Environment } from '~/types';
 import {
   Sidebar,
@@ -26,10 +27,33 @@ import {
 import CreateWorkspaceDialog from '~/components/CreateWorkspaceDialog.vue';
 import CreateEnvironmentDialog from '~/components/CreateEnvironmentDialog.vue';
 import { ChevronDown, Check, Database, Target, Users, BarChart3 } from 'lucide-vue-next';
+import Logo from '~/components/Logo.vue';
+import ThemeToggle from '~/components/ThemeToggle.vue';
 
 const { workspaces, selectedWorkspaceId, selectWorkspace } = useWorkspaces();
 const { environments, selectedEnvironmentId, selectEnvironment } = useEnvironments();
 const router = useRouter();
+
+// Configure useDark to properly handle system preferences and manual control
+const isDark = useDark({
+  valueDark: 'dark',
+  valueLight: 'light',
+  selector: 'html',
+  attribute: 'class',
+  storageKey: 'cortex-color-scheme'
+})
+
+// Watch for changes and ensure proper synchronization
+watch(isDark, (newValue) => {
+  // Ensure the DOM is updated when the reactive state changes
+  if (typeof document !== 'undefined') {
+    if (newValue) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }
+}, { immediate: true })
 
 function handleWorkspaceSelect(id: string) {
   selectWorkspace(id);
@@ -79,16 +103,19 @@ watch([selectedWorkspaceId, selectedEnvironmentId], ([workspaceId, environmentId
 </script>
 
 <template>
-  <Sidebar class="w-64">
-    <SidebarHeader class="border-b p-4">
-      <h2 class="text-lg font-semibold">Cortex</h2>
+  <Sidebar class="w-64 bg-sidebar border-r border-sidebar-border">
+    <SidebarHeader class="border-b border-sidebar-border p-4 flex flex-row items-center justify-between">
+      <Logo />
+      <div class="mt-1 flex items-center justify-center">
+        <ThemeToggle />
+      </div>
     </SidebarHeader>
     
     <SidebarContent class="p-4">
       <!-- Workspace & Environment Dropdown -->
       <div class="mb-4">
         <DropdownMenu>
-          <DropdownMenuTrigger class="w-full text-left p-3 border rounded-md hover:bg-gray-50 flex items-center justify-between">
+          <DropdownMenuTrigger class="w-full text-left p-3 border border-sidebar-border rounded-md hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex items-center justify-between transition-colors">
             <div class="flex flex-col items-start">
               <span class="text-sm font-medium">{{ displayText }}</span>
             </div>
@@ -105,7 +132,7 @@ watch([selectedWorkspaceId, selectedEnvironmentId], ([workspaceId, environmentId
               @click="handleWorkspaceSelect(ws.id)"
             >
               <span>{{ ws.name }}</span>
-              <Check v-if="ws.id === selectedWorkspaceId" class="w-4 h-4 text-blue-600" />
+              <Check v-if="ws.id === selectedWorkspaceId" class="w-4 h-4 text-sidebar-primary" />
             </DropdownMenuItem>
             
             <DropdownMenuSeparator />
@@ -130,7 +157,7 @@ watch([selectedWorkspaceId, selectedEnvironmentId], ([workspaceId, environmentId
                     @click="handleEnvironmentSelect(env.id)"
                   >
                     <span>{{ env.name }}</span>
-                    <Check v-if="env.id === selectedEnvironmentId" class="w-4 h-4 text-blue-600" />
+                    <Check v-if="env.id === selectedEnvironmentId" class="w-4 h-4 text-sidebar-primary" />
                   </DropdownMenuItem>
                   
                   <DropdownMenuSeparator />
@@ -148,25 +175,19 @@ watch([selectedWorkspaceId, selectedEnvironmentId], ([workspaceId, environmentId
 
       <!-- Navigation -->
       <SidebarMenu>
-        <!-- <SidebarMenuButton @click="router.push('/workspaces')">
-          Workspaces
-        </SidebarMenuButton>
-        <SidebarMenuButton @click="router.push('/environments')">
-          Environments
-        </SidebarMenuButton> -->
-        <SidebarMenuButton @click="router.push('/data/sources')">
+        <SidebarMenuButton @click="router.push('/data/sources')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
           <Database class="w-4 h-4 mr-2" />
           Data Sources
         </SidebarMenuButton>
-        <SidebarMenuButton @click="router.push('/metrics')">
+        <SidebarMenuButton @click="router.push('/metrics')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
           <Target class="w-4 h-4 mr-2" />
           Metrics
         </SidebarMenuButton>
-        <SidebarMenuButton @click="router.push('/dashboards')">
+        <SidebarMenuButton @click="router.push('/dashboards')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
           <BarChart3 class="w-4 h-4 mr-2" />
           Dashboards
         </SidebarMenuButton>
-        <SidebarMenuButton @click="router.push('/consumers')">
+        <SidebarMenuButton @click="router.push('/consumers')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
           <Users class="w-4 h-4 mr-2" />
           Consumers
         </SidebarMenuButton>

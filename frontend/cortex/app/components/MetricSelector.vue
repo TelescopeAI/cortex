@@ -62,13 +62,13 @@ onMounted(async () => {
         <ChevronDown class="h-4 w-4 ml-2" />
       </Button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent class="w-80">
+    <DropdownMenuContent class="w-80 z-[100001]">
       <DropdownMenuSub v-for="model in models" :key="model.id">
         <DropdownMenuSubTrigger @pointerenter="ensureMetrics(model.id)">
           <Database class="h-4 w-4 mr-2" />
           {{ model.name }}
         </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent>
+        <DropdownMenuSubContent class="z-[100001]">
           <DropdownMenuItem
             v-for="metric in modelIdToMetrics[model.id] || []"
             :key="metric.id"

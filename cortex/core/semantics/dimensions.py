@@ -1,5 +1,6 @@
-from typing import Optional
+from typing import Optional, List
 
+from cortex.core.semantics.output_formats import OutputFormat
 from cortex.core.types.telescope import TSModel
 
 
@@ -20,3 +21,4 @@ class SemanticDimension(TSModel):
     description: Optional[str] = None
     query: str
     table: Optional[str] = None
+    formatting: Optional[List[OutputFormat]] = None

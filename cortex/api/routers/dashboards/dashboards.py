@@ -1,5 +1,5 @@
-from typing import Optional
-from uuid import UUID
+from typing import Optional, Any
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, status
 
@@ -24,6 +24,7 @@ from cortex.core.exceptions.dashboards import (
     DashboardExecutionError, WidgetExecutionError
 )
 from cortex.core.services.metrics import MetricExecutionService
+from cortex.core.types.dashboards import AxisDataType
 
 DashboardRouter = APIRouter()
 
@@ -143,8 +144,73 @@ async def update_dashboard(dashboard_id: UUID, dashboard_data: DashboardUpdateRe
                 tags=existing_dashboard.tags,
                 alias=existing_dashboard.alias,
             )
-            updated_model = _convert_create_request_to_dashboard(temp_request)
-            existing_dashboard.views = updated_model.views
+        updated_model = _convert_create_request_to_dashboard(temp_request)
+
+        # Merge strategy: preserve existing widget data_mapping fields when the incoming update omits them
+        merged_views = []
+        for new_view in updated_model.views:
+            # find existing view by alias
+            old_view = next((v for v in (existing_dashboard.views or []) if v.alias == new_view.alias), None)
+            if not old_view:
+                merged_views.append(new_view)
+                continue
+            merged_sections = []
+            for new_sec in new_view.sections:
+                old_sec = next((s for s in (old_view.sections or []) if s.alias == new_sec.alias), None)
+                if not old_sec:
+                    merged_sections.append(new_sec)
+                    continue
+                merged_widgets = []
+                for new_w in new_sec.widgets:
+                    old_w = None
+                    for ow in (old_sec.widgets or []):
+                        if ow.alias == new_w.alias:
+                            old_w = ow
+                            break
+                    if not old_w:
+                        merged_widgets.append(new_w)
+                        continue
+                    # Merge data_mapping conservatively
+                    nm = new_w.visualization.data_mapping
+                    om = old_w.visualization.data_mapping
+                    # If y_axes missing/empty in update, preserve existing
+                    if (not getattr(nm, 'y_axes', None)) and getattr(om, 'y_axes', None):
+                        nm.y_axes = om.y_axes
+                    # If x_axis missing but exists before, preserve
+                    if (not getattr(nm, 'x_axis', None)) and getattr(om, 'x_axis', None):
+                        nm.x_axis = om.x_axis
+                    # Preserve series_field/value_field/category_field if omitted
+                    if (not getattr(nm, 'series_field', None)) and getattr(om, 'series_field', None):
+                        nm.series_field = om.series_field
+                    if (not getattr(nm, 'value_field', None)) and getattr(om, 'value_field', None):
+                        nm.value_field = om.value_field
+                    if (not getattr(nm, 'category_field', None)) and getattr(om, 'category_field', None):
+                        nm.category_field = om.category_field
+                    # Preserve columns if omitted
+                    if (not getattr(nm, 'columns', None)) and getattr(om, 'columns', None):
+                        nm.columns = om.columns
+                    
+                    # Preserve chart_config if omitted
+                    if (not getattr(new_w.visualization, 'chart_config', None)) and getattr(old_w.visualization, 'chart_config', None):
+                        new_w.visualization.chart_config = old_w.visualization.chart_config
+                    
+                    merged_widgets.append(new_w)
+                # carry over any widgets that were not present in update payload
+                new_aliases = {w.alias for w in new_sec.widgets}
+                for ow in (old_sec.widgets or []):
+                    if ow.alias not in new_aliases:
+                        merged_widgets.append(ow)
+                new_sec.widgets = merged_widgets
+                merged_sections.append(new_sec)
+            # carry over any sections not present in update
+            new_sec_aliases = {s.alias for s in new_view.sections}
+            for os in (old_view.sections or []):
+                if os.alias not in new_sec_aliases:
+                    merged_sections.append(os)
+            new_view.sections = merged_sections
+            merged_views.append(new_view)
+
+        existing_dashboard.views = merged_views
 
         # Update dashboard
         updated_dashboard = DashboardCRUD.update_dashboard(dashboard_id, existing_dashboard)
@@ -271,11 +337,68 @@ async def execute_dashboard_view(dashboard_id: UUID, view_alias: str):
     tags=["Dashboards"]
 )
 async def execute_widget(dashboard_id: UUID, view_alias: str, widget_alias: str):
-    """Execute a specific widget and return its chart data."""
-    try:
-        execution_result = DashboardExecutionService.execute_widget(dashboard_id, view_alias, widget_alias)
+    """Execute a specific widget and return its chart data.
 
-        return WidgetExecutionResponse(**execution_result.model_dump())
+    This mirrors the preview behavior, but loads the persisted dashboard config
+    and executes the real metric for the widget.
+    """
+    try:
+        # Load dashboard
+        dashboard = DashboardCRUD.get_dashboard_by_id(dashboard_id)
+        if dashboard is None:
+            raise DashboardDoesNotExistError(dashboard_id)
+
+        # Find view
+        target_view = None
+        for v in dashboard.views:
+            if v.alias == view_alias:
+                target_view = v
+                break
+        if target_view is None:
+            raise DashboardViewDoesNotExistError(view_alias)
+
+        # Find widget by alias across sections
+        target_widget = None
+        for s in target_view.sections:
+            for w in s.widgets:
+                if w.alias == widget_alias:
+                    target_widget = w
+                    break
+            if target_widget:
+                break
+        if target_widget is None:
+            raise WidgetExecutionError(widget_alias, "Widget not found")
+
+        if not target_widget.metric_id:
+            raise WidgetExecutionError(widget_alias, "Widget must reference a metric")
+
+        # Execute metric using shared service
+        execution_result = MetricExecutionService.execute_metric(
+            metric_id=target_widget.metric_id,
+            context_id=target_view.context_id,
+            limit=100,
+        )
+
+        if not execution_result.get("success"):
+            data_payload = _create_error_chart_data(execution_result.get("error", "Metric execution failed"))
+            return WidgetExecutionResponse(
+                widget_alias=widget_alias,
+                data=data_payload,
+                execution_time_ms=execution_result.get("metadata", {}).get("execution_time_ms", 0.0),
+                error=execution_result.get("error")
+            )
+
+        metric_result = _convert_to_metric_execution_result(execution_result)
+
+        # Transform data using the same mapper as preview
+        transformed_data = _transform_widget_data_with_mapping(target_widget, metric_result)
+
+        return WidgetExecutionResponse(
+            widget_alias=widget_alias,
+            data=transformed_data,
+            execution_time_ms=execution_result.get("metadata", {}).get("execution_time_ms", 0.0),
+            error=None
+        )
     except (DashboardDoesNotExistError, DashboardViewDoesNotExistError) as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -300,9 +423,9 @@ def _convert_create_request_to_dashboard(request: DashboardCreateRequest) -> Das
         DashboardView, DashboardSection, DashboardWidget,
         VisualizationConfig, DataMapping, WidgetGridConfig,
         DashboardLayout, MetricExecutionOverrides,
-        SingleValueConfig, GaugeConfig
+        SingleValueConfig, GaugeConfig, ChartConfig
     )
-    from uuid import uuid4
+    
 
     # Convert views (support optional aliases in future; client can send in layout field later)
     views = []
@@ -315,14 +438,52 @@ def _convert_create_request_to_dashboard(request: DashboardCreateRequest) -> Das
             # Convert widgets
             widgets = []
             for widget_req in section_req.widgets:
+                # Build a robust DataMapping directly from FieldMappingRequest
+                dm_req = widget_req.visualization.data_mapping
+
+                def _fm(m, default: str, required_default: bool = False):
+                    if not m:
+                        return None
+                    return FieldMapping(
+                        field=m.field,
+                        data_type=(m.data_type or default),
+                        label=getattr(m, 'label', None),
+                        required=bool(getattr(m, 'required', required_default)),
+                    )
+
+                data_mapping = DataMapping(
+                    x_axis=_fm(getattr(dm_req, 'x_axis', None), 'categorical', False),
+                    y_axes=[_fm(ym, 'numerical', True) for ym in (getattr(dm_req, 'y_axes', None) or [])] or None,
+                    series_field=_fm(getattr(dm_req, 'series_field', None), 'categorical', False),
+                    columns=[
+                        {
+                            'field': getattr(col, 'field', None) or (col.get('field') if isinstance(col, dict) else None),
+                            'label': getattr(col, 'label', None) or (col.get('label') if isinstance(col, dict) else None),
+                            'width': getattr(col, 'width', None) if not isinstance(col, dict) else col.get('width'),
+                            'sortable': getattr(col, 'sortable', None) if not isinstance(col, dict) else col.get('sortable'),
+                            'filterable': getattr(col, 'filterable', None) if not isinstance(col, dict) else col.get('filterable'),
+                            'alignment': getattr(col, 'alignment', None) if not isinstance(col, dict) else col.get('alignment'),
+                        }
+                        for col in (getattr(dm_req, 'columns', None) or [])
+                    ] or None,
+                )
+
                 # Convert visualization config
                 viz_config = VisualizationConfig(
                     type=widget_req.visualization.type,
-                    data_mapping=DataMapping(**widget_req.visualization.data_mapping.model_dump()),
-                    single_value_config=SingleValueConfig(
-                        **widget_req.visualization.single_value_config.model_dump()) if widget_req.visualization.single_value_config else None,
-                    gauge_config=GaugeConfig(
-                        **widget_req.visualization.gauge_config.model_dump()) if widget_req.visualization.gauge_config else None,
+                    data_mapping=data_mapping,
+                    chart_config=(
+                        ChartConfig(**widget_req.visualization.chart_config.model_dump(exclude_none=True))
+                        if widget_req.visualization.chart_config else None
+                    ),
+                    single_value_config=(
+                        SingleValueConfig(**widget_req.visualization.single_value_config.model_dump(exclude_none=True))
+                        if widget_req.visualization.single_value_config else None
+                    ),
+                    gauge_config=(
+                        GaugeConfig(**widget_req.visualization.gauge_config.model_dump(exclude_none=True))
+                        if widget_req.visualization.gauge_config else None
+                    ),
                     show_legend=widget_req.visualization.show_legend,
                     show_grid=widget_req.visualization.show_grid,
                     show_axes_labels=widget_req.visualization.show_axes_labels,
@@ -489,7 +650,7 @@ def _create_error_chart_data(error_message: str):
         title="Error",
         description=error_message,
         x_axis_title="",
-        y_axis_title="",
+        y_axes_title="",
         data_types={},
         formatting={},
         ranges={}
@@ -563,53 +724,55 @@ def _transform_widget_data_with_mapping(widget, metric_result):
                 row_dict[column] = row[i] if i < len(row) else None
             result_data.append(row_dict)
 
-        # Convert request data mapping to domain model
+
+        # Convert request data mapping (AxisMapping in domain) to FieldMapping used by transformers
         request_mapping = widget.visualization.data_mapping
 
-        # Create domain model data mapping
+        def _mapping_type(m: Any, default: str) -> str:
+            # Accept either AxisMapping.type or FieldMapping.data_type
+            # Prefer explicit request data_type; if missing, attempt to infer from metric result columns suffixes
+            inferred = getattr(m, 'data_type', None) or getattr(m, 'type', None)
+            return _normalize_axis_type(inferred, default)
+
+        def _to_field_mapping(m: Any, default: str, required_default: bool = False, force_numeric: bool = False) -> Optional[FieldMapping]:
+            if not m:
+                return None
+            dtype = _mapping_type(m, default)
+            if force_numeric:
+                dtype = 'numerical'
+            return FieldMapping(
+                field=getattr(m, 'field', None),
+                data_type=dtype,
+                label=getattr(m, 'label', None),
+                required=bool(getattr(m, 'required', required_default)),
+            )
+
+        # Build DataMapping expected by mapping engine
         domain_data_mapping = DataMapping(
-            x_axis=FieldMapping(
-                field=request_mapping.x_axis.field,
-                data_type=_normalize_axis_type(request_mapping.x_axis.data_type, "categorical"),
-                label=request_mapping.x_axis.label,
-                required=(request_mapping.x_axis.required or False)
-            ) if request_mapping.x_axis else None,
+            x_axis=_to_field_mapping(getattr(request_mapping, 'x_axis', None), 'categorical', False),
             y_axes=[
-                FieldMapping(
-                    field=ym.field,
-                    data_type=_normalize_axis_type(getattr(ym, 'data_type', None), "numerical"),
-                    label=getattr(ym, 'label', None),
-                    required=(getattr(ym, 'required', False) or False)
-                ) for ym in getattr(request_mapping, 'y_axes', []) or []
+                _to_field_mapping(ym, 'numerical', True, True)
+                for ym in (getattr(request_mapping, 'y_axes', None) or [])
             ] or None,
-            value_field=FieldMapping(
-                field=request_mapping.value_field.field,
-                data_type=_normalize_axis_type(request_mapping.value_field.data_type, "numerical"),
-                label=request_mapping.value_field.label,
-                required=(request_mapping.value_field.required or False)
-            ) if request_mapping.value_field else None,
-            category_field=FieldMapping(
-                field=request_mapping.category_field.field,
-                data_type=_normalize_axis_type(request_mapping.category_field.data_type, "categorical"),
-                label=request_mapping.category_field.label,
-                required=(request_mapping.category_field.required or False)
-            ) if request_mapping.category_field else None,
-            series_field=FieldMapping(
-                field=request_mapping.series_field.field,
-                data_type=_normalize_axis_type(request_mapping.series_field.data_type, "categorical"),
-                label=request_mapping.series_field.label,
-                required=(request_mapping.series_field.required or False)
-            ) if request_mapping.series_field else None,
+            # Legacy/category-value support (may not be present on domain model)
+            value_field=_to_field_mapping(getattr(request_mapping, 'value_field', None), 'numerical', True),
+            category_field=_to_field_mapping(getattr(request_mapping, 'category_field', None), 'categorical', True),
+            # Accept both series_field and series_by from domain
+            series_field=_to_field_mapping(
+                getattr(request_mapping, 'series_field', None) or getattr(request_mapping, 'series_by', None),
+                'categorical',
+                False,
+            ),
             columns=[
                 ColumnMapping(
-                    field=col.field,
-                    label=col.label or col.field,
-                    width=col.width,
-                    sortable=col.sortable or False,
-                    filterable=col.filterable or False,
-                    alignment=col.alignment
-                ) for col in request_mapping.columns
-            ] if request_mapping.columns else None
+                    field=getattr(col, 'field', None) or (col.get('field') if isinstance(col, dict) else None),
+                    label=(getattr(col, 'label', None) or (col.get('label') if isinstance(col, dict) else None) or (getattr(col, 'field', None) if hasattr(col, 'field') else None)),
+                    width=getattr(col, 'width', None) if not isinstance(col, dict) else col.get('width'),
+                    sortable=(getattr(col, 'sortable', False) if not isinstance(col, dict) else bool(col.get('sortable', False))),
+                    filterable=(getattr(col, 'filterable', False) if not isinstance(col, dict) else bool(col.get('filterable', False))),
+                    alignment=getattr(col, 'alignment', None) if not isinstance(col, dict) else col.get('alignment'),
+                ) for col in (getattr(request_mapping, 'columns', None) or [])
+            ] or None,
         )
 
         # If there is no data or columns, return a safe default preview without failing
@@ -642,6 +805,10 @@ def _transform_widget_data_with_mapping(widget, metric_result):
                     pass
             else:
                 # Validate mapping against metric result columns for chart types
+                # If y_axes have missing or ambiguous data_type, infer as numerical
+                for ym in (domain_data_mapping.y_axes or []):
+                    if not getattr(ym, 'data_type', None):
+                        ym.data_type = AxisDataType.NUMERICAL
                 visualization_mapping.validate(metric_result.columns)
 
             # Transform data using the mapping
@@ -657,21 +824,46 @@ def _transform_widget_data_with_mapping(widget, metric_result):
                 y_type = getattr(domain_data_mapping.y_axes[0].data_type, 'value', domain_data_mapping.y_axes[0].data_type)
         except Exception:
             pass
-        x_type = x_type or _normalize_axis_type(getattr(request_mapping.x_axis, 'data_type', None), 'categorical')
+        # Fallback to request mapping (supports both .data_type and .type)
+        x_src = getattr(request_mapping, 'x_axis', None)
+        x_type = x_type or _normalize_axis_type((getattr(x_src, 'data_type', None) or getattr(x_src, 'type', None)), 'categorical')
         if not y_type and getattr(request_mapping, 'y_axes', None):
             first_y = request_mapping.y_axes[0]
-            y_type = _normalize_axis_type(getattr(first_y, 'data_type', None), 'numerical')
+            y_type = _normalize_axis_type((getattr(first_y, 'data_type', None) or getattr(first_y, 'type', None)), 'numerical')
+
+        # Build metadata types/title conditionally to avoid None enums for single-value/gauge
+        _data_types = {}
+        if x_type:
+            _data_types["x_axis"] = x_type
+        if y_type:
+            _data_types["y_axes"] = y_type
+
+        y_title = ""
+        if getattr(request_mapping, 'y_axes', None) and request_mapping.y_axes:
+            first_y = request_mapping.y_axes[0]
+            if getattr(first_y, 'label', None):
+                y_title = first_y.label
 
         # Convert to StandardChartData format with all required metadata
+        # Safely resolve axis titles even when request mapping is AxisMapping without 'label'
+        x_axis_label = "X Axis"
+        try:
+            if getattr(request_mapping, 'x_axis', None):
+                x_label_candidate = getattr(request_mapping.x_axis, 'label', None)
+                if x_label_candidate:
+                    x_axis_label = x_label_candidate
+        except Exception:
+            pass
+
         return StandardChartData(
             raw={"columns": metric_result.columns, "data": metric_result.data},
             processed=transformed_data,
             metadata=ChartMetadata(
                 title=(widget.title if hasattr(widget, 'title') else "Preview Widget"),
                 description=(widget.description if hasattr(widget, 'description') else ""),
-                x_axis_title=(request_mapping.x_axis.label if request_mapping.x_axis and request_mapping.x_axis.label else "X Axis"),
-                y_axis_title=(request_mapping.y_axes[0].label if getattr(request_mapping, 'y_axes', None) and request_mapping.y_axes and request_mapping.y_axes[0].label else "Y Axis"),
-                data_types={"x_axis": x_type, "y_axis": y_type},
+                x_axis_title=x_axis_label,
+                y_axes_title=y_title,
+                data_types=_data_types,
                 formatting={},
                 ranges={},
             )

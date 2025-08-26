@@ -22,7 +22,8 @@ class MetricExecutionService:
         parameters: Optional[Dict[str, Any]] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
-        source_type: DataSourceTypes = DataSourceTypes.POSTGRESQL
+        source_type: DataSourceTypes = DataSourceTypes.POSTGRESQL,
+        grouped: Optional[bool] = None
     ) -> Dict[str, Any]:
         """
         Execute a metric and return the result.
@@ -73,7 +74,8 @@ class MetricExecutionService:
                 limit=limit,
                 offset=offset,
                 source_type=source_type,
-                context_id=context_id
+                context_id=context_id,
+                grouped=grouped
             )
             
             return result

@@ -123,21 +123,12 @@
 
           
 
-          <!-- Format Options -->
-          <div class="space-y-2">
-            <Label>Output Format</Label>
-            <Select v-model="measure.format" @update:model-value="updateMeasures">
-              <SelectTrigger>
-                <SelectValue placeholder="Default format" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="number">Number</SelectItem>
-                <SelectItem value="currency">Currency</SelectItem>
-                <SelectItem value="percentage">Percentage</SelectItem>
-                <SelectItem value="decimal">Decimal</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <!-- Output Formatting -->
+          <OutputFormatEditor
+            v-model="measure.formatting"
+            object-type="measure"
+            @update:model-value="updateMeasures"
+          />
         </div>
       </Card>
     </div>
@@ -145,7 +136,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Card } from '~/components/ui/card'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
@@ -164,12 +155,13 @@ import {
 } from '~/components/ui/dropdown-menu'
 import { Target, X, Code } from 'lucide-vue-next'
 import ColumnSelector from '~/components/ColumnSelector.vue'
+import OutputFormatEditor from './OutputFormatEditor.vue'
 
 interface Measure {
   name: string
   description?: string
   type: string
-  format?: string
+  formatting?: any[]
   alias?: string
   query?: string
   table?: string
@@ -236,7 +228,8 @@ const addMeasure = (tableName: string, column: any) => {
     type: getDefaultType(column.type),
     table: tableName,
     alias: column.name,
-    query: column.name
+    query: column.name,
+    formatting: []
   }
   
   measures.value.push(newMeasure)
@@ -250,7 +243,8 @@ const addCustomMeasure = () => {
     type: 'custom',
     query: 'custom_measure',
     alias: 'custom_measure',
-    table: undefined // User will select table manually
+    table: undefined, // User will select table manually
+    formatting: []
   }
   
   measures.value.push(newMeasure)

@@ -4,25 +4,28 @@ from cortex.core.semantics.metrics.metric import SemanticMetric
 from cortex.core.types.databases import DataSourceTypes
 from cortex.core.types.telescope import TSModel
 import time
+from typing import Optional, Dict, Any
 
 
 class QueryGenerator(TSModel):
     metric: SemanticMetric
     source_type: DataSourceTypes
 
-    def generate_query(self) -> str:
+    def generate_query(self, parameters: Optional[Dict[str, Any]] = None, limit: Optional[int] = None, offset: Optional[int] = None, grouped: Optional[bool] = None) -> str:
         """
         Generate a database query for the given metric.
 
         Args:
-            metric: The semantic metric to generate a query for
-            source_type: The database source implementation that should be used to generate the query
+            parameters: Optional runtime parameters for the query
+            limit: Optional limit for query results
+            offset: Optional offset for query results
+            grouped: Optional override for metric's grouping setting
 
         Returns:
             The generated query string (or query object for NoSQL)
         """
         generator = QueryGeneratorFactory.create_generator(self.metric, self.source_type)
-        return generator.generate_query()
+        return generator.generate_query(parameters=parameters, limit=limit, offset=offset, grouped=grouped)
 
 
 if __name__ == "__main__":

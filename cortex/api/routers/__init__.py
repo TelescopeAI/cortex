@@ -10,6 +10,7 @@ from cortex.api.routers.environments import EnvironmentsRouter
 from cortex.api.routers.workspaces import WorkspaceRouter
 from cortex.api.routers.metrics import MetricsRouter
 from cortex.api.routers.dashboards.dashboards import DashboardRouter
+from cortex.api.routers.query_history import QueryHistoryRouter
 
 ROUTES: List[dict] = [
     {"router": DocsRouter, "enabled": True, "internal": False},
@@ -21,6 +22,7 @@ ROUTES: List[dict] = [
     {"router": DataModelsRouter, "enabled": True, "internal": False},
     {"router": MetricsRouter, "enabled": True, "internal": False},
     {"router": DashboardRouter, "enabled": True, "internal": False},
+    {"router": QueryHistoryRouter, "enabled": True, "internal": False},
 ]
 
 ENABLED_ROUTES = list(filter(lambda route: route["enabled"] is True, ROUTES))

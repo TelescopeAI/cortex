@@ -17,6 +17,7 @@ import SchemaSheet from '~/components/metric-builder/SchemaSheet.vue'
 import CodeHighlight from '~/components/CodeHighlight.vue'
 import KeyValuePairs from '~/components/KeyValuePairs.vue'
 import ContextIdBuilder from '~/components/ContextIdBuilder.vue'
+import MetricQueryHistory from '~/components/MetricQueryHistory.vue'
 import { useDateFormat, useTimeAgo, useNavigatorLanguage } from '@vueuse/core'
 
 // Page metadata
@@ -249,11 +250,22 @@ const onExecute = async () => {
     } else {
       toast.error('Metric execution failed - check results for details')
     }
+    
+    // Refresh query history after execution
+    await refreshQueryHistory()
   } catch (error) {
     console.error('Failed to execute metric:', error)
     toast.error('Failed to execute metric')
   } finally {
     executing.value = false
+  }
+}
+
+// Query history refresh
+const queryHistoryRef = ref()
+const refreshQueryHistory = async () => {
+  if (queryHistoryRef.value) {
+    await queryHistoryRef.value.refreshHistory()
   }
 }
 
@@ -810,48 +822,11 @@ onMounted(() => {
 
         <!-- History Tab -->
         <TabsContent value="history" class="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Version History</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div v-if="metricVersions.length === 0" class="text-center py-8">
-                <History class="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 class="text-lg font-medium text-muted-foreground mb-2">No version history</h3>
-                <p class="text-sm text-muted-foreground">
-                  Version history will appear here as you make changes to this metric.
-                </p>
-              </div>
-
-              <Table v-else>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Version</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead>Changes</TableHead>
-                    <TableHead class="w-[100px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow v-for="version in metricVersions" :key="version.id">
-                    <TableCell class="font-medium">{{ version.version }}</TableCell>
-                    <TableCell>
-                      <div class="space-y-1">
-                        <div>{{ formatAbsoluteDate(version.created_at) }}</div>
-                        <div class="text-xs text-muted-foreground">{{ formatRelativeTime(version.created_at) }}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{{ version.change_summary || 'No summary' }}</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="sm">
-                        View
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <MetricQueryHistory 
+            :metric-id="metric?.id || ''" 
+            @refresh="refreshQueryHistory"
+            ref="queryHistoryRef"
+          />
         </TabsContent>
       </Tabs>
     </div>

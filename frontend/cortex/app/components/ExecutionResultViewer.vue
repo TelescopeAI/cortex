@@ -31,7 +31,7 @@ const activeTab = ref('table')
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div class="space-y-1">
             <div class="text-muted-foreground">Execution Time</div>
-            <div class="font-medium">{{ metadata.execution_time_ms?.toFixed(2) || 'N/A' }} ms</div>
+            <div class="font-medium">{{ metadata.duration?.toFixed(2) || 'N/A' }} ms</div>
           </div>
           <div class="space-y-1">
             <div class="text-muted-foreground">Row Count</div>

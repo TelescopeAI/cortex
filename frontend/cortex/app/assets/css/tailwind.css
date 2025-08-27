@@ -94,6 +94,8 @@
   --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
   --sidebar-border: oklch(0.929 0.013 255.508);
   --sidebar-ring: oklch(0.704 0.04 256.788);
+  --card-content-bg: oklch(1 0 0);
+  --card-content-border: oklch(0.929 0.013 255.508);
 }
 
 .dark {
@@ -129,6 +131,8 @@
   --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
   --sidebar-border: oklch(0.279 0.041 260.031);
   --sidebar-ring: oklch(0.446 0.043 257.281);
+  --card-content-bg: oklch(0.179 0.041 260.031);
+  --card-content-border: oklch(0.279 0.041 260.031);
 }
 
 @layer base {
@@ -138,6 +142,27 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Card content background styling for better chart readability */
+  .card-content-bg {
+    background-color: var(--card-content-bg);
+    border: 1px solid var(--card-content-border);
+  }
+  
+  /* Enhanced chart readability in dark mode */
+  .dark .card-content-bg {
+    background-color: var(--card-content-bg);
+    border: 1px solid var(--card-content-border);
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+  }
+  
+  /* Chart container specific styling */
+  .dark .chart-container {
+    background-color: var(--card-content-bg);
+    border-radius: 0.5rem;
+    padding: 1rem;
+  }
+  
   :root {
     --vis-color0: oklch(0.72 0.192 149.58) !important;
     --vis-color1: oklch(0.63 0.1963 157.86) !important;

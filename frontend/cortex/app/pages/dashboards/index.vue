@@ -412,7 +412,7 @@ onMounted(() => {
             </DropdownMenu>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent class="p-6">
           <div class="space-y-3">
             <div class="flex items-center gap-2">
               <Badge :variant="getBadgeVariant(dashboard.type)">

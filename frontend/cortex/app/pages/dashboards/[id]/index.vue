@@ -629,7 +629,7 @@ useHead({
 
     <!-- Dashboard Info -->
     <Card v-if="dashboard">
-      <CardContent class="p-4 card-content-bg">
+      <CardContent class="p-4">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-4">
             <Badge>{{ dashboard.type }}</Badge>

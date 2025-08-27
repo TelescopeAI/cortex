@@ -1,12 +1,10 @@
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
-import pytz
 from pydantic import Field
 
 from cortex.core.data.modelling.model import DataModel
-from cortex.core.data.modelling.metric_service import MetricService
 from cortex.core.query.engine.factory import QueryGeneratorFactory
 from cortex.core.query.engine.processors.output_processor import OutputProcessor
 from cortex.core.semantics.metrics.metric import SemanticMetric
@@ -16,27 +14,8 @@ from cortex.core.connectors.databases.clients.service import DBClientService
 from cortex.core.utils.parsesql import convert_sqlalchemy_rows_to_dict
 from cortex.core.types.telescope import TSModel
 from cortex.core.query.context import MetricContext
-
-
-class QueryLogEntry(TSModel):
-    """
-    Represents a logged query execution with metadata.
-    """
-    id: UUID = Field(default_factory=uuid4)
-    metric_alias: str
-    metric_id: UUID
-    data_model_id: UUID
-    query: str
-    parameters: Optional[Dict[str, Any]] = None
-    
-    # Execution metadata
-    execution_time_ms: float
-    row_count: Optional[int] = None
-    success: bool
-    error_message: Optional[str] = None
-    
-    # Timestamps
-    executed_at: datetime = Field(default_factory=lambda: datetime.now(pytz.UTC))
+from cortex.core.query.history.logger import QueryHistory, QueryCacheMode
+from cortex.core.query.db.service import QueryHistoryCRUD
 
 
 class QueryExecutor(TSModel):
@@ -45,8 +24,8 @@ class QueryExecutor(TSModel):
     Handles query generation, execution, result processing, and audit logging.
     """
     
-    # Define query_log as a model field
-    query_log: List[QueryLogEntry] = Field(default_factory=list)
+    # Use QueryHistory for logging
+    query_history: QueryHistory = Field(default_factory=QueryHistory)
     
     def execute_metric(
         self, 
@@ -72,15 +51,14 @@ class QueryExecutor(TSModel):
             Dict containing query results and execution metadata
         """
         start_time = datetime.now()
-        log_entry = QueryLogEntry(
-            metric_alias=metric.alias or metric.name,
-            metric_id=metric.id,
-            data_model_id=data_model.id,
-            query="",  # Will be updated
-            parameters=parameters,
-            execution_time_ms=0.0,
-            success=False
-        )
+        
+        # Prepare meta information
+        meta = {
+            "source_type": source_type.value,
+            "limit": limit,
+            "offset": offset,
+            "grouped": grouped
+        }
         
         try:
             # Resolve metric extensions if needed
@@ -92,7 +70,6 @@ class QueryExecutor(TSModel):
             # Generate the query
             query_generator = QueryGeneratorFactory.create_generator(resolved_metric, source_type)
             generated_query = query_generator.generate_query(enhanced_parameters, limit, offset, grouped)
-            log_entry.query = generated_query
             
             # Execute the query (placeholder - would integrate with actual database execution)
             query_results = self._execute_database_query(generated_query, metric.data_source_id)
@@ -121,24 +98,35 @@ class QueryExecutor(TSModel):
             
             # Calculate execution time
             end_time = datetime.now()
-            execution_time_ms = (end_time - start_time).total_seconds() * 1000
+            duration = (end_time - start_time).total_seconds() * 1000
             
-            # Update log entry with success
-            log_entry.execution_time_ms = execution_time_ms
-            log_entry.row_count = len(transformed_results) if transformed_results else 0
-            log_entry.success = True
+            # Log successful execution (in-memory)
+            log_entry = self.query_history.log_success(
+                metric_id=metric.id,
+                data_model_id=data_model.id,
+                query=generated_query,
+                duration=duration,
+                row_count=len(transformed_results) if transformed_results else 0,
+                parameters=parameters,
+                context_id=context_id,
+                meta=meta,
+                cache_mode=QueryCacheMode.UNCACHED
+            )
             
-            # Add to query log
-            self.query_log.append(log_entry)
+            # Persist to database
+            try:
+                QueryHistoryCRUD.add_query_log(log_entry)
+            except Exception as db_error:
+                print(f"Failed to persist query log to database: {db_error}")
+                # Continue execution even if database logging fails
             
             return {
                 "success": True,
                 "data": transformed_results,
                 "metadata": {
-                    "metric_alias": metric.alias or metric.name,
                     "metric_id": str(metric.id),
-                    "execution_time_ms": execution_time_ms,
-                    "row_count": log_entry.row_count,
+                    "duration": duration,
+                    "row_count": len(transformed_results) if transformed_results else 0,
                     "query": generated_query,
                     "parameters": parameters
                 }
@@ -147,23 +135,35 @@ class QueryExecutor(TSModel):
         except Exception as e:
             # Calculate execution time even for failures
             end_time = datetime.now()
-            execution_time_ms = (end_time - start_time).total_seconds() * 1000
+            duration = (end_time - start_time).total_seconds() * 1000
             
-            # Update log entry with failure
-            log_entry.execution_time_ms = execution_time_ms
-            log_entry.error_message = str(e)
+            # Log failed execution (in-memory)
+            log_entry = self.query_history.log_failure(
+                metric_id=metric.id,
+                data_model_id=data_model.id,
+                query=generated_query if 'generated_query' in locals() else "",
+                duration=duration,
+                error_message=str(e),
+                parameters=parameters,
+                context_id=context_id,
+                meta=meta,
+                cache_mode=QueryCacheMode.UNCACHED
+            )
             
-            # Add to query log
-            self.query_log.append(log_entry)
+            # Persist to database
+            try:
+                QueryHistoryCRUD.add_query_log(log_entry)
+            except Exception as db_error:
+                print(f"Failed to persist failed query log to database: {db_error}")
+                # Continue execution even if database logging fails
             
             return {
                 "success": False,
                 "error": str(e),
                 "metadata": {
-                    "metric_alias": metric.alias or metric.name,
                     "metric_id": str(metric.id),
-                    "execution_time_ms": execution_time_ms,
-                    "query": log_entry.query,
+                    "duration": duration,
+                    "query": generated_query if 'generated_query' in locals() else "",
                     "parameters": parameters
                 }
             }
@@ -233,7 +233,7 @@ class QueryExecutor(TSModel):
     
 
     
-    def get_query_log(self, limit: Optional[int] = None) -> List[QueryLogEntry]:
+    def get_query_log(self, limit: Optional[int] = None):
         """
         Get the query execution log.
         
@@ -241,11 +241,9 @@ class QueryExecutor(TSModel):
             limit: Optional limit on number of entries to return
             
         Returns:
-            List of QueryLogEntry objects
+            List of QueryLog objects
         """
-        if limit:
-            return self.query_log[-limit:]
-        return self.query_log
+        return self.query_history.get_recent(limit)
     
     def get_execution_stats(self) -> Dict[str, Any]:
         """
@@ -254,31 +252,8 @@ class QueryExecutor(TSModel):
         Returns:
             Dictionary with execution statistics
         """
-        if not self.query_log:
-            return {
-                "total_executions": 0,
-                "successful_executions": 0,
-                "failed_executions": 0,
-                "success_rate": 0.0,
-                "average_execution_time_ms": 0.0
-            }
-        
-        total_executions = len(self.query_log)
-        successful_executions = sum(1 for entry in self.query_log if entry.success)
-        failed_executions = total_executions - successful_executions
-        success_rate = (successful_executions / total_executions) * 100
-        
-        total_execution_time = sum(entry.execution_time_ms for entry in self.query_log)
-        average_execution_time = total_execution_time / total_executions
-        
-        return {
-            "total_executions": total_executions,
-            "successful_executions": successful_executions,
-            "failed_executions": failed_executions,
-            "success_rate": round(success_rate, 2),
-            "average_execution_time_ms": round(average_execution_time, 2)
-        }
+        return self.query_history.stats()
     
     def clear_query_log(self) -> None:
         """Clear the query execution log."""
-        self.query_log.clear() 
+        self.query_history.clear() 

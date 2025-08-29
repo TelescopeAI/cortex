@@ -42,7 +42,7 @@ class MetricService:
                 filters=metric.filters,
 
                 parameters=metric.parameters,
-                model_version=metric.model_version,
+                version=metric.version,
                 extends=metric.extends,
                 public=metric.public,
                 refresh_key=metric.refresh_key,
@@ -58,6 +58,17 @@ class MetricService:
             self.session.commit()
             self.session.refresh(db_metric)
             
+            # Create initial version snapshot aligned to current metric.version
+            try:
+                _ = self.create_metric_version(
+                    db_metric.id,
+                    description="Initial metric creation",
+                    version_number=int(getattr(db_metric, 'version', 1) or 1)
+                )
+            except Exception:
+                # Do not fail create on snapshot issues
+                pass
+
             return db_metric
             
         except IntegrityError as e:
@@ -114,16 +125,45 @@ class MetricService:
             if not db_metric:
                 return None
             
+            # Detect changes to core fields to bump version for caching invalidation
+            version_bump_fields = {
+                'name', 'alias', 'description', 'title', 'query', 'table_name',
+                'data_source_id', 'limit', 'grouped', 'measures', 'dimensions',
+                'joins', 'aggregations', 'filters', 'parameters', 'refresh_key', 'meta'
+            }
+
+            should_bump = any(k in version_bump_fields for k in updates.keys())
+
             # Update allowed fields - Pydantic handles serialization automatically
             for key, value in updates.items():
                 if hasattr(db_metric, key):
                     setattr(db_metric, key, value)
+
+            if should_bump:
+                try:
+                    current_version = int(getattr(db_metric, 'version', 0) or 0)
+                except Exception:
+                    current_version = 0
+                setattr(db_metric, 'version', current_version + 1)
             
             # Always update the timestamp
             db_metric.updated_at = datetime.now(pytz.UTC)
             
             self.session.commit()
             self.session.refresh(db_metric)
+
+            # Persist a version snapshot when bumped
+            if should_bump:
+                try:
+                    changed_fields = ",".join(sorted(set(updates.keys()) & version_bump_fields))
+                    _ = self.create_metric_version(
+                        metric_id,
+                        description=f"Auto snapshot on update: {changed_fields}",
+                        version_number=int(getattr(db_metric, 'version', 1) or 1)
+                    )
+                except Exception:
+                    # If snapshot fails, continue
+                    pass
             
             return db_metric
             
@@ -149,27 +189,37 @@ class MetricService:
             self.session.rollback()
             raise ValueError(f"Failed to delete metric: {str(e)}")
     
-    def create_metric_version(self, metric_id: UUID, description: Optional[str] = None) -> MetricVersionORM:
-        """Create a version snapshot of a metric"""
+    def create_metric_version(self, metric_id: UUID, description: Optional[str] = None, version_number: Optional[int] = None) -> MetricVersionORM:
+        """Create a version snapshot of a metric.
+
+        If version_number is provided, it will be used. Otherwise, the method
+        will bump the metric.version by 1 and use that value, keeping
+        metric.version == metric_versions.version_number.
+        """
         try:
             db_metric = self.get_metric_by_id(metric_id)
             if not db_metric:
                 raise ValueError(f"Metric {metric_id} not found")
             
-            # Get the current version number
-            latest_version = (self.session.query(MetricVersionORM)
-                            .filter(MetricVersionORM.metric_id == metric_id)
-                            .order_by(desc(MetricVersionORM.version_number))
-                            .first())
-            
-            version_number = (latest_version.version_number + 1) if latest_version else 1
-            
-            # Create complete snapshot
-            snapshot = db_metric.model_dump()
+            # Resolve version to persist
+            if version_number is None:
+                current_version = int(getattr(db_metric, 'version', 0) or 0)
+                next_version = current_version + 1
+                setattr(db_metric, 'version', next_version)
+                db_metric.updated_at = datetime.now(pytz.UTC)
+                self.session.commit()
+                self.session.refresh(db_metric)
+                version_to_use = next_version
+            else:
+                version_to_use = int(version_number)
+
+            # Create complete snapshot from ORM via Pydantic conversion
+            pydantic_metric = SemanticMetric.model_validate(db_metric, from_attributes=True)
+            snapshot = pydantic_metric.model_dump()
             
             db_version = MetricVersionORM(
                 metric_id=metric_id,
-                version_number=version_number,
+                version_number=version_to_use,
                 snapshot_data=snapshot,
                 description=description,
                 created_at=datetime.now(pytz.UTC)

@@ -2,6 +2,7 @@ from typing import Optional
 from enum import Enum
 
 from cortex.core.types.telescope import TSModel
+from pydantic import Field
 
 
 class RefreshKeyType(str, Enum):
@@ -16,5 +17,16 @@ class RefreshKey(TSModel):
     """
     type: RefreshKeyType
     every: Optional[str] = None  # e.g., "1 hour", "30 minutes", "1 day"
-    sql: Optional[str] = None    # Custom SQL to check if refresh is needed
-    max: Optional[str] = None    # Column name to check max value 
+    sql: Optional[str] = None    # Custom SQL refresh condition
+    max: Optional[str] = None    # Column name to check max value
+    cache: Optional["CachePreference"] = None
+
+
+class CachePreference(TSModel):
+    """Execution-time caching preference. Overrides metric-level enablement.
+    """
+    enabled: bool = Field(default=True)
+
+
+# Resolve forward reference
+RefreshKey.model_rebuild() 

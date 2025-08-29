@@ -16,6 +16,12 @@ from cortex.core.types.telescope import TSModel
 from cortex.core.query.context import MetricContext
 from cortex.core.query.history.logger import QueryHistory, QueryCacheMode
 from cortex.core.query.db.service import QueryHistoryCRUD
+from cortex.core.caching.keys import build_query_signature, derive_time_bucket, build_cache_key
+from cortex.core.caching.manager import QueryCacheManager
+from cortex.core.caching.factory import get_cache_storage
+from cortex.core.config.models.cache import CacheConfig
+from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
+from cortex.core.semantics.refresh_keys import CachePreference
 
 
 class QueryExecutor(TSModel):
@@ -36,7 +42,8 @@ class QueryExecutor(TSModel):
         offset: Optional[int] = None,
         source_type: DataSourceTypes = DataSourceTypes.POSTGRESQL,
         context_id: Optional[str] = None,
-        grouped: Optional[bool] = None
+        grouped: Optional[bool] = None,
+        cache_preference: Optional["CachePreference"] = None
     ) -> Dict[str, Any]:
         """
         Execute a specific metric from a data model with comprehensive logging.
@@ -51,6 +58,14 @@ class QueryExecutor(TSModel):
             Dict containing query results and execution metadata
         """
         start_time = datetime.now()
+
+        # Cache integration flags and precomputed elements
+        cache_mode: QueryCacheMode = QueryCacheMode.UNCACHED
+        cache_signature: Optional[str] = None
+        cache_enabled = False
+        cache_manager: Optional[QueryCacheManager] = None
+        cache_key: Optional[str] = None
+        cached_payload: Optional[Dict[str, Any]] = None
         
         # Prepare meta information
         meta = {
@@ -61,6 +76,90 @@ class QueryExecutor(TSModel):
         }
         
         try:
+            # Initialize caching if enabled and we have enough context to key it
+            try:
+                cache_config = CacheConfig.from_env()
+                cache_enabled = bool(cache_config.enabled)
+                if cache_enabled and metric.data_source_id:
+                    # Request-level override for caching enablement via typed argument
+                    if cache_preference is not None and hasattr(cache_preference, 'enabled'):
+                        cache_enabled = bool(getattr(cache_preference, 'enabled'))
+                    # Metric-level preference from refresh_key.caching
+                    if getattr(metric, "refresh_key", None) and getattr(metric.refresh_key, "caching", None):
+                        rk_enabled = getattr(metric.refresh_key.cache, "enabled", True)
+                        # Only apply metric-level default if request didn't specify
+                        if cache_preference is None:
+                            cache_enabled = bool(rk_enabled)
+                    if not cache_enabled:
+                        print("[CORTEX CACHE] disabled by preference; skipping caching")
+                        # proceed without throwing; caching just disabled for this request
+                        raise RuntimeError("CACHE_DISABLED_SIGNAL")
+                    # resolve environment and workspace
+                    ds = DataSourceCRUD.get_data_source(metric.data_source_id)
+                    environment_id = getattr(ds, "environment_id", None)
+                    workspace_id = None
+                    if environment_id:
+                        env = EnvironmentCRUD.get_environment(environment_id)
+                        workspace_id = getattr(env, "workspace_id", None)
+                    # derive time bucket and signature
+                    bucket = derive_time_bucket(start_time, metric.refresh_key)
+                    signature_payload = {
+                        "workspace_id": str(workspace_id) if workspace_id else None,
+                        "environment_id": str(environment_id) if environment_id else None,
+                        "data_model_id": str(data_model.id),
+                        "metric_id": str(metric.id),
+                        "parameters": parameters or {},
+                        "context_id": context_id,
+                        "source_type": source_type.value,
+                        "grouped": grouped,
+                        "limit": limit,
+                        "offset": offset,
+                        "bucket": bucket,
+                        "metric_version": getattr(metric, "version", None),
+                        "compiled_query": getattr(metric, "compiled_query", None),
+                    }
+                    cache_signature = build_query_signature(signature_payload)
+                    cache_key = build_cache_key(cache_signature)
+                    cache_storage = get_cache_storage(cache_config)
+                    cache_manager = QueryCacheManager(cache_storage)
+                    print(f"[CORTEX CACHE] prepared key={cache_key} sig={cache_signature} backend={cache_config.backend}")
+                    cached_payload = cache_manager.get(cache_key)
+                    if cached_payload is not None:
+                        cache_mode = QueryCacheMode.CACHE_HIT
+                        # Persist a lightweight history entry for caching hit
+                        lookup_duration = (datetime.now() - start_time).total_seconds() * 1000
+                        try:
+                            log_entry = self.query_history.log_success(
+                                metric_id=metric.id,
+                                data_model_id=data_model.id,
+                                query=(cached_payload.get("metadata", {}) or {}).get("query", ""),
+                                duration=lookup_duration,
+                                row_count=int((cached_payload.get("metadata", {}) or {}).get("row_count", 0)),
+                                parameters=parameters,
+                                context_id=context_id,
+                                meta=meta,
+                                cache_mode=cache_mode,
+                                query_hash=cache_signature,
+                            )
+                            QueryHistoryCRUD.add_query_log(log_entry)
+                        except Exception:
+                            pass
+                        # return cached result using cached metadata
+                        result_metadata = (cached_payload.get("metadata", {}) or {}).copy()
+                        # overwrite duration to reflect actual caching lookup time
+                        result_metadata["duration"] = lookup_duration
+                        result_metadata.setdefault("metric_id", str(metric.id))
+                        print(f"[CORTEX CACHE] HIT key={cache_key} sig={cache_signature} duration_ms={lookup_duration:.2f}")
+                        return {
+                            "success": True,
+                            "data": cached_payload.get("data"),
+                            "metadata": result_metadata,
+                        }
+            except Exception as e:
+                # On any caching init/fetch error, continue uncached
+                cache_enabled = False
+                print(f"[CORTEX CACHE] read path error: {e}")
+
             # Resolve metric extensions if needed
             resolved_metric = metric
             
@@ -99,6 +198,31 @@ class QueryExecutor(TSModel):
             # Calculate execution time
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds() * 1000
+
+            # Cache write (on success only)
+            if cache_enabled and cache_manager and cache_key and cache_signature:
+                # Derive TTL from refresh_key (fallback to default)
+                ttl_seconds = self._derive_ttl_seconds(metric.refresh_key, CacheConfig.from_env().ttl_seconds_default)
+                cache_value = {
+                    "data": transformed_results,
+                    "metadata": {
+                        "metric_id": str(metric.id),
+                        "duration": duration,
+                        "row_count": len(transformed_results) if transformed_results else 0,
+                        "query": generated_query,
+                        "parameters": parameters,
+                    },
+                    "stored_at": end_time.isoformat(),
+                    "query_hash": cache_signature,
+                    "metric_version": getattr(metric, "version", None),
+                    "schema_version": "1",
+                }
+                try:
+                    cache_manager.set(cache_key, cache_value, ttl_seconds)
+                    cache_mode = QueryCacheMode.CACHE_MISS_EXECUTED
+                except Exception:
+                    cache_mode = QueryCacheMode.UNCACHED
+                print(f"[CORTEX CACHE] MISS/STORE key={cache_key} sig={cache_signature} ttl={ttl_seconds}s rows={len(transformed_results) if transformed_results else 0}")
             
             # Log successful execution (in-memory)
             log_entry = self.query_history.log_success(
@@ -110,7 +234,8 @@ class QueryExecutor(TSModel):
                 parameters=parameters,
                 context_id=context_id,
                 meta=meta,
-                cache_mode=QueryCacheMode.UNCACHED
+                cache_mode=cache_mode,
+                query_hash=cache_signature,
             )
             
             # Persist to database
@@ -147,7 +272,8 @@ class QueryExecutor(TSModel):
                 parameters=parameters,
                 context_id=context_id,
                 meta=meta,
-                cache_mode=QueryCacheMode.UNCACHED
+                cache_mode=QueryCacheMode.UNCACHED,
+                query_hash=cache_signature,
             )
             
             # Persist to database
@@ -257,3 +383,27 @@ class QueryExecutor(TSModel):
     def clear_query_log(self) -> None:
         """Clear the query execution log."""
         self.query_history.clear() 
+
+    def _derive_ttl_seconds(self, refresh_key, default_ttl: int) -> int:
+        """Compute TTL seconds from refresh_key; fallback to default."""
+        try:
+            from cortex.core.semantics.refresh_keys import RefreshKeyType
+            if not refresh_key:
+                return int(default_ttl)
+            if getattr(refresh_key, "type", None) == RefreshKeyType.EVERY and getattr(refresh_key, "every", None):
+                parts = str(refresh_key.every).strip().split()
+                if len(parts) != 2:
+                    return int(default_ttl)
+                amount = int(parts[0])
+                unit = parts[1].lower()
+                if unit.startswith("hour"):
+                    return amount * 3600
+                if unit.startswith("minute"):
+                    return amount * 60
+                if unit.startswith("day"):
+                    return amount * 86400
+                return int(default_ttl)
+            # For sql/max, use default for now
+            return int(default_ttl)
+        except Exception:
+            return int(default_ttl)

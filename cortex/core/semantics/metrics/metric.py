@@ -62,7 +62,7 @@ class SemanticMetric(TSModel):
     parameters: Optional[Dict[str, ParameterDefinition]] = None
     
     # Version tracking
-    model_version: int = 1  # Version of the model this metric belongs to
+    version: int = 1  # Metric version for caching invalidation and change tracking
     
     # Metric inheritance
     extends: Optional[UUID] = None  # Parent metric ID for inheritance

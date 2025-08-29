@@ -14,7 +14,7 @@ class CacheConfig(TSModel):
     def from_env() -> "CacheConfig":
         enabled = os.getenv("CORTEX_CACHE_ENABLED", "false").lower() == "true"
         backend_raw = os.getenv("CORTEX_CACHE_BACKEND")
-        # If backend is missing/blank and cache is enabled, default to memory
+        # If backend is missing/blank and caching is enabled, default to memory
         backend = (backend_raw or "memory").strip().lower() if enabled else (backend_raw or "memory").strip().lower()
         print(f"[CORTEX CACHE] backend={backend} enabled={enabled}")
         print(f"[CORTEX CACHE] redis_url={os.getenv('CORTEX_CACHE_REDIS_URL')}")

@@ -91,7 +91,7 @@ class MetricORM(BaseDBModel):
     
     # Configuration
     parameters = mapped_column(JSONB, nullable=True)  # Parameter definitions
-    model_version = mapped_column(Integer, nullable=False, default=1)
+    version = mapped_column(Integer, nullable=False, default=1)
     extends = mapped_column(UUID, ForeignKey("metrics.id"), nullable=True, index=True)  # Parent metric for inheritance
     public = mapped_column(Boolean, nullable=False, default=True, index=True)
     refresh_key = mapped_column(JSONB, nullable=True)  # RefreshKey object
@@ -110,7 +110,7 @@ class MetricORM(BaseDBModel):
 class MetricVersionORM(BaseDBModel):
     __tablename__ = "metric_versions"
     
-    id = mapped_column(UUID, primary_key=True, index=True)
+    id = mapped_column(UUID, primary_key=True, index=True, default=uuid4)
     metric_id = mapped_column(UUID, ForeignKey("metrics.id"), nullable=False, index=True)
     version_number = mapped_column(Integer, nullable=False, index=True)
     

@@ -56,7 +56,7 @@ class QueryLogResponse(TSModel):
     data_model_id: UUID
     query: str
     parameters: Optional[Dict[str, Any]] = None
-    execution_time_ms: float
+    duration: float
     row_count: Optional[int] = None
     success: bool
     error_message: Optional[str] = None
@@ -75,7 +75,7 @@ class ExecutionStatsResponse(TSModel):
     successful_executions: int
     failed_executions: int
     success_rate: float
-    average_execution_time_ms: float
+    average_duration: float
 
 
 class ModelVersionResponse(TSModel):
@@ -108,7 +108,7 @@ class MetricResponse(TSModel):
     description: Optional[str] = None
     title: Optional[str] = None
     data_source_id: Optional[UUID] = None
-    model_version: int
+    version: int
     public: bool
     created_at: datetime
     updated_at: datetime

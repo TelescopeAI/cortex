@@ -29,6 +29,7 @@
               v-model:data-source-id="schema.data_source_id"
               v-model:limit="schema.limit"
               v-model:grouped="schema.grouped"
+              v-model:refresh-key="schema.refresh_key"
               :available-tables="availableTables"
               :table-schema="props.tableSchema"
             />
@@ -191,12 +192,12 @@ const schema = ref({
   aggregations: [],
   filters: [],
   parameters: {},
+  refresh_key: undefined as any,
   tableSchema: undefined as any
 })
 
 // Available data computed from schema
 const availableTables = computed(() => {
-  console.log('MetricSchemaBuilder - tableSchema prop:', props.tableSchema)
   if (!props.tableSchema?.tables) return []
   return props.tableSchema.tables
 })
@@ -247,14 +248,8 @@ watch(() => props.modelValue, (newValue) => {
 // Load schema from data source
 const loadSchemaFromDataSource = async (dataSourceId: string) => {
   try {
-    console.log('Loading schema for data source:', dataSourceId)
     const loadedSchema = await getDataSourceSchema(dataSourceId)
-    console.log('Schema loaded:', loadedSchema)
-    
-    // Update the schema data with the new tableSchema
     schema.value = { ...schema.value, tableSchema: loadedSchema }
-    
-    // Emit the updated schema to parent
     emit('update:modelValue', schema.value)
   } catch (error) {
     console.error('Failed to load schema:', error)
@@ -263,7 +258,6 @@ const loadSchemaFromDataSource = async (dataSourceId: string) => {
 
 // Sync selectedDataSourceId prop with schema.data_source_id (only when prop changes)
 watch(() => props.selectedDataSourceId, (newId) => {
-  console.log('MetricSchemaBuilder - selectedDataSourceId prop changed to:', newId)
   if (newId !== schema.value.data_source_id) {
     schema.value.data_source_id = newId || undefined
   }
@@ -273,12 +267,9 @@ watch(() => props.selectedDataSourceId, (newId) => {
 watch(
   () => schema.value.data_source_id,
   (newId: any, oldId: any) => {
-    console.log('MetricSchemaBuilder - schema.data_source_id changed to:', newId)
-    // Clear currently selected source table when data source changes
     if (newId !== oldId) {
       schema.value.table_name = ''
     }
-    // Emit only the id string upward
     emit('update:selectedDataSourceId', typeof newId === 'object' ? (newId?.id ?? undefined) : newId)
   },
   { immediate: false }
@@ -287,10 +278,7 @@ watch(
 // Auto-load schema when selectedDataSourceId changes
 watch(() => props.selectedDataSourceId, (newDataSourceId, oldDataSourceId) => {
   if (newDataSourceId && newDataSourceId !== oldDataSourceId) {
-    console.log('Data source changed from', oldDataSourceId, 'to', newDataSourceId)
     loadSchemaFromDataSource(newDataSourceId)
   }
 }, { immediate: true })
-
-
 </script> 

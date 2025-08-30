@@ -33,7 +33,7 @@ class MetricResponse(BaseModel):
     aggregations: Optional[List[SemanticAggregation]] = None
     filters: Optional[List[SemanticFilter]] = None
     parameters: Optional[Dict[str, ParameterDefinition]] = None
-    model_version: int
+    version: int
     public: bool
     refresh_key: Optional[RefreshKey] = None
     meta: Optional[Dict[str, Any]]

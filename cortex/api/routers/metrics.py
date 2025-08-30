@@ -71,7 +71,7 @@ async def create_metric(metric_data: MetricCreateRequest):
             public=metric_data.public,
             refresh_key=metric_data.refresh_key,
             meta=metric_data.meta,
-            model_version=pydantic_model.version
+            version=pydantic_model.version
         )
         
         # Save to database
@@ -290,7 +290,8 @@ async def execute_metric(metric_id: UUID, execution_request: MetricExecutionRequ
             parameters=execution_request.parameters,
             limit=execution_request.limit,
             offset=execution_request.offset,
-            grouped=execution_request.grouped
+            grouped=execution_request.grouped,
+            cache_preference=getattr(execution_request, 'cache', None)
         )
         
         return MetricExecutionResponse(

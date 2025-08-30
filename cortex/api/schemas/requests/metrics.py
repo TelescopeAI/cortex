@@ -7,7 +7,7 @@ from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.joins import SemanticJoin
 from cortex.core.semantics.aggregations import SemanticAggregation
 from cortex.core.semantics.filters import SemanticFilter
-from cortex.core.semantics.refresh_keys import RefreshKey
+from cortex.core.semantics.refresh_keys import RefreshKey, CachePreference
 from cortex.core.semantics.parameters import ParameterDefinition
 
 
@@ -68,6 +68,7 @@ class MetricExecutionRequest(BaseModel):
     offset: Optional[int] = None
     context_id: Optional[str] = None
     grouped: Optional[bool] = Field(default=True, description="Whether to apply GROUP BY when dimensions are present")
+    cache: Optional[CachePreference] = None
 
 
 class MetricCloneRequest(BaseModel):

@@ -173,7 +173,8 @@ const schema = ref({
   joins: [],
   aggregations: [],
   filters: [],
-  parameters: {}
+  parameters: {},
+  refresh_key: undefined as any
 })
 
 // Initialize schema from metric
@@ -190,7 +191,8 @@ watch(() => props.metric, (newMetric) => {
       joins: newMetric.joins || [],
       aggregations: newMetric.aggregations || [],
       filters: newMetric.filters || [],
-      parameters: newMetric.parameters || {}
+      parameters: newMetric.parameters || {},
+      refresh_key: newMetric.refresh_key || undefined
     }
     
     // Initialize local data source id
@@ -213,11 +215,11 @@ watch(() => props.selectedDataSourceId, (newId) => {
 const generatedJson = computed(() => {
   const cleanSchema = JSON.parse(JSON.stringify(schema.value))
   
-  // Remove empty arrays and null values, but preserve data_source_id
+  // Remove empty arrays and null values, but preserve data_source_id and refresh_key
   Object.keys(cleanSchema).forEach(key => {
     if (Array.isArray(cleanSchema[key]) && cleanSchema[key].length === 0) {
       delete cleanSchema[key]
-    } else if ((cleanSchema[key] === null || cleanSchema[key] === undefined || cleanSchema[key] === '') && key !== 'data_source_id') {
+    } else if ((cleanSchema[key] === null || cleanSchema[key] === undefined || cleanSchema[key] === '') && !['data_source_id', 'refresh_key'].includes(key)) {
       delete cleanSchema[key]
     }
   })
@@ -236,7 +238,6 @@ async function loadSchemaFromDataSource(dataSourceId?: string) {
   schemaLoading.value = true
   try {
     tableSchema.value = await getDataSourceSchema(src)
-    // After loading a new schema, default the table to the first available table
     const firstTable = tableSchema.value?.tables?.[0]?.name
     if (firstTable) {
       schema.value.table_name = firstTable
@@ -268,7 +269,6 @@ const handleSchemaUpdate = (newSchema: any) => {
 // Handle data source updates from child. Do not save automatically; update local and load schema.
 const handleDataSourceUpdate = (newDataSourceId: string | undefined) => {
   selectedDataSourceIdLocal.value = newDataSourceId
-  // Load schema for the newly selected data source
   if (newDataSourceId) {
     loadSchemaFromDataSource(newDataSourceId)
   }
@@ -276,7 +276,6 @@ const handleDataSourceUpdate = (newDataSourceId: string | undefined) => {
 
 // Handle save
 const handleSave = () => {
-  // Persist with current selected data source id
   const payload = { ...schema.value, data_source_id: selectedDataSourceIdLocal.value }
   emit('save', payload)
   emit('update:open', false)

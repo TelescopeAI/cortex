@@ -61,6 +61,9 @@ const offsetValue = ref<number>(0)
 const useGrouped = ref(false)
 const groupedValue = ref(false)
 
+// Cache preference state
+const requestCacheEnabled = ref<boolean>(true)
+
 // Schema sheet functions
 const onOpenSchema = () => {
   // Set data source ID for schema loading if not already set
@@ -225,7 +228,8 @@ const onExecute = async () => {
   try {
     const executionRequest: any = {
       parameters: executionParams.value,
-      context_id: contextId.value || undefined
+      context_id: contextId.value || undefined,
+      cache: { enabled: requestCacheEnabled.value }
     }
     
     // Add limit and offset if enabled
@@ -647,6 +651,20 @@ onMounted(() => {
             </CardHeader>
             <CardContent class="space-y-4">
               <ContextIdBuilder v-model="contextId" />
+            </CardContent>
+          </Card>
+
+          <!-- Cache Preference -->
+          <Card>
+            <CardHeader>
+              <CardTitle>Cache Preference</CardTitle>
+            </CardHeader>
+            <CardContent class="space-y-4">
+              <div class="flex items-center space-x-3">
+                <Switch id="cache-enabled" v-model="requestCacheEnabled" />
+                <Label for="cache-enabled">Enabled</Label>
+              </div>
+              <p class="text-xs text-muted-foreground">This overrides the metric default defined in the schema.</p>
             </CardContent>
           </Card>
 

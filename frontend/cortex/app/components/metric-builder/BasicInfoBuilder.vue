@@ -122,6 +122,44 @@
       </p>
     </div>
 
+    <!-- Refresh Key & Cache Preference -->
+    <div class="space-y-3">
+      <Label>Refresh Key</Label>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="space-y-1">
+          <Label for="rk-type">Type</Label>
+          <Select :model-value="refreshKeyType" @update:model-value="(v) => updateRefreshKeyType(v as string)">
+            <SelectTrigger id="rk-type">
+              <SelectValue placeholder="Select type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="every">Every</SelectItem>
+              <SelectItem value="sql">SQL</SelectItem>
+              <SelectItem value="max">Max</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div class="space-y-1" v-if="refreshKeyType === 'every'">
+          <Label for="rk-every">Every</Label>
+          <Input id="rk-every" :model-value="props.refreshKey?.every || ''" placeholder="e.g. 1 hour" @update:model-value="(v) => emitRefreshKey({ every: v as string })" />
+          <p class="text-xs text-muted-foreground">Examples: 30 minutes, 1 hour, 1 day</p>
+        </div>
+        <div class="space-y-1 md:col-span-2" v-if="refreshKeyType === 'sql'">
+          <Label for="rk-sql">SQL</Label>
+          <Textarea id="rk-sql" rows="3" :model-value="props.refreshKey?.sql || ''" placeholder="SELECT NOW()" @update:model-value="(v) => emitRefreshKey({ sql: v as string })" />
+        </div>
+        <div class="space-y-1" v-if="refreshKeyType === 'max'">
+          <Label for="rk-max">Max Column</Label>
+          <Input id="rk-max" :model-value="props.refreshKey?.max || ''" placeholder="table.column" @update:model-value="(v) => emitRefreshKey({ max: v as string })" />
+        </div>
+      </div>
+      <div class="flex items-center space-x-3">
+        <Switch :model-value="cacheEnabled" @update:model-value="(v) => emitRefreshKey({ cache: { enabled: !!v } })" />
+        <Label>Enable cache (default)</Label>
+      </div>
+      <p class="text-xs text-muted-foreground">Request execution can override this preference.</p>
+    </div>
+
     <!-- Info Alert -->
     <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
       <div class="flex items-start space-x-3">
@@ -151,6 +189,7 @@ import { Textarea } from '~/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 import { NumberField, NumberFieldContent, NumberFieldDecrement, NumberFieldIncrement, NumberFieldInput } from '~/components/ui/number-field'
 import { Switch } from '~/components/ui/switch'
+import { Input } from '~/components/ui/input'
 import { useDataSources } from '~/composables/useDataSources'
 
 interface Props {
@@ -161,6 +200,7 @@ interface Props {
   grouped?: boolean
   availableTables?: Array<{ name: string; columns: any[] }>
   tableSchema?: any
+  refreshKey?: { type?: 'every' | 'sql' | 'max'; every?: string; sql?: string; max?: string; cache?: { enabled?: boolean } }
 }
 
 const props = defineProps<Props>()
@@ -170,6 +210,7 @@ const emit = defineEmits<{
   'update:dataSourceId': [value: string]
   'update:limit': [value: number | undefined]
   'update:grouped': [value: boolean]
+  'update:refreshKey': [value: any]
 }>()
 
 // Debug availableTables
@@ -182,8 +223,6 @@ const debugAvailableTables = computed(() => {
 const { dataSources } = useDataSources()
 const availableDataSources = computed(() => {
   console.log('BasicInfoBuilder - tableSchema prop:', props.tableSchema)
-  // If we have tableSchema, we can derive the data source from it
-  // For now, fallback to the composable
   return dataSources.value || []
 })
 
@@ -202,23 +241,34 @@ const groupedEnabled = computed(() => {
   return props.grouped !== undefined ? props.grouped : true
 })
 
+// Refresh key helpers
+const refreshKeyType = computed(() => props.refreshKey?.type || 'every')
+const cacheEnabled = computed(() => props.refreshKey?.cache?.enabled !== false)
+
+const emitRefreshKey = (partial: any) => {
+  const rk = { ...(props.refreshKey || {}), ...partial }
+  emit('update:refreshKey', rk)
+}
+
+const updateRefreshKeyType = (t: string) => {
+  emitRefreshKey({ type: t })
+}
+
 // Handle limit toggle
 const handleLimitToggle = (enabled: boolean) => {
   if (enabled) {
-    emit('update:limit', 100) // Default value when enabling
+    emit('update:limit', 100)
   } else {
-    emit('update:limit', undefined) // Clear limit when disabling
+    emit('update:limit', undefined)
   }
 }
 
 // Handle query source toggle
 const handleQuerySourceToggle = (enabled: boolean) => {
   if (enabled) {
-    // Switch to custom query - clear table name and set default query
     emit('update:tableName', '')
     emit('update:query', 'SELECT * FROM your_table WHERE condition...')
   } else {
-    // Switch to table selection - clear custom query
     emit('update:query', '')
   }
 }

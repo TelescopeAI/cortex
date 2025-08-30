@@ -16,9 +16,9 @@ from cortex.core.types.telescope import TSModel
 from cortex.core.query.context import MetricContext
 from cortex.core.query.history.logger import QueryHistory, QueryCacheMode
 from cortex.core.query.db.service import QueryHistoryCRUD
-from cortex.core.caching.keys import build_query_signature, derive_time_bucket, build_cache_key
-from cortex.core.caching.manager import QueryCacheManager
-from cortex.core.caching.factory import get_cache_storage
+from cortex.core.cache.keys import build_query_signature, derive_time_bucket, build_cache_key
+from cortex.core.cache.manager import QueryCacheManager
+from cortex.core.cache.factory import get_cache_storage
 from cortex.core.config.models.cache import CacheConfig
 from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
 from cortex.core.semantics.refresh_keys import CachePreference
@@ -43,7 +43,7 @@ class QueryExecutor(TSModel):
         source_type: DataSourceTypes = DataSourceTypes.POSTGRESQL,
         context_id: Optional[str] = None,
         grouped: Optional[bool] = None,
-        cache_preference: Optional["CachePreference"] = None
+        cache_preference: Optional[CachePreference] = None
     ) -> Dict[str, Any]:
         """
         Execute a specific metric from a data model with comprehensive logging.
@@ -79,21 +79,18 @@ class QueryExecutor(TSModel):
             # Initialize caching if enabled and we have enough context to key it
             try:
                 cache_config = CacheConfig.from_env()
-                cache_enabled = bool(cache_config.enabled)
+                # Resolve enablement in this order: request override > (env AND metric default)
+                env_enabled = bool(cache_config.enabled)
+                metric_enabled = True
+                if getattr(metric, "refresh_key", None) and getattr(metric.refresh_key, "cache", None):
+                    metric_enabled = bool(getattr(metric.refresh_key.cache, "enabled", True))
+                request_enabled = None
+                if cache_preference is not None and hasattr(cache_preference, 'enabled'):
+                    request_enabled = bool(getattr(cache_preference, 'enabled'))
+                cache_enabled = bool(request_enabled) if request_enabled is not None else (env_enabled and metric_enabled)
+                print(f"[CORTEX CACHE] resolve enabled -> env={env_enabled} metric={metric_enabled} request={request_enabled} final={cache_enabled}")
+
                 if cache_enabled and metric.data_source_id:
-                    # Request-level override for caching enablement via typed argument
-                    if cache_preference is not None and hasattr(cache_preference, 'enabled'):
-                        cache_enabled = bool(getattr(cache_preference, 'enabled'))
-                    # Metric-level preference from refresh_key.caching
-                    if getattr(metric, "refresh_key", None) and getattr(metric.refresh_key, "caching", None):
-                        rk_enabled = getattr(metric.refresh_key.cache, "enabled", True)
-                        # Only apply metric-level default if request didn't specify
-                        if cache_preference is None:
-                            cache_enabled = bool(rk_enabled)
-                    if not cache_enabled:
-                        print("[CORTEX CACHE] disabled by preference; skipping caching")
-                        # proceed without throwing; caching just disabled for this request
-                        raise RuntimeError("CACHE_DISABLED_SIGNAL")
                     # resolve environment and workspace
                     ds = DataSourceCRUD.get_data_source(metric.data_source_id)
                     environment_id = getattr(ds, "environment_id", None)

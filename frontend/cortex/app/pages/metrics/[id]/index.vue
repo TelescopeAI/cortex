@@ -63,6 +63,7 @@ const groupedValue = ref(false)
 
 // Cache preference state
 const requestCacheEnabled = ref<boolean>(true)
+const requestCacheTtl = ref<number | undefined>(undefined)
 
 // Schema sheet functions
 const onOpenSchema = () => {
@@ -229,7 +230,7 @@ const onExecute = async () => {
     const executionRequest: any = {
       parameters: executionParams.value,
       context_id: contextId.value || undefined,
-      cache: { enabled: requestCacheEnabled.value }
+      cache: { enabled: requestCacheEnabled.value, ttl: requestCacheTtl.value }
     }
     
     // Add limit and offset if enabled
@@ -663,6 +664,13 @@ onMounted(() => {
               <div class="flex items-center space-x-3">
                 <Switch id="cache-enabled" v-model="requestCacheEnabled" />
                 <Label for="cache-enabled">Enabled</Label>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div class="space-y-1">
+                  <Label for="req-cache-ttl">TTL (seconds)</Label>
+                  <Input id="req-cache-ttl" type="number" min="1" placeholder="300" @input="(e: any) => requestCacheTtl = parseInt(e?.target?.value || '0')" />
+                  <p class="text-xs text-muted-foreground">Override default cache TTL for this run.</p>
+                </div>
               </div>
               <p class="text-xs text-muted-foreground">This overrides the metric default defined in the schema.</p>
             </CardContent>

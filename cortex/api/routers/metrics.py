@@ -69,7 +69,8 @@ async def create_metric(metric_data: MetricCreateRequest):
 
             parameters=metric_data.parameters,
             public=metric_data.public,
-            refresh_key=metric_data.refresh_key,
+            refresh=metric_data.refresh,
+            cache=metric_data.cache,
             meta=metric_data.meta,
             version=pydantic_model.version
         )

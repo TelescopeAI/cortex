@@ -7,7 +7,8 @@ from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.joins import SemanticJoin
 from cortex.core.semantics.aggregations import SemanticAggregation
 from cortex.core.semantics.filters import SemanticFilter
-from cortex.core.semantics.refresh_keys import RefreshKey, CachePreference
+from cortex.core.semantics.refresh_keys import RefreshPolicy
+from cortex.core.semantics.cache import CachePreference
 from cortex.core.semantics.parameters import ParameterDefinition
 
 
@@ -31,7 +32,8 @@ class MetricCreateRequest(BaseModel):
     parameters: Optional[Dict[str, ParameterDefinition]] = None
     extends: Optional[UUID] = None
     public: Optional[bool] = True
-    refresh_key: Optional[RefreshKey] = None
+    refresh: Optional[RefreshPolicy] = None
+    cache: Optional[CachePreference] = None
     meta: Optional[Dict[str, Any]] = None
 
 
@@ -54,7 +56,8 @@ class MetricUpdateRequest(BaseModel):
     parameters: Optional[Dict[str, ParameterDefinition]] = None
     extends: Optional[UUID] = None
     public: Optional[bool] = None
-    refresh_key: Optional[RefreshKey] = None
+    refresh: Optional[RefreshPolicy] = None
+    cache: Optional[CachePreference] = None
     meta: Optional[Dict[str, Any]] = None
 
     model_config = ConfigDict(use_enum_values=True)

@@ -10,7 +10,8 @@ from cortex.core.semantics.measures import SemanticMeasure
 from cortex.core.semantics.joins import SemanticJoin
 from cortex.core.semantics.aggregations import SemanticAggregation
 from cortex.core.semantics.filters import SemanticFilter
-from cortex.core.semantics.refresh_keys import RefreshKey
+from cortex.core.semantics.refresh_keys import RefreshPolicy
+from cortex.core.semantics.cache import CachePreference
 from cortex.core.semantics.parameters import ParameterDefinition
 from cortex.core.types.telescope import TSModel
 
@@ -71,7 +72,8 @@ class SemanticMetric(TSModel):
     public: bool = True  # Whether this metric can be queried via API
     
     # Caching and refresh
-    refresh_key: Optional[RefreshKey] = None
+    refresh: Optional[RefreshPolicy] = Field(default=None, description="Pre-aggregation refresh policy")
+    cache: Optional[CachePreference] = Field(default=None, description="Result cache preference")
     
     # Custom metadata
     meta: Optional[Dict[str, Any]] = None

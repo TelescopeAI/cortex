@@ -122,13 +122,13 @@
       </p>
     </div>
 
-    <!-- Refresh Key & Cache Preference -->
+    <!-- Refresh Policy & Cache Preference -->
     <div class="space-y-3">
-      <Label>Refresh Key</Label>
+      <Label>Refresh Policy (Pre-aggregations)</Label>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div class="space-y-1">
           <Label for="rk-type">Type</Label>
-          <Select :model-value="refreshKeyType" @update:model-value="(v) => updateRefreshKeyType(v as string)">
+          <Select :model-value="refreshType" @update:model-value="(v) => updateRefreshType(v as string)">
             <SelectTrigger id="rk-type">
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
@@ -139,25 +139,41 @@
             </SelectContent>
           </Select>
         </div>
-        <div class="space-y-1" v-if="refreshKeyType === 'every'">
+        <div class="space-y-1" v-if="refreshType === 'every'">
           <Label for="rk-every">Every</Label>
-          <Input id="rk-every" :model-value="props.refreshKey?.every || ''" placeholder="e.g. 1 hour" @update:model-value="(v) => emitRefreshKey({ every: v as string })" />
+          <Input id="rk-every" :model-value="props.refresh?.every || ''" placeholder="e.g. 1 hour" @update:model-value="(v) => emitRefresh({ every: v as string })" />
           <p class="text-xs text-muted-foreground">Examples: 30 minutes, 1 hour, 1 day</p>
         </div>
-        <div class="space-y-1 md:col-span-2" v-if="refreshKeyType === 'sql'">
+        <div class="space-y-1 md:col-span-2" v-if="refreshType === 'sql'">
           <Label for="rk-sql">SQL</Label>
-          <Textarea id="rk-sql" rows="3" :model-value="props.refreshKey?.sql || ''" placeholder="SELECT NOW()" @update:model-value="(v) => emitRefreshKey({ sql: v as string })" />
+          <Textarea id="rk-sql" rows="3" :model-value="props.refresh?.sql || ''" placeholder="SELECT NOW()" @update:model-value="(v) => emitRefresh({ sql: v as string })" />
         </div>
-        <div class="space-y-1" v-if="refreshKeyType === 'max'">
+        <div class="space-y-1" v-if="refreshType === 'max'">
           <Label for="rk-max">Max Column</Label>
-          <Input id="rk-max" :model-value="props.refreshKey?.max || ''" placeholder="table.column" @update:model-value="(v) => emitRefreshKey({ max: v as string })" />
+          <Input id="rk-max" :model-value="props.refresh?.max || ''" placeholder="table.column" @update:model-value="(v) => emitRefresh({ max: v as string })" />
         </div>
       </div>
-      <div class="flex items-center space-x-3">
-        <Switch :model-value="cacheEnabled" @update:model-value="(v) => emitRefreshKey({ cache: { enabled: !!v } })" />
-        <Label>Enable cache (default)</Label>
+      <div class="space-y-2">
+        <Label>Result Cache (Default)</Label>
+        <div class="flex items-center space-x-3">
+          <Switch :model-value="cacheEnabled" @update:model-value="(v) => emitCache({ enabled: !!v })" />
+          <Label>Enabled</Label>
+        </div>
+        <div class="mt-2 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="space-y-1">
+            <Label for="cache-ttl">TTL (seconds)</Label>
+            <NumberField :model-value="props.cache?.ttl" :min="1" @update:model-value="(v) => emitCache({ ttl: v as number })">
+              <NumberFieldContent>
+                <NumberFieldDecrement />
+                <NumberFieldInput id="cache-ttl" placeholder="300" class="w-full" />
+                <NumberFieldIncrement />
+              </NumberFieldContent>
+            </NumberField>
+            <p class="text-xs text-muted-foreground">How long results stay cached by default.</p>
+          </div>
+        </div>
       </div>
-      <p class="text-xs text-muted-foreground">Request execution can override this preference.</p>
+      <p class="text-xs text-muted-foreground">Execution requests can override this cache preference.</p>
     </div>
 
     <!-- Info Alert -->
@@ -200,7 +216,8 @@ interface Props {
   grouped?: boolean
   availableTables?: Array<{ name: string; columns: any[] }>
   tableSchema?: any
-  refreshKey?: { type?: 'every' | 'sql' | 'max'; every?: string; sql?: string; max?: string; cache?: { enabled?: boolean } }
+  refresh?: { type?: 'every' | 'sql' | 'max'; every?: string; sql?: string; max?: string }
+  cache?: { enabled?: boolean; ttl?: number }
 }
 
 const props = defineProps<Props>()
@@ -210,7 +227,8 @@ const emit = defineEmits<{
   'update:dataSourceId': [value: string]
   'update:limit': [value: number | undefined]
   'update:grouped': [value: boolean]
-  'update:refreshKey': [value: any]
+  'update:refresh': [value: any]
+  'update:cache': [value: any]
 }>()
 
 // Debug availableTables
@@ -241,17 +259,19 @@ const groupedEnabled = computed(() => {
   return props.grouped !== undefined ? props.grouped : true
 })
 
-// Refresh key helpers
-const refreshKeyType = computed(() => props.refreshKey?.type || 'every')
-const cacheEnabled = computed(() => props.refreshKey?.cache?.enabled !== false)
-
-const emitRefreshKey = (partial: any) => {
-  const rk = { ...(props.refreshKey || {}), ...partial }
-  emit('update:refreshKey', rk)
+// Refresh policy helpers
+const refreshType = computed(() => props.refresh?.type || 'every')
+const emitRefresh = (partial: any) => {
+  const rk = { ...(props.refresh || {}), ...partial }
+  emit('update:refresh', rk)
 }
+const updateRefreshType = (t: string) => emitRefresh({ type: t })
 
-const updateRefreshKeyType = (t: string) => {
-  emitRefreshKey({ type: t })
+// Cache helpers
+const cacheEnabled = computed(() => props.cache?.ttl ? true : (props.cache?.enabled !== false))
+const emitCache = (partial: any) => {
+  const c = { ...(props.cache || {}), ...partial }
+  emit('update:cache', c)
 }
 
 // Handle limit toggle

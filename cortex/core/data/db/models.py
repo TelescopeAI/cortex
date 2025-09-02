@@ -94,7 +94,8 @@ class MetricORM(BaseDBModel):
     version = mapped_column(Integer, nullable=False, default=1)
     extends = mapped_column(UUID, ForeignKey("metrics.id"), nullable=True, index=True)  # Parent metric for inheritance
     public = mapped_column(Boolean, nullable=False, default=True, index=True)
-    refresh_key = mapped_column(JSONB, nullable=True)  # RefreshKey object
+    refresh = mapped_column(JSONB, nullable=True)  # RefreshPolicy object
+    cache = mapped_column(JSONB, nullable=True)  # CachePreference object
     meta = mapped_column(JSONB, nullable=True)  # Custom metadata
     
     # Validation and compilation

@@ -29,7 +29,8 @@
               v-model:data-source-id="schema.data_source_id"
               v-model:limit="schema.limit"
               v-model:grouped="schema.grouped"
-              v-model:refresh-key="schema.refresh_key"
+              v-model:refresh="schema.refresh"
+              v-model:cache="schema.cache"
               :available-tables="availableTables"
               :table-schema="props.tableSchema"
             />
@@ -192,7 +193,8 @@ const schema = ref({
   aggregations: [],
   filters: [],
   parameters: {},
-  refresh_key: undefined as any,
+  refresh: undefined as any,
+  cache: undefined as any,
   tableSchema: undefined as any
 })
 

@@ -9,8 +9,9 @@ from cortex.core.semantics.joins import SemanticJoin
 from cortex.core.semantics.aggregations import SemanticAggregation
 from cortex.core.semantics.filters import SemanticFilter
 
-from cortex.core.semantics.refresh_keys import RefreshKey
 from cortex.core.semantics.parameters import ParameterDefinition
+from cortex.core.semantics.refresh_keys import RefreshPolicy
+from cortex.core.semantics.cache import CachePreference
 
 
 class MetricResponse(BaseModel):
@@ -35,7 +36,8 @@ class MetricResponse(BaseModel):
     parameters: Optional[Dict[str, ParameterDefinition]] = None
     version: int
     public: bool
-    refresh_key: Optional[RefreshKey] = None
+    refresh: Optional[RefreshPolicy] = None
+    cache: Optional[CachePreference] = None
     meta: Optional[Dict[str, Any]]
     is_valid: bool
     validation_errors: Optional[List[str]]

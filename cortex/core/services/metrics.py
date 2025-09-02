@@ -6,11 +6,11 @@ from uuid import UUID
 
 from cortex.core.data.db.metric_service import MetricService
 from cortex.core.data.db.model_service import DataModelService
+from cortex.core.semantics.cache import CachePreference
 from cortex.core.semantics.metrics.metric import SemanticMetric
 from cortex.core.data.modelling.model import DataModel
 from cortex.core.query.executor import QueryExecutor
 from cortex.core.types.databases import DataSourceTypes
-from cortex.core.semantics.refresh_keys import CachePreference
 
 
 class MetricExecutionService:

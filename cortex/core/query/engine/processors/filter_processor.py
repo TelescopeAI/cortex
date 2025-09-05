@@ -105,16 +105,23 @@ class FilterProcessor(TSModel):
                                   table_name: Optional[str] = None,
                                   table_prefix: Optional[str] = None) -> str:
         """Get a fully qualified column name with table prefix"""
-        # If column already contains a table prefix (has a dot), return as-is
+        # Determine the prefix to use
+        prefix = table_prefix or table_name
+        
         if '.' in column_query:
+            # Column already has a table prefix
+            if prefix:
+                # Replace the existing table prefix with the new one
+                column_part = column_query.split('.', 1)[1]  # Get everything after the first dot
+                return f"{prefix}.{column_part}"
+            else:
+                # No new prefix provided, return as-is
+                return column_query
+        else:
+            # Column doesn't have a table prefix
+            if prefix:
+                return f"\"{prefix}\".{column_query}"
             return column_query
-        
-        # Use provided table name or table prefix
-        prefix = table_name or table_prefix
-        if prefix:
-            return f"{prefix}.{column_query}"
-        
-        return column_query
 
     @staticmethod
     def _build_operator_condition(column: str, 

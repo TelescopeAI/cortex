@@ -7,6 +7,7 @@ from cortex.api.routers.consumers.groups import ConsumerGroupsRouter
 from cortex.api.routers.data.models import DataModelsRouter
 from cortex.api.routers.data.sources import DataSourcesRouter
 from cortex.api.routers.environments import EnvironmentsRouter
+from cortex.api.routers.preaggregations import PreAggregationsRouter
 from cortex.api.routers.workspaces import WorkspaceRouter
 from cortex.api.routers.metrics import MetricsRouter
 from cortex.api.routers.dashboards.dashboards import DashboardRouter
@@ -23,6 +24,7 @@ ROUTES: List[dict] = [
     {"router": MetricsRouter, "enabled": True, "internal": False},
     {"router": DashboardRouter, "enabled": True, "internal": False},
     {"router": QueryHistoryRouter, "enabled": True, "internal": False},
+    {"router": PreAggregationsRouter, "enabled": True, "internal": False},
 ]
 
 ENABLED_ROUTES = list(filter(lambda route: route["enabled"] is True, ROUTES))

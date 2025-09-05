@@ -4,6 +4,7 @@ from cortex.core.query.engine.modules.sql.base_sql import SQLQueryGenerator
 from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.measures import SemanticMeasure
 from cortex.core.semantics.output_formats import OutputFormat, OutputFormatType, FormatType, OutputFormatMode, FormattingMap
+from cortex.core.types.time import TimeGrain
 
 
 class BigQueryGenerator(SQLQueryGenerator):
@@ -183,3 +184,17 @@ class BigQueryGenerator(SQLQueryGenerator):
             concat_parts.append(col)
             
         return f"CONCAT({', '.join(concat_parts)})"
+
+    # Time bucketing support
+    def _time_bucket(self, column_sql: str, grain: TimeGrain) -> str:
+        """Generate time bucket SQL for BigQuery using TIMESTAMP_TRUNC."""
+        grain_upper = grain.value.upper()
+        return f"TIMESTAMP_TRUNC({column_sql}, {grain_upper})"
+
+    # Hierarchical grouping support (not available by default)
+    def _supports_hierarchical_grouping(self) -> bool:
+        return False
+
+    def _group_by_hierarchical(self, dim_cols_sql: list[str]) -> str:
+        # BigQuery doesn't support ROLLUP in the same way; fallback to explicit GROUP BY
+        return f"GROUP BY {', '.join(dim_cols_sql)}"

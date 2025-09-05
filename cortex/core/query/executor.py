@@ -22,6 +22,9 @@ from cortex.core.cache.factory import get_cache_storage
 from cortex.core.config.models.cache import CacheConfig
 from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
 from cortex.core.semantics.cache import CachePreference
+from cortex.core.preaggregations import get_service, load_env_config
+from cortex.core.preaggregations.service import _sanitize_identifier
+from cortex.core.query.engine.bindings.rollup_binding import RollupBindingModel
 
 
 class QueryExecutor(TSModel):
@@ -65,6 +68,66 @@ class QueryExecutor(TSModel):
         }
         
         try:
+            # Pre-aggregations: attempt planner routing if enabled and specs exist
+            try:
+                preagg_env = load_env_config()
+                if preagg_env.enabled:
+                    preagg_service = get_service()
+                    requested_dimensions = [d.query for d in (metric.dimensions or [])]
+                    requested_measures = [m.query for m in (metric.measures or [])]
+                    
+                    # Debug: Check how many specs are available
+                    available_specs = preagg_service.list_specs(metric_id=metric.id)
+                    print(f"[PREAGG] Available specs for metric {metric.id}: {len(available_specs)}")
+                    print(f"[PREAGG] Requested dimensions: {requested_dimensions}")
+                    print(f"[PREAGG] Requested measures: {requested_measures}")
+                    
+                    plan_result = preagg_service.plan(metric, requested_dimensions=requested_dimensions, requested_measures=requested_measures)
+                    print(f"[PREAGG] Plan result: covered={plan_result.covered}, spec_id={plan_result.spec_id}, reason={plan_result.reason}")
+                    
+                    if plan_result.covered and plan_result.spec_id:
+                        # Route to rollup: select only needed columns using the standard generator with a binding
+                        spec = preagg_service.registry.get_spec(plan_result.spec_id)
+                        if spec and (spec.name or spec.metric_id):
+                            object_name = _sanitize_identifier(spec.name or f"mv_{spec.metric_id}")
+                            qualified = f'"{spec.source.schema}"."{object_name}"' if getattr(spec.source, "schema", None) else f'"{object_name}"'
+                            # Build a minimal binding mapping from dimension/measure names to canonical columns
+                            dimension_map = {d: f"{d}" for d in ([dim for dim in (metric.dimensions or []) if dim.query] and [dim.query for dim in (metric.dimensions or [])])}
+                            measure_map = {m: f"{m}" for m in ([ms for ms in (metric.measures or []) if ms.query] and [ms.query for ms in (metric.measures or [])])}
+                            binding = RollupBindingModel(
+                                qualified_table=qualified,
+                                dimension_columns=dimension_map,
+                                measure_columns=measure_map,
+                                time_bucket_columns={},
+                                pre_aggregation_spec_id=None,
+                            ).to_query_binding()
+                            # Use the standard generator but attach binding so FROM and SELECT map to rollup
+                            generator = QueryGeneratorFactory.create_generator(metric, source_type)
+                            generator.binding = binding  # type: ignore[attr-defined]
+                            generated_query = generator.generate_query(parameters, limit, offset, grouped)
+                            query_results = self._execute_database_query(generated_query, metric.data_source_id)
+                            end_time = datetime.now()
+                            duration = (end_time - start_time).total_seconds() * 1000
+                            return {
+                                "success": True,
+                                "data": query_results,
+                                "metadata": {
+                                    "metric_id": str(metric.id),
+                                    "duration": duration,
+                                    "row_count": len(query_results) if query_results else 0,
+                                    "query": generated_query,
+                                    "parameters": parameters,
+                                    "pre_aggregation_spec_id": plan_result.spec_id,
+                                    "rollup_binding": {
+                                        "qualified_table": qualified,
+                                        "dimension_columns": dimension_map,
+                                        "measure_columns": measure_map,
+                                    },
+                                }
+                            }
+            except Exception:
+                raise
+
             # Initialize caching if enabled and we have enough context to key it
             try:
                 cfg = CacheConfig.from_env()
@@ -142,18 +205,18 @@ class QueryExecutor(TSModel):
             query_generator = QueryGeneratorFactory.create_generator(resolved_metric, source_type)
             generated_query = query_generator.generate_query(enhanced_parameters, limit, offset, grouped)
             query_results = self._execute_database_query(generated_query, metric.data_source_id)
-
+            
             all_formats = OutputProcessor.collect_semantic_formatting(
                 measures=resolved_metric.measures,
                 dimensions=resolved_metric.dimensions,
                 filters=resolved_metric.filters
             )
-
+            
             flat_formats = []
             for format_list in all_formats.values():
                 if format_list:
                     flat_formats.extend(format_list)
-
+            
             if flat_formats:
                 transformed_results = OutputProcessor.process_output_formats(
                     query_results, 
@@ -161,7 +224,7 @@ class QueryExecutor(TSModel):
                 )
             else:
                 transformed_results = query_results
-
+            
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds() * 1000
 

@@ -3,13 +3,14 @@
 
     <!-- Builder Tabs -->
     <Tabs v-model="activeTab" class="w-full">
-      <TabsList class="grid w-full grid-cols-7">
+      <TabsList class="grid w-full grid-cols-8">
         <TabsTrigger value="basic">Basic Info</TabsTrigger>
         <TabsTrigger value="measures">Measures</TabsTrigger>
         <TabsTrigger value="dimensions">Dimensions</TabsTrigger>
         <TabsTrigger value="joins">Joins</TabsTrigger>
         <TabsTrigger value="aggregations">Aggregations</TabsTrigger>
         <TabsTrigger value="filters">Filters</TabsTrigger>
+        <TabsTrigger value="ordering">Ordering</TabsTrigger>
         <TabsTrigger value="parameters">Parameters</TabsTrigger>
       </TabsList>
 
@@ -24,15 +25,32 @@
           </CardHeader>
           <CardContent class="space-y-4">
             <BasicInfoBuilder
+              v-model:name="schema.name"
+              v-model:alias="schema.alias"
+              v-model:title="schema.title"
+              v-model:description="schema.description"
               v-model:table-name="schema.table_name"
               v-model:query="schema.query"
               v-model:data-source-id="schema.data_source_id"
               v-model:limit="schema.limit"
               v-model:grouped="schema.grouped"
+              v-model:ordered="schema.ordered"
               v-model:refresh="schema.refresh"
               v-model:cache="schema.cache"
               :available-tables="availableTables"
               :table-schema="props.tableSchema"
+              @update:name="updateSchema"
+              @update:alias="updateSchema"
+              @update:title="updateSchema"
+              @update:description="updateSchema"
+              @update:table-name="updateSchema"
+              @update:query="updateSchema"
+              @update:data-source-id="updateSchema"
+              @update:limit="updateSchema"
+              @update:grouped="updateSchema"
+              @update:ordered="updateSchema"
+              @update:refresh="updateSchema"
+              @update:cache="updateSchema"
             />
           </CardContent>
         </Card>
@@ -51,6 +69,7 @@
             <MeasuresBuilder
               v-model:measures="schema.measures"
               :table-schema="tableSchema"
+              @update:measures="updateSchema"
             />
           </CardContent>
         </Card>
@@ -69,6 +88,7 @@
             <DimensionsBuilder
               v-model:dimensions="schema.dimensions"
               :table-schema="tableSchema"
+              @update:dimensions="updateSchema"
             />
           </CardContent>
         </Card>
@@ -87,6 +107,7 @@
             <JoinsBuilder
               v-model="schema.joins"
               :available-tables="availableTables"
+              @update:model-value="updateSchema"
             />
           </CardContent>
         </Card>
@@ -106,6 +127,7 @@
               v-model:aggregations="schema.aggregations"
               :available-columns="availableColumns"
               :measures="schema.measures"
+              @update:aggregations="updateSchema"
             />
           </CardContent>
         </Card>
@@ -124,6 +146,31 @@
             <FiltersBuilder
               v-model:filters="schema.filters"
               :table-schema="tableSchema"
+              @update:filters="updateSchema"
+            />
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      <!-- Ordering Tab -->
+      <TabsContent value="ordering" class="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Ordering</CardTitle>
+            <CardDescription>
+              Define how query results should be sorted
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <OrderingBuilder
+              v-model:order="schema.order"
+              v-model:ordered="schema.ordered"
+              :available-columns="availableColumns"
+              :available-tables="availableTables"
+              :measures="schema.measures"
+              :dimensions="schema.dimensions"
+              @update:order="updateSchema"
+              @update:ordered="updateSchema"
             />
           </CardContent>
         </Card>
@@ -141,6 +188,7 @@
           <CardContent>
             <ParametersBuilder
               v-model:parameters="schema.parameters"
+              @update:parameters="updateSchema"
             />
           </CardContent>
         </Card>
@@ -161,6 +209,7 @@ import DimensionsBuilder from './DimensionsBuilder.vue'
 import JoinsBuilder from './JoinsBuilder.vue'
 import AggregationsBuilder from './AggregationsBuilder.vue'
 import FiltersBuilder from './FiltersBuilder.vue'
+import OrderingBuilder from './OrderingBuilder.vue'
 import ParametersBuilder from './ParametersBuilder.vue'
 
 interface Props {
@@ -182,16 +231,22 @@ const activeTab = ref('basic')
 
 // Schema data structure
 const schema = ref({
+  name: '',
+  alias: '',
+  title: '',
+  description: '',
   table_name: '',
   query: '',
   data_source_id: undefined as string | undefined,
   limit: undefined as number | undefined,
   grouped: true,
+  ordered: true,
   measures: [],
   dimensions: [],
   joins: [],
   aggregations: [],
   filters: [],
+  order: [],
   parameters: {},
   refresh: undefined as any,
   cache: undefined as any,
@@ -220,14 +275,15 @@ const availableColumns = computed(() => {
   return columns
 })
 
-// When a new table schema arrives, default the table_name to the first available table
+// When a new table schema arrives, only set table_name if not already set
 watch(
   () => props.tableSchema,
   (newSchema) => {
     if (newSchema?.tables && newSchema.tables.length > 0) {
       const first = newSchema.tables[0]?.name
       const existsInNew = newSchema.tables.some((t: any) => t.name === schema.value.table_name)
-      if (!existsInNew) {
+      // Only set to first table if no table is currently selected OR current table doesn't exist in new schema
+      if (!schema.value.table_name || !existsInNew) {
         schema.value.table_name = first || ''
       }
     }
@@ -235,10 +291,10 @@ watch(
   { immediate: true }
 )
 
-// Watch for changes and emit to parent
-watch(schema, (newSchema) => {
-  emit('update:modelValue', newSchema)
-}, { deep: true })
+// Manual update function (following MeasuresBuilder pattern)
+const updateSchema = () => {
+  emit('update:modelValue', schema.value)
+}
 
 // Watch for modelValue changes from parent
 watch(() => props.modelValue, (newValue) => {
@@ -252,7 +308,7 @@ const loadSchemaFromDataSource = async (dataSourceId: string) => {
   try {
     const loadedSchema = await getDataSourceSchema(dataSourceId)
     schema.value = { ...schema.value, tableSchema: loadedSchema }
-    emit('update:modelValue', schema.value)
+    updateSchema()
   } catch (error) {
     console.error('Failed to load schema:', error)
   }

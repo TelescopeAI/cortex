@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '~/components/ui/dropdown-menu'
-import { Plus, MoreHorizontal, GripVertical, Edit, Trash2, Move, RefreshCw } from 'lucide-vue-next'
+import { Plus, MoreHorizontal, GripVertical, Edit, Trash2, Move, RefreshCw, Clock } from 'lucide-vue-next'
 import type { Dashboard, DashboardView, DashboardSection, DashboardWidget } from '~/types/dashboards'
 import DashboardSectionComponent from '~/components/dashboards/DashboardSection.vue'
 import { toast } from 'vue-sonner'
@@ -14,6 +14,7 @@ interface Props {
   dashboard: Dashboard
   view: DashboardView
   executionResults?: any
+  lastExecutionTime?: string
 }
 
 interface Emits {
@@ -96,22 +97,38 @@ function getWidgetExecutionResult(widgetId: string) {
 
 <template>
   <div class="space-y-6">
-    <!-- View Header -->
+    <!-- Dashboard & View Info -->
     <Card>
-      <CardHeader class="pb-4">
+      <CardHeader>
         <div class="flex items-center justify-between">
-          <div>
-            <CardTitle class="flex items-center gap-2">
-              {{ view.title }}
-              <Badge v-if="view.context_id" variant="outline" class="text-xs">
-                Context: {{ view.context_id }}
+          <div class="flex items-center gap-4">
+            <div>
+              <CardTitle class="flex items-center gap-2">
+                <Badge class="capitalize">{{ dashboard.type }}</Badge>
+                
+                <Badge v-if="view.context_id" variant="outline" class="text-xs">
+                  Context: {{ view.context_id }}
+                </Badge>
+                
+              </CardTitle>
+              
+            </div>
+            <div v-if="dashboard.tags?.length" class="flex gap-1">
+              <Badge 
+                v-for="tag in dashboard.tags" 
+                :key="tag" 
+                variant="secondary"
+                class="text-xs capitalize"
+              >
+                {{ tag }}
               </Badge>
-            </CardTitle>
-            <p v-if="view.description" class="text-sm text-muted-foreground mt-1">
-              {{ view.description }}
-            </p>
+            </div>
+            <p v-if="view.description" class="text-sm text-muted-foreground p-1">
+                {{ view.description }}
+              </p>
           </div>
           <div class="flex items-center gap-2">
+            <Badge variant="outline">{{ dashboard.views.length }} views</Badge>
             <Badge variant="secondary">
               {{ sortedSections.length }} section{{ sortedSections.length !== 1 ? 's' : '' }}
             </Badge>
@@ -122,24 +139,11 @@ function getWidgetExecutionResult(widgetId: string) {
               <Plus class="w-4 h-4 mr-1" />
               Add Section
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger as-child>
-                <Button variant="ghost" size="icon">
-                  <MoreHorizontal class="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem @click="editView">
-                  <Edit class="w-4 h-4 mr-2" />
-                  Edit View
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Move class="w-4 h-4 mr-2" />
-                  Reorder Sections
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
+        </div>
+        <div v-if="lastExecutionTime" class="flex items-center text-sm text-muted-foreground mt-2">
+          <Clock class="w-4 h-4 mr-1" />
+          Last executed: {{ lastExecutionTime }}
         </div>
       </CardHeader>
     </Card>

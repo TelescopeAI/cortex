@@ -144,7 +144,10 @@ async def update_dashboard(dashboard_id: UUID, dashboard_data: DashboardUpdateRe
                 tags=existing_dashboard.tags,
                 alias=existing_dashboard.alias,
             )
-        updated_model = _convert_create_request_to_dashboard(temp_request)
+            updated_model = _convert_create_request_to_dashboard(temp_request)
+        else:
+            # If no views update, use existing dashboard as updated model
+            updated_model = existing_dashboard
 
         # Merge strategy: preserve existing widget data_mapping fields when the incoming update omits them
         merged_views = []
@@ -375,8 +378,7 @@ async def execute_widget(dashboard_id: UUID, view_alias: str, widget_alias: str)
         # Execute metric using shared service
         execution_result = MetricExecutionService.execute_metric(
             metric_id=target_widget.metric_id,
-            context_id=target_view.context_id,
-            limit=100,
+            context_id=target_view.context_id
         )
 
         if not execution_result.get("success"):
@@ -584,8 +586,7 @@ async def preview_dashboard_config(dashboard_id: UUID, config: DashboardUpdateRe
                     # Execute metric using the shared service
                     execution_result = MetricExecutionService.execute_metric(
                         metric_id=widget.metric_id,
-                        context_id=preview_view.context_id,
-                        limit=100  # Limit preview results for performance
+                        context_id=preview_view.context_id
                     )
 
                     if not execution_result.get("success"):

@@ -219,7 +219,8 @@ async function handleCreateDashboard() {
       type: createForm.type,
       views: [
         {
-          name: 'Default',
+          title: 'Default',
+          alias: generateAlias('Default'),
           description: '',
           sections: [],
         }

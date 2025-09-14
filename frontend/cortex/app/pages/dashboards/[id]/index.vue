@@ -19,6 +19,7 @@ import DashboardContainer from '~/components/dashboards/DashboardContainer.vue'
 import WidgetUpsertDialog from '~/components/dashboards/WidgetUpsertDialog.vue'
 import WidgetEditSheet from '~/components/dashboards/WidgetEditSheet.vue'
 import DashboardViewSelector from '~/components/dashboards/DashboardViewSelector.vue'
+import DashboardViewUpsert from '~/components/dashboards/DashboardViewUpsert.vue'
 
 // Page metadata
 definePageMeta({
@@ -53,8 +54,9 @@ const lastExecutionTime = ref<string>('')
 
 // Dialogs
 const showAddViewDialog = ref(false)
+const showEditViewDialog = ref(false)
 const showAddSectionDialog = ref(false)
-const addViewForm = reactive({ title: '', description: '', alias: '' })
+const editingView = ref<DashboardView | null>(null)
 const addSectionForm = reactive({ title: '', description: '', alias: '' })
 const showAddWidgetDialog = ref(false)
 const showEditWidgetSheet = ref(false)
@@ -91,13 +93,6 @@ const pageTitle = computed(() => {
 watch(() => addSectionForm.title, (newTitle) => {
   if (newTitle) {
     addSectionForm.alias = generateAlias(newTitle)
-  }
-})
-
-// Auto-generate alias from view title
-watch(() => addViewForm.title, (newTitle) => {
-  if (newTitle) {
-    addViewForm.alias = generateAlias(newTitle)
   }
 })
 
@@ -254,50 +249,23 @@ async function setAsDefaultView() {
   }
 }
 
-async function addView() {
-  if (!dashboard.value) return
-  const title = addViewForm.title.trim()
-  const alias = addViewForm.alias.trim()
-  
-  if (!title) {
-    toast.error('View title is required')
-    return
-  }
-  
-  if (!alias) {
-    toast.error('View alias is required')
-    return
-  }
-  
-  const mutable = JSON.parse(JSON.stringify(dashboard.value!)) as Dashboard
-  
-  // Check if alias already exists
-  if (mutable.views.some(v => v.alias === alias)) {
-    toast.error('View alias already exists')
-    return
-  }
-  
-  const newView: DashboardView = {
-    alias,
-    title,
-    description: addViewForm.description || undefined,
-    sections: [],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  } as any
-  const updated = { ...mutable, views: [...mutable.views, newView] } as Dashboard
-  try {
-    await updateDashboard(mutable.id, updated as any)
-    toast.success('View added')
-    showAddViewDialog.value = false
-    addViewForm.title = ''
-    addViewForm.description = ''
-    addViewForm.alias = ''
-    await loadDashboard()
-    selectedViewId.value = newView.alias
-  } catch (e) {
-    toast.error('Failed to add view')
-  }
+// View management handlers
+function handleAddView() {
+  showAddViewDialog.value = true
+}
+
+function handleEditView(view: DashboardView) {
+  editingView.value = view
+  showEditViewDialog.value = true
+}
+
+function handleViewCreated(view: DashboardView) {
+  selectedViewId.value = view.alias
+  loadDashboard()
+}
+
+function handleViewUpdated(view: DashboardView) {
+  loadDashboard()
 }
 
 async function addSection() {
@@ -588,13 +556,10 @@ useHead({
           :default-view-id="(dashboardForUi as any)?.default_view"
           @view-changed="onViewChanged"
           @set-default="setAsDefaultView"
+          @add-view="handleAddView"
+          @edit-view="handleEditView"
         />
 
-        <!-- Add View -->
-        <Button variant="outline" size="sm" @click="showAddViewDialog = true">
-          <Plus class="w-4 h-4 mr-1" />
-          Add View
-        </Button>
         
         <!-- Execute Button -->
         <Button 
@@ -605,53 +570,9 @@ useHead({
           <RefreshCw :class="{ 'animate-spin': isExecuting, 'w-4 h-4': true }" />
           {{ isExecuting ? 'Executing...' : 'Execute' }}
         </Button>
-        
-        <!-- Actions -->
-        <DropdownMenu>
-          <DropdownMenuTrigger as-child>
-            <Button variant="outline" size="icon">
-              <MoreHorizontal class="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem @click="editDashboard">
-              <Edit class="w-4 h-4 mr-2" />
-              Edit Dashboard
-            </DropdownMenuItem>
-            <DropdownMenuItem @click="setAsDefaultView" :disabled="!currentView || currentView.alias === (dashboardForUi as any)?.default_view">
-              <Eye class="w-4 h-4 mr-2" />
-              Set as Default View
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
     </div>
 
-    <!-- Dashboard Info -->
-    <Card v-if="dashboard">
-      <CardContent class="p-4">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-4">
-            <Badge>{{ dashboard.type }}</Badge>
-            <Badge variant="outline">{{ dashboard.views.length }} views</Badge>
-            <div v-if="dashboard.tags?.length" class="flex gap-1">
-              <Badge 
-                v-for="tag in dashboard.tags" 
-                :key="tag" 
-                variant="secondary"
-                class="text-xs"
-              >
-                {{ tag }}
-              </Badge>
-            </div>
-          </div>
-          <div v-if="lastExecutionTime" class="flex items-center text-sm text-muted-foreground">
-            <Clock class="w-4 h-4 mr-1" />
-            Last executed: {{ lastExecutionTime }}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
 
     <!-- Loading State -->
     <div v-if="loading" class="flex items-center justify-center py-12">
@@ -671,20 +592,13 @@ useHead({
       </CardContent>
     </Card>
 
-    <!-- Dashboard Content -->
-    <div class="flex items-center justify-between" v-if="dashboard && currentView">
-      <div class="text-sm text-muted-foreground">View: {{ currentView.title }}</div>
-      <Button variant="outline" size="sm" @click="showAddSectionDialog = true">
-        <Plus class="w-4 h-4 mr-1" />
-        Add Section
-      </Button>
-    </div>
 
     <DashboardContainer
       v-if="dashboardForUi && currentView"
       :dashboard="dashboardForUi as unknown as Dashboard"
       :view="currentView"
       :execution-results="executionResults"
+      :last-execution-time="lastExecutionTime"
       @execute-widget="(widgetId) => { toast.info('Widget execution coming soon') }"
       @widget-updated="() => { loadDashboard() }"
       @add-section="() => { showAddSectionDialog = true }"
@@ -703,34 +617,21 @@ useHead({
       </CardContent>
     </Card>
 
-    <!-- Add View Dialog -->
-    <Dialog v-model:open="showAddViewDialog">
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add View</DialogTitle>
-          <DialogDescription>Create a new view in this dashboard.</DialogDescription>
-        </DialogHeader>
-        <div class="space-y-3 py-2">
-          <div class="space-y-2">
-            <Label>View Title</Label>
-            <Input v-model="addViewForm.title" placeholder="View title" />
-          </div>
-          <div class="space-y-2">
-            <Label>Alias</Label>
-            <Input v-model="addViewForm.alias" placeholder="Auto-generated from title" />
-            <p class="text-xs text-muted-foreground">Used for referencing this view. Auto-generated from title.</p>
-          </div>
-          <div class="space-y-2">
-            <Label>Description (Optional)</Label>
-            <Input v-model="addViewForm.description" placeholder="Optional description" />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" @click="showAddViewDialog = false">Cancel</Button>
-          <Button :disabled="!addViewForm.title.trim()" @click="addView">Add</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <!-- View Management Dialogs -->
+    <DashboardViewUpsert
+      v-model:open="showAddViewDialog"
+      mode="create"
+      :dashboard="dashboardForUi as unknown as Dashboard"
+      @view-created="handleViewCreated"
+    />
+    
+    <DashboardViewUpsert
+      v-model:open="showEditViewDialog"
+      mode="edit"
+      :dashboard="dashboardForUi as unknown as Dashboard"
+      :view-to-edit="editingView || undefined"
+      @view-updated="handleViewUpdated"
+    />
 
     <!-- Add Section Dialog -->
     <Dialog v-model:open="showAddSectionDialog">

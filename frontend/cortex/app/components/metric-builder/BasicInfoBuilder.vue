@@ -1,5 +1,61 @@
 <template>
   <div class="space-y-4">
+    <!-- Metric Basic Information -->
+    <div class="space-y-4">
+      <div class="space-y-2">
+        <Label for="metric-name">Metric Name</Label>
+        <Input
+          id="metric-name"
+          :model-value="name"
+          @update:model-value="(value) => $emit('update:name', value as string)"
+          placeholder="Enter metric name"
+        />
+        <p class="text-xs text-muted-foreground">
+          A unique name for your metric.
+        </p>
+      </div>
+
+      <div class="space-y-2">
+        <Label for="metric-alias">Alias</Label>
+        <Input
+          id="metric-alias"
+          :model-value="alias"
+          @update:model-value="(value) => handleAliasChange(value as string)"
+          placeholder="Auto-generated from name"
+        />
+        <p class="text-xs text-muted-foreground">
+          {{ aliasError || 'Used for programmatic references. Auto-generated from name.' }}
+        </p>
+      </div>
+
+      <div class="space-y-2">
+        <Label for="metric-title">Title</Label>
+        <Input
+          id="metric-title"
+          :model-value="title"
+          @update:model-value="(value) => $emit('update:title', value as string)"
+          placeholder="Enter display title"
+        />
+        <p class="text-xs text-muted-foreground">
+          Display title for the metric (optional).
+        </p>
+      </div>
+
+      <div class="space-y-2">
+        <Label for="metric-description">Description</Label>
+        <Textarea
+          id="metric-description"
+          :model-value="description"
+          @update:model-value="(value) => $emit('update:description', value as string)"
+          placeholder="Enter metric description"
+          rows="3"
+        />
+        <p class="text-xs text-muted-foreground">
+          Describe what this metric measures and how it's used.
+        </p>
+      </div>
+    </div>
+
     <!-- Data Source Selection -->
     <div class="space-y-2">
       <Label for="data-source">Data Source</Label>
@@ -122,6 +178,23 @@
       </p>
     </div>
 
+    <!-- Ordering Toggle -->
+    <div class="space-y-2">
+      <Label>Order Results</Label>
+      <div class="flex items-center space-x-3">
+        <Switch
+          :model-value="orderedEnabled"
+          @update:model-value="handleOrderedToggle"
+        />
+        <span class="text-sm text-muted-foreground">
+          {{ orderedEnabled ? 'Enabled' : 'Disabled' }}
+        </span>
+      </div>
+      <p class="text-xs text-muted-foreground">
+        When enabled, applies ORDER BY clause to sort results. Configure specific ordering in the Ordering tab.
+      </p>
+    </div>
+
     <!-- Refresh Policy & Cache Preference -->
     <div class="space-y-3">
       <Label>Refresh Policy (Pre-aggregations)</Label>
@@ -153,13 +226,13 @@
           <Input id="rk-max" :model-value="props.refresh?.max || ''" placeholder="table.column" @update:model-value="(v) => emitRefresh({ max: v as string })" />
         </div>
       </div>
-      <div class="space-y-2">
+        <div class="space-y-2">
         <Label>Result Cache (Default)</Label>
         <div class="flex items-center space-x-3">
-          <Switch :model-value="cacheEnabled" @update:model-value="(v) => emitCache({ enabled: !!v })" />
-          <Label>Enabled</Label>
+          <Switch :model-value="cacheEnabled" @update:model-value="handleCacheToggle" />
+          <Label>{{ cacheEnabled ? 'Enabled' : 'Disabled' }}</Label>
         </div>
-        <div class="mt-2 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div v-if="cacheEnabled" class="mt-2 grid grid-cols-1 md:grid-cols-3 gap-3">
           <div class="space-y-1">
             <Label for="cache-ttl">TTL (seconds)</Label>
             <NumberField :model-value="props.cache?.ttl" :min="1" @update:model-value="(v) => emitCache({ ttl: v as number })">
@@ -199,7 +272,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { Label } from '~/components/ui/label'
 import { Textarea } from '~/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
@@ -207,13 +280,19 @@ import { NumberField, NumberFieldContent, NumberFieldDecrement, NumberFieldIncre
 import { Switch } from '~/components/ui/switch'
 import { Input } from '~/components/ui/input'
 import { useDataSources } from '~/composables/useDataSources'
+import { useAliasGenerator } from '~/composables/useAliasGenerator'
 
 interface Props {
+  name?: string
+  alias?: string
+  title?: string
+  description?: string
   tableName?: string
   query?: string
   dataSourceId?: string
   limit?: number
   grouped?: boolean
+  ordered?: boolean
   availableTables?: Array<{ name: string; columns: any[] }>
   tableSchema?: any
   refresh?: { type?: 'every' | 'sql' | 'max'; every?: string; sql?: string; max?: string }
@@ -222,14 +301,28 @@ interface Props {
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
+  'update:name': [value: string]
+  'update:alias': [value: string]
+  'update:title': [value: string]
+  'update:description': [value: string]
   'update:tableName': [value: string]
   'update:query': [value: string]
   'update:dataSourceId': [value: string]
   'update:limit': [value: number | undefined]
   'update:grouped': [value: boolean]
+  'update:ordered': [value: boolean]
   'update:refresh': [value: any]
   'update:cache': [value: any]
 }>()
+
+// Alias generation
+const { aliasManuallyEdited, generateAlias, getAliasError, markAsManuallyEdited } = useAliasGenerator()
+
+// Computed alias error
+const aliasError = computed(() => {
+  if (!props.alias) return ''
+  return getAliasError(props.alias)
+})
 
 // Debug availableTables
 const debugAvailableTables = computed(() => {
@@ -259,6 +352,11 @@ const groupedEnabled = computed(() => {
   return props.grouped !== undefined ? props.grouped : true
 })
 
+// Computed property for ordered toggle  
+const orderedEnabled = computed(() => {
+  return props.ordered !== undefined ? props.ordered : true
+})
+
 // Refresh policy helpers
 const refreshType = computed(() => props.refresh?.type || 'every')
 const emitRefresh = (partial: any) => {
@@ -268,7 +366,15 @@ const emitRefresh = (partial: any) => {
 const updateRefreshType = (t: string) => emitRefresh({ type: t })
 
 // Cache helpers
-const cacheEnabled = computed(() => props.cache?.ttl ? true : (props.cache?.enabled !== false))
+const cacheEnabled = computed(() => {
+  // If cache object exists, check the enabled property explicitly
+  if (props.cache) {
+    return props.cache.enabled === true
+  }
+  // If no cache object, default to false (disabled)
+  return false
+})
+
 const emitCache = (partial: any) => {
   const c = { ...(props.cache || {}), ...partial }
   emit('update:cache', c)
@@ -297,6 +403,38 @@ const handleQuerySourceToggle = (enabled: boolean) => {
 const handleGroupedToggle = (enabled: boolean) => {
   emit('update:grouped', enabled)
 }
+
+// Handle ordered toggle
+const handleOrderedToggle = (enabled: boolean) => {
+  emit('update:ordered', enabled)
+}
+
+// Handle cache toggle
+const handleCacheToggle = (enabled: boolean) => {
+  if (enabled) {
+    // When enabling cache, set default TTL if not already set
+    emitCache({ 
+      enabled: true, 
+      ttl: props.cache?.ttl || 300  // Default to 5 minutes if no TTL set
+    })
+  } else {
+    // When disabling cache, set enabled to false
+    emitCache({ enabled: false })
+  }
+}
+
+// Handle alias change
+const handleAliasChange = (value: string) => {
+  markAsManuallyEdited()
+  emit('update:alias', value)
+}
+
+// Auto-generate alias from name unless manually edited
+watch(() => props.name, (newName) => {
+  if (newName && !aliasManuallyEdited.value) {
+    emit('update:alias', generateAlias(newName))
+  }
+})
 
 // Handle data source change
 const handleDataSourceChange = (value: string) => {

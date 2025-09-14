@@ -163,11 +163,17 @@ const selectedDataSourceIdLocal = ref<string | undefined>(undefined)
 
 // Schema data structure
 const schema = ref({
+  name: '',
+  alias: '',
+  title: '',
+  description: '',
   table_name: '',
   query: '',
   data_source_id: undefined as string | undefined,
   limit: undefined as number | undefined,
   grouped: true,
+  ordered: true,
+  order: [],
   measures: [],
   dimensions: [],
   joins: [],
@@ -182,11 +188,17 @@ const schema = ref({
 watch(() => props.metric, (newMetric) => {
   if (newMetric) {
     schema.value = {
+      name: newMetric.name || '',
+      alias: newMetric.alias || '',
+      title: newMetric.title || '',
+      description: newMetric.description || '',
       table_name: newMetric.table_name || '',
       query: newMetric.query || '',
       data_source_id: newMetric.data_source_id || undefined,
       limit: newMetric.limit || undefined,
       grouped: newMetric.grouped !== undefined ? newMetric.grouped : true,
+      ordered: newMetric.ordered !== undefined ? newMetric.ordered : true,
+      order: newMetric.order || [],
       measures: newMetric.measures || [],
       dimensions: newMetric.dimensions || [],
       joins: newMetric.joins || [],
@@ -240,8 +252,15 @@ async function loadSchemaFromDataSource(dataSourceId?: string) {
   try {
     tableSchema.value = await getDataSourceSchema(src)
     const firstTable = tableSchema.value?.tables?.[0]?.name
+    // Only set table_name if it's not already set or if current table doesn't exist in new schema
     if (firstTable) {
-      schema.value.table_name = firstTable
+      const currentTable = schema.value.table_name
+      const tableExists = tableSchema.value?.tables?.some((t: any) => t.name === currentTable)
+      
+      // Only override if no table is currently selected OR current table doesn't exist in new schema
+      if (!currentTable || !tableExists) {
+        schema.value.table_name = firstTable
+      }
     } else {
       schema.value.table_name = ''
     }

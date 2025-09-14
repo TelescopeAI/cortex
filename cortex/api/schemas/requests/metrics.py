@@ -7,6 +7,7 @@ from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.joins import SemanticJoin
 from cortex.core.semantics.aggregations import SemanticAggregation
 from cortex.core.semantics.filters import SemanticFilter
+from cortex.core.semantics.order_sequences import SemanticOrderSequence
 from cortex.core.semantics.refresh_keys import RefreshPolicy
 from cortex.core.semantics.cache import CachePreference
 from cortex.core.semantics.parameters import ParameterDefinition
@@ -24,11 +25,13 @@ class MetricCreateRequest(BaseModel):
     data_source_id: Optional[UUID] = None
     limit: Optional[int] = None
     grouped: Optional[bool] = Field(default=True, description="Whether to apply GROUP BY when dimensions are present")
+    ordered: Optional[bool] = Field(default=True, description="Whether to apply ORDER BY for sorting results")
     measures: Optional[List[SemanticMeasure]] = None
     dimensions: Optional[List[SemanticDimension]] = None
     joins: Optional[List[SemanticJoin]] = None
     aggregations: Optional[List[SemanticAggregation]] = None
     filters: Optional[List[SemanticFilter]] = None
+    order: Optional[List[SemanticOrderSequence]] = None
     parameters: Optional[Dict[str, ParameterDefinition]] = None
     extends: Optional[UUID] = None
     public: Optional[bool] = True
@@ -48,11 +51,13 @@ class MetricUpdateRequest(BaseModel):
     data_source_id: Optional[UUID] = None
     limit: Optional[int] = None
     grouped: Optional[bool] = None
+    ordered: Optional[bool] = None
     measures: Optional[List[SemanticMeasure]] = None
     dimensions: Optional[List[SemanticDimension]] = None
     joins: Optional[List[SemanticJoin]] = None
     aggregations: Optional[List[SemanticAggregation]] = None
     filters: Optional[List[SemanticFilter]] = None
+    order: Optional[List[SemanticOrderSequence]] = None
     parameters: Optional[Dict[str, ParameterDefinition]] = None
     extends: Optional[UUID] = None
     public: Optional[bool] = None
@@ -71,6 +76,7 @@ class MetricExecutionRequest(BaseModel):
     offset: Optional[int] = None
     context_id: Optional[str] = None
     grouped: Optional[bool] = Field(default=True, description="Whether to apply GROUP BY when dimensions are present")
+    ordered: Optional[bool] = Field(default=True, description="Whether to apply ORDER BY for sorting results")
     cache: Optional[CachePreference] = None
 
 

@@ -12,6 +12,7 @@ from cortex.core.semantics.measures import SemanticMeasure
 from cortex.core.types.semantics.measure import SemanticMeasureType
 from cortex.core.semantics.output_formats import FormattingMap
 from cortex.core.types.time import TimeGrain
+from cortex.core.query.engine.processors.order_processor import OrderProcessor
 
 
 class SQLQueryGenerator(BaseQueryGenerator):
@@ -29,6 +30,10 @@ class SQLQueryGenerator(BaseQueryGenerator):
         # If grouped parameter is explicitly set in request, use that
         # Otherwise, use the metric's default grouped setting
         effective_grouped = grouped if grouped is not None else (self.metric.grouped if self.metric.grouped is not None else True)
+        
+        # Determine if ordering should be applied
+        # Use the metric's default ordered setting (defaults to True if not specified)
+        effective_ordered = self.metric.ordered if self.metric.ordered is not None else True
         
         # If custom query is provided, substitute parameters and add limit if specified
         if self.metric.query:
@@ -278,9 +283,72 @@ class SQLQueryGenerator(BaseQueryGenerator):
         return None
 
     def _build_order_by_clause(self) -> Optional[str]:
-        """Build ORDER BY clause with qualified column names when joins are present"""
-        # This is a basic implementation - can be enhanced based on specific needs
-        # When implementing ORDER BY, ensure to use self._get_qualified_column_name() for column references
+        """Build ORDER BY clause with context-aware semantic resolution"""
+        # Get table prefix/name for qualified column names
+        table_prefix = self._get_primary_table_name()
+        
+        # Determine if this is a grouped query
+        is_grouped_query = self.metric.grouped and self.metric.dimensions
+        
+        # Build SELECT expressions mapping for semantic resolution
+        select_expressions = self._build_select_expressions_map()
+        
+        return OrderProcessor.process_order_sequences(
+            order_sequences=self.metric.order,
+            measures=self.metric.measures,
+            dimensions=self.metric.dimensions,
+            table_prefix=table_prefix,
+            formatting_map=getattr(self, 'formatting_map', None),
+            apply_default_ordering=self.metric.ordered if self.metric.ordered is not None else True,
+            is_grouped_query=is_grouped_query,
+            select_expressions=select_expressions
+        )
+    
+    def _build_select_expressions_map(self) -> Dict[str, str]:
+        """Build a mapping of column aliases to their actual SELECT expressions"""
+        expressions = {}
+        
+        # Add measure expressions
+        if self.metric.measures:
+            formatting_map = getattr(self, 'formatting_map', None)
+            for measure in self.metric.measures:
+                # Build the expression using the same logic as _format_measure
+                formatted_expression = self._format_measure(measure, formatting_map or {})
+                # Extract just the expression part (before AS "alias")
+                if ' AS "' in formatted_expression:
+                    expression = formatted_expression.split(' AS "')[0]
+                    expressions[measure.name] = expression
+                else:
+                    expressions[measure.name] = formatted_expression
+        
+        # Add dimension expressions
+        if self.metric.dimensions:
+            formatting_map = getattr(self, 'formatting_map', None)
+            for dimension in self.metric.dimensions:
+                # Build the expression using the same logic as _format_dimension  
+                formatted_expression = self._format_dimension(dimension, formatting_map or {})
+                # Extract just the expression part (before AS "alias")
+                if ' AS "' in formatted_expression:
+                    expression = formatted_expression.split(' AS "')[0]
+                    expressions[dimension.name] = expression
+                else:
+                    expressions[dimension.name] = formatted_expression
+        
+        return expressions
+    
+    def _get_primary_table_name(self) -> Optional[str]:
+        """Get the primary table name for column qualification"""
+        # Use the metric's table_name if available
+        if self.metric.table_name:
+            return self.metric.table_name
+        
+        # Extract from first measure or dimension if available
+        if self.metric.measures and self.metric.measures[0].table:
+            return self.metric.measures[0].table
+        
+        if self.metric.dimensions and self.metric.dimensions[0].table:
+            return self.metric.dimensions[0].table
+            
         return None
 
     def _build_limit_clause(self, limit: Optional[int] = None, offset: Optional[int] = None) -> Optional[str]:

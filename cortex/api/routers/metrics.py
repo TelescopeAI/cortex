@@ -19,10 +19,17 @@ from cortex.api.schemas.responses.metrics import (
     MetricVersionListResponse
 )
 from cortex.core.semantics.metrics.metric import SemanticMetric
+from cortex.core.semantics.measures import SemanticMeasure
+from cortex.core.semantics.dimensions import SemanticDimension
+from cortex.core.semantics.filters import SemanticFilter
 from cortex.core.data.db.metric_service import MetricService
 from cortex.core.data.db.model_service import DataModelService
+from cortex.core.data.db.source_service import DataSourceCRUD
 from cortex.core.services.metrics import MetricExecutionService
 from cortex.core.data.modelling.model import DataModel
+from cortex.core.connectors.databases.clients.service import DBClientService
+from cortex.core.types.databases import DataSourceTypes
+from cortex.core.utils.schema_inference import auto_infer_semantic_types
 
 # Create router instance
 MetricsRouter = APIRouter()
@@ -50,7 +57,42 @@ async def create_metric(metric_data: MetricCreateRequest):
         finally:
             model_service.close()
         
-        # Create metric
+        # Auto-infer source_type and source_meta for measures, dimensions, and filters
+        measures = metric_data.measures
+        dimensions = metric_data.dimensions  
+        filters = metric_data.filters
+        
+        if metric_data.data_source_id and (measures or dimensions or filters):
+            try:
+                # Get data source schema for auto-inference
+                data_source = DataSourceCRUD.get_data_source(metric_data.data_source_id)
+                config = data_source.config
+                
+                # Add dialect for SQL databases if not present
+                if data_source.source_type in [DataSourceTypes.POSTGRESQL, DataSourceTypes.MYSQL, DataSourceTypes.ORACLE, DataSourceTypes.SQLITE]:
+                    config["dialect"] = data_source.source_type
+                
+                # Create database client and get schema
+                client = DBClientService.get_client(details=config, db_type=data_source.source_type)
+                client.connect()
+                schema = client.get_schema()
+                
+                # Auto-infer source types and metadata
+                inferred_measures, inferred_dimensions, inferred_filters = auto_infer_semantic_types(
+                    measures, dimensions, filters, schema
+                )
+                
+                # Use inferred values if available, otherwise keep original
+                measures = inferred_measures if inferred_measures is not None else measures
+                dimensions = inferred_dimensions if inferred_dimensions is not None else dimensions
+                filters = inferred_filters if inferred_filters is not None else filters
+                
+            except Exception as e:
+                # Schema inference failed, but continue with metric creation
+                # This ensures backward compatibility if schema inference has issues
+                print(f"Warning: Schema inference failed for metric {metric_data.name}: {str(e)}")
+        
+        # Create metric with potentially updated measures/dimensions/filters
         metric = SemanticMetric(
             data_model_id=metric_data.data_model_id,
             name=metric_data.name,
@@ -61,11 +103,11 @@ async def create_metric(metric_data: MetricCreateRequest):
             table_name=metric_data.table_name,
             data_source_id=metric_data.data_source_id,
             limit=metric_data.limit,
-            measures=metric_data.measures,
-            dimensions=metric_data.dimensions,
+            measures=measures,
+            dimensions=dimensions,
             joins=metric_data.joins,
             aggregations=metric_data.aggregations,
-            filters=metric_data.filters,
+            filters=filters,
 
             parameters=metric_data.parameters,
             public=metric_data.public,
@@ -213,10 +255,69 @@ async def update_metric(metric_id: UUID, metric_data: MetricUpdateRequest):
                     detail=f"Metric with ID {metric_id} not found"
                 )
             
+            # Auto-infer source_type and source_meta for updated measures, dimensions, and filters
+            metric_data_dict = metric_data.model_dump()
+            
+            # Only perform schema inference if measures, dimensions, or filters are being updated
+            if any(key in metric_data_dict and metric_data_dict[key] is not None 
+                   for key in ['measures', 'dimensions', 'filters']):
+                
+                # Get the data_source_id (either from update or existing metric)
+                data_source_id = metric_data_dict.get('data_source_id') or db_metric.data_source_id
+                
+                if data_source_id:
+                    try:
+                        # Get data source schema for auto-inference
+                        data_source = DataSourceCRUD.get_data_source(data_source_id)
+                        config = data_source.config
+                        
+                        # Add dialect for SQL databases if not present
+                        if data_source.source_type in [DataSourceTypes.POSTGRESQL, DataSourceTypes.MYSQL, DataSourceTypes.ORACLE, DataSourceTypes.SQLITE]:
+                            config["dialect"] = data_source.source_type
+                        
+                        # Create database client and get schema
+                        client = DBClientService.get_client(details=config, db_type=data_source.source_type)
+                        client.connect()
+                        schema = client.get_schema()
+                        
+                        # Get current or updated values
+                        measures_data = metric_data_dict.get('measures') or db_metric.measures
+                        dimensions_data = metric_data_dict.get('dimensions') or db_metric.dimensions
+                        filters_data = metric_data_dict.get('filters') or db_metric.filters
+                        
+                        # Convert dicts to Pydantic models for inference
+                        measures = None
+                        dimensions = None
+                        filters = None
+                        
+                        if measures_data:
+                            measures = [SemanticMeasure.model_validate(m) if isinstance(m, dict) else m for m in measures_data]
+                        if dimensions_data:
+                            dimensions = [SemanticDimension.model_validate(d) if isinstance(d, dict) else d for d in dimensions_data]
+                        if filters_data:
+                            filters = [SemanticFilter.model_validate(f) if isinstance(f, dict) else f for f in filters_data]
+                        
+                        # Auto-infer source types and metadata
+                        inferred_measures, inferred_dimensions, inferred_filters = auto_infer_semantic_types(
+                            measures, dimensions, filters, schema
+                        )
+                        
+                        # Update the metric_data_dict with inferred values (convert back to dicts for JSONB)
+                        if 'measures' in metric_data_dict and metric_data_dict['measures'] is not None:
+                            metric_data_dict['measures'] = [m.model_dump() if hasattr(m, 'model_dump') else m for m in inferred_measures] if inferred_measures else None
+                        if 'dimensions' in metric_data_dict and metric_data_dict['dimensions'] is not None:
+                            metric_data_dict['dimensions'] = [d.model_dump() if hasattr(d, 'model_dump') else d for d in inferred_dimensions] if inferred_dimensions else None
+                        if 'filters' in metric_data_dict and metric_data_dict['filters'] is not None:
+                            metric_data_dict['filters'] = [f.model_dump() if hasattr(f, 'model_dump') else f for f in inferred_filters] if inferred_filters else None
+                        
+                    except Exception as e:
+                        # Schema inference failed, but continue with metric update
+                        print(f"Warning: Schema inference failed for metric update {metric_id}: {str(e)}")
+            
             # Update metric
             # Handle explicit None values for fields that can be cleared (like limit)
             updates = {}
-            for k, v in metric_data.model_dump().items():
+            for k, v in metric_data_dict.items():
                 if v is not None or k in ['limit', 'filters']:  # Allow None for limit and filters
                     updates[k] = v
             updated_metric = metric_service.update_metric(metric_id, updates)

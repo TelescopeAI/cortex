@@ -58,12 +58,6 @@ class JoinProcessor(TSModel):
             condition_sql = f"{condition.left_table}.{condition.left_column} {condition.operator} {condition.right_table}.{condition.right_column}"
             conditions.append(condition_sql)
         
-        # Add additional conditions if present
-        if join.additional_conditions:
-            for condition in join.additional_conditions:
-                condition_sql = f"{condition.left_table}.{condition.left_column} {condition.operator} {condition.right_table}.{condition.right_column}"
-                conditions.append(condition_sql)
-        
         # Build the complete JOIN clause with proper indentation
         on_clause = " AND ".join(conditions)
         

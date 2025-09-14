@@ -10,6 +10,7 @@ import {
   CardContent
 } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
+import { Skeleton } from '~/components/ui/skeleton';
 import CreateDataSourceDialog from '~/components/CreateDataSourceDialog.vue';
 import { Calendar, Database, Globe, FileText, Settings } from 'lucide-vue-next';
 import { Button } from '~/components/ui/button';
@@ -55,9 +56,35 @@ function getCatalogColor(catalog: string) {
       <CreateDataSourceDialog v-if="selectedEnvironmentId" />
     </div>
     
-    <div v-if="loading" class="text-center py-8">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-      <p class="mt-2 text-gray-600">Loading data sources...</p>
+    <!-- Loading State -->
+    <div v-if="loading" class="grid grid-cols-2 lg:grid-cols-3 space-4">
+      <Card v-for="i in 6" :key="i" class="p-6 m-3">
+        <div class="flex items-start justify-between">
+          <div class="flex-1">
+            <!-- Icon and Title -->
+            <div class="flex items-center gap-2 mb-3">
+              <Skeleton class="h-6 w-24 rounded-full" />
+              <Skeleton class="h-6 w-full" />
+            </div>
+            
+            <!-- Badges -->
+            <div class="flex items-center gap-2 mb-3">
+              <Skeleton class="h-6 w-full rounded-full" />
+            </div>
+            
+            <!-- Description lines -->
+            <div class="space-y-2 mb-3">
+              <Skeleton class="h-4 w-full" />
+              <Skeleton class="h-4 w-full" />
+            </div>
+            
+            <!-- Date with icon -->
+            <div class="flex items-center gap-2 text-sm">
+              <Skeleton class="h-4 w-full" />
+            </div>
+          </div>
+        </div>
+      </Card>
     </div>
     
     <div v-else-if="error" class="text-center py-8">

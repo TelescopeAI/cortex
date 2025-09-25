@@ -11,6 +11,7 @@ from cortex.core.semantics.metrics.metric import SemanticMetric
 from cortex.core.data.modelling.model import DataModel
 from cortex.core.query.executor import QueryExecutor
 from cortex.core.types.databases import DataSourceTypes
+from cortex.core.semantics.metrics.modifiers import MetricModifiers
 
 
 class MetricExecutionService:
@@ -25,7 +26,8 @@ class MetricExecutionService:
         offset: Optional[int] = None,
         source_type: DataSourceTypes = DataSourceTypes.POSTGRESQL,
         grouped: Optional[bool] = None,
-        cache_preference: Optional[CachePreference] = None
+        cache_preference: Optional[CachePreference] = None,
+        modifiers: Optional[MetricModifiers] = None,
     ) -> Dict[str, Any]:
         """
         Execute a metric and return the result.
@@ -78,7 +80,8 @@ class MetricExecutionService:
                 source_type=source_type,
                 context_id=context_id,
                 grouped=grouped,
-                cache_preference=cache_preference
+                cache_preference=cache_preference,
+                modifiers=modifiers,
             )
             
             return result

@@ -393,7 +393,8 @@ async def execute_metric(metric_id: UUID, execution_request: MetricExecutionRequ
             limit=execution_request.limit,
             offset=execution_request.offset,
             grouped=execution_request.grouped,
-            cache_preference=getattr(execution_request, 'cache', None)
+            cache_preference=getattr(execution_request, 'cache', None),
+            modifiers=getattr(execution_request, 'modifiers', None),
         )
         
         return MetricExecutionResponse(

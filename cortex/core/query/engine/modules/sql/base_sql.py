@@ -13,6 +13,7 @@ from cortex.core.types.semantics.measure import SemanticMeasureType
 from cortex.core.semantics.output_formats import FormattingMap
 from cortex.core.types.time import TimeGrain
 from cortex.core.query.engine.processors.order_processor import OrderProcessor
+from cortex.core.utils.schema_inference import get_qualified_column_name
 
 
 class SQLQueryGenerator(BaseQueryGenerator):
@@ -127,17 +128,14 @@ class SQLQueryGenerator(BaseQueryGenerator):
 
     def _get_qualified_column_name(self, column_query: str, table_name: Optional[str] = None) -> str:
         """Get a fully qualified column name with table prefix when joins are present"""
-        # If no joins are present, return the column as-is
-        if not self.metric.joins:
-            return column_query
-        
-        # If column already contains a table prefix (has a dot), return as-is
-        if '.' in column_query:
-            return column_query
-        
-        # Use provided table name or default to metric's main table
+        has_joins = bool(self.metric.joins)
         table_prefix = table_name or self.metric.table_name
-        return f"{table_prefix}.{column_query}"
+        return get_qualified_column_name(
+            column_query=column_query,
+            table_name=table_name,
+            table_prefix=table_prefix,
+            has_joins=has_joins
+        )
 
     def _format_measure(self, measure: SemanticMeasure, formatting_map: FormattingMap) -> str:
         """Format a measure for the SELECT clause based on its type and formatting"""

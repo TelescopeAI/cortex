@@ -76,3 +76,23 @@ export interface SemanticFilter {
   max_value?: any
   formatting?: OutputFormat[]
 }
+
+export type SemanticJoinType = 'inner' | 'left' | 'right' | 'full'
+
+export interface SemanticJoinCondition {
+  left_table: string
+  left_column: string
+  right_table: string
+  right_column: string
+}
+
+export interface SemanticJoin {
+  name: string
+  description?: string
+  join_type: SemanticJoinType
+  left_table: string
+  right_table: string
+  conditions?: SemanticJoinCondition[]
+  on?: string
+  alias?: string
+}

@@ -6,7 +6,7 @@ import pytz
 from sqlalchemy.exc import IntegrityError
 
 from cortex.core.exceptions.workspaces import WorkspaceDoesNotExistError, NoWorkspacesExistError, WorkspaceAlreadyExistsError
-from cortex.core.stores.connection import LocalSession
+from cortex.core.storage.connection import CortexStorage
 from cortex.core.types.telescope import TSModel
 from cortex.core.workspaces.workspace import Workspace
 from cortex.core.workspaces.db.workspace import WorkspaceORM
@@ -16,7 +16,7 @@ class WorkspaceCRUD(TSModel):
 
     @staticmethod
     def get_workspace_by_name(name: str) -> Optional[Workspace]:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_workspace = db_session.query(WorkspaceORM).filter(
                 WorkspaceORM.name == name
@@ -31,7 +31,7 @@ class WorkspaceCRUD(TSModel):
 
     @staticmethod
     def add_workspace(workspace: Workspace) -> Workspace:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             # Check if workspace with same name exists
             existing_workspace = WorkspaceCRUD.get_workspace_by_name(workspace.name)
@@ -66,7 +66,7 @@ class WorkspaceCRUD(TSModel):
 
     @staticmethod
     def get_workspace(workspace_id: UUID) -> Workspace:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_workspace = db_session.query(WorkspaceORM).filter(
                 WorkspaceORM.id == workspace_id
@@ -81,7 +81,7 @@ class WorkspaceCRUD(TSModel):
 
     @staticmethod
     def get_all_workspaces() -> List[Workspace]:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_workspaces = db_session.query(WorkspaceORM).all()
             if not db_workspaces:
@@ -94,7 +94,7 @@ class WorkspaceCRUD(TSModel):
 
     @staticmethod
     def update_workspace(workspace: Workspace) -> Workspace:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_workspace = db_session.query(WorkspaceORM).filter(
                 WorkspaceORM.id == workspace.id
@@ -118,7 +118,7 @@ class WorkspaceCRUD(TSModel):
 
     @staticmethod
     def delete_workspace(workspace: Workspace) -> bool:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             result = db_session.query(WorkspaceORM).filter(
                 WorkspaceORM.id == workspace.id
@@ -133,7 +133,7 @@ class WorkspaceCRUD(TSModel):
 
     @staticmethod
     def get_workspace_by_name(name: str) -> Optional[Workspace]:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_workspace = db_session.query(WorkspaceORM).filter(
                 WorkspaceORM.name == name

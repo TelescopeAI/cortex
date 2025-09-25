@@ -9,7 +9,7 @@ from sqlalchemy import and_, desc
 
 from cortex.core.data.db.models import MetricORM, MetricVersionORM
 from cortex.core.semantics.metrics.metric import SemanticMetric
-from cortex.core.stores.connection import LocalSession
+from cortex.core.storage.connection import CortexStorage
 
 
 class MetricService:
@@ -19,7 +19,7 @@ class MetricService:
         if session:
             self.session = session
         else:
-            self.local_session = LocalSession()
+            self.local_session = CortexStorage()
             self.session = self.local_session.get_session()
     
     def create_metric(self, metric: SemanticMetric) -> MetricORM:

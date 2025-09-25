@@ -6,6 +6,54 @@ from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.filters import SemanticFilter
 
 
+def get_qualified_column_name(column_query: str, 
+                            table_name: Optional[str] = None,
+                            table_prefix: Optional[str] = None,
+                            has_joins: bool = False) -> str:
+    """
+    Get a fully qualified column name with table prefix when joins are present.
+    Automatically wraps column names containing spaces in quotes.
+    
+    Args:
+        column_query: The column name or expression
+        table_name: The table name for the column
+        table_prefix: Optional table prefix to use instead of table_name
+        has_joins: Whether joins are present (affects qualification logic)
+        
+    Returns:
+        Qualified column name with proper quoting
+    """
+    # Helper function to wrap column names with spaces in quotes
+    def _quote_if_needed(column: str) -> str:
+        if ' ' in column and not (column.startswith('"') and column.endswith('"')):
+            return f'"{column}"'
+        return column
+    
+    # Determine the prefix to use
+    prefix = table_prefix or table_name
+    
+    # If no joins are present and no prefix needed, return column as-is (but quote if needed)
+    if not has_joins and not prefix:
+        return _quote_if_needed(column_query)
+    
+    # If column already contains a table prefix (has a dot), handle it
+    if '.' in column_query:
+        if prefix:
+            # Replace the existing table prefix with the new one
+            column_part = column_query.split('.', 1)[1]  # Get everything after the first dot
+            quoted_column = _quote_if_needed(column_part)
+            return f"{prefix}.{quoted_column}"
+        else:
+            # No new prefix provided, return as-is (but quote if needed)
+            return _quote_if_needed(column_query)
+    else:
+        # Column doesn't have a table prefix
+        if prefix:
+            quoted_column = _quote_if_needed(column_query)
+            return f"{prefix}.{quoted_column}"
+        return _quote_if_needed(column_query)
+
+
 def map_database_type_to_source_type(db_type: str) -> ColumnSourceType:
     """
     Map database-specific type names to our standardized ColumnSourceType enum.

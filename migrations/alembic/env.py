@@ -6,7 +6,7 @@ from sqlalchemy import pool
 from alembic import context
 import sys
 
-from cortex.core.stores.connection import LocalSession
+from cortex.core.storage.connection import CortexStorage
 
 sys.path = ['', '..'] + sys.path[1:]
 
@@ -34,7 +34,7 @@ POSTGRES_INDEXES_NAMING_CONVENTION = {
     "pk": "%(table_name)s_pkey",
 }
 metadata = MetaData(naming_convention=POSTGRES_INDEXES_NAMING_CONVENTION)
-target_metadata = LocalSession().Base.metadata
+target_metadata = CortexStorage().Base.metadata
 
 count = 0
 for table in target_metadata.tables.values():
@@ -46,7 +46,7 @@ print("Total Tables: ", count)
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
-db_uri = LocalSession().connection.db_url.replace('%', '%%')
+db_uri = CortexStorage().connection.db_url.replace('%', '%%')
 config.set_main_option('sqlalchemy.url', r"{}".format(db_uri))
 
 

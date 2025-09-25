@@ -5,7 +5,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import mapped_column
 from sqlalchemy import ForeignKey
 
-from cortex.core.stores.sqlalchemy import BaseDBModel
+from cortex.core.storage.sqlalchemy import BaseDBModel
 
 
 class DataSourceORM(BaseDBModel):

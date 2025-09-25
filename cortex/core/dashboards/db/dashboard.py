@@ -4,7 +4,7 @@ import pytz
 from sqlalchemy import String, DateTime, UUID, Integer, Text, JSON
 from sqlalchemy.orm import mapped_column
 
-from cortex.core.stores.sqlalchemy import BaseDBModel
+from cortex.core.storage.sqlalchemy import BaseDBModel
 
 
 class DashboardORM(BaseDBModel):

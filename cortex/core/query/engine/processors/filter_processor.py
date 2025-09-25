@@ -5,6 +5,7 @@ from cortex.core.types.telescope import TSModel
 from cortex.core.semantics.filters import SemanticFilter
 from cortex.core.types.semantics.filter import FilterOperator, FilterType
 from cortex.core.query.engine.processors.output_processor import OutputProcessor
+from cortex.core.utils.schema_inference import get_qualified_column_name
 
 
 class FilterProcessor(TSModel):
@@ -79,8 +80,11 @@ class FilterProcessor(TSModel):
             )
         
         # Get qualified column name
-        column = FilterProcessor._get_qualified_column_name(
-            filter_obj.query, filter_obj.table, table_prefix
+        column = get_qualified_column_name(
+            column_query=filter_obj.query,
+            table_name=filter_obj.table,
+            table_prefix=table_prefix,
+            has_joins=False  # FilterProcessor doesn't have access to joins info
         )
         
         # Apply any IN_QUERY formatting to the column
@@ -100,28 +104,6 @@ class FilterProcessor(TSModel):
             column, filter_obj.operator, value, filter_obj
         )
 
-    @staticmethod
-    def _get_qualified_column_name(column_query: str, 
-                                  table_name: Optional[str] = None,
-                                  table_prefix: Optional[str] = None) -> str:
-        """Get a fully qualified column name with table prefix"""
-        # Determine the prefix to use
-        prefix = table_prefix or table_name
-        
-        if '.' in column_query:
-            # Column already has a table prefix
-            if prefix:
-                # Replace the existing table prefix with the new one
-                column_part = column_query.split('.', 1)[1]  # Get everything after the first dot
-                return f"{prefix}.{column_part}"
-            else:
-                # No new prefix provided, return as-is
-                return column_query
-        else:
-            # Column doesn't have a table prefix
-            if prefix:
-                return f"\"{prefix}\".{column_query}"
-            return column_query
 
     @staticmethod
     def _build_operator_condition(column: str, 

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "telescope-cortex"
-version = "0.0.1"
+version = "0.0.1a0"
 description = "Semantic Layer for Databases with optional API components"
 authors = ["Nilotpal Roychowdhury <nilotpal@jointelescope.com>"]
 license = "MIT"
@@ -15,8 +15,8 @@ sqlalchemy-bigquery = "^1.12.1"
 psycopg = {extras = ["binary", "pool"], version = "3.2.9"}
 pytz = "^2025.1"
 alembic = "^1.14.1"
-langgraph = "^0.6.3"
-langchain = {extras = ["openai"], version = "^0.3.27"}
+duckdb = "^1.4.0"
+duckdb-engine = "^0.11.1"
 
 
 [tool.poetry.group.api]

@@ -12,7 +12,7 @@
     </div>
     
     <!-- Text - only show if showText is true -->
-    <h1 v-if="showText" :class="textClasses">
+    <h1 v-if="showText" class="dark:text-white"  :class="textClasses">
       {{ text }}
     </h1>
   </div>

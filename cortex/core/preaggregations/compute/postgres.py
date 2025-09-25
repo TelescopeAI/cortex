@@ -11,7 +11,7 @@ from cortex.core.preaggregations.models import (
 from cortex.core.preaggregations.service import PreAggregationService, _sanitize_identifier
 from cortex.core.preaggregations import get_service
 from cortex.core.connectors.databases.clients.service import DBClientService
-from cortex.core.connectors.databases.clients.SQL.common import CommonSQLClient
+from cortex.core.connectors.databases.clients.SQL.common import CommonProtocolSQLClient
 from cortex.core.data.db.source_service import DataSourceCRUD
 from cortex.core.types.databases import DataSourceTypes
 from sqlalchemy import text
@@ -58,7 +58,7 @@ class PostgresComputeAdapter(ComputeAdapter):
         }
         print(f"[PREAGG] Connection details: host={conn_details['host']}, port={conn_details['port']}, database={conn_details['database']}")
         
-        client: CommonSQLClient = DBClientService.get_client(
+        client: CommonProtocolSQLClient = DBClientService.get_client(
             details=conn_details, 
             db_type=DataSourceTypes.POSTGRESQL
         )

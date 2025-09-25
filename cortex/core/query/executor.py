@@ -8,6 +8,11 @@ from cortex.core.data.modelling.model import DataModel
 from cortex.core.query.engine.factory import QueryGeneratorFactory
 from cortex.core.query.engine.processors.output_processor import OutputProcessor
 from cortex.core.semantics.metrics.metric import SemanticMetric
+from cortex.core.semantics.metrics.modifiers import (
+    MetricModifier,
+    MetricModifiers,
+    apply_metric_modifiers,
+)
 from cortex.core.types.databases import DataSourceTypes
 from cortex.core.data.db.source_service import DataSourceCRUD
 from cortex.core.connectors.databases.clients.service import DBClientService
@@ -46,7 +51,8 @@ class QueryExecutor(TSModel):
         source_type: DataSourceTypes = DataSourceTypes.POSTGRESQL,
         context_id: Optional[str] = None,
         grouped: Optional[bool] = None,
-        cache_preference: Optional[CachePreference] = None
+        cache_preference: Optional[CachePreference] = None,
+        modifiers: Optional[MetricModifiers] = None,
     ) -> Dict[str, Any]:
         """
         Execute a specific metric from a data model with comprehensive logging.
@@ -67,14 +73,17 @@ class QueryExecutor(TSModel):
             "grouped": grouped
         }
         
+        # Apply metric modifiers up-front so planning, generation and formatting see updated components
+        resolved_metric = apply_metric_modifiers(metric, modifiers)
+
         try:
             # Pre-aggregations: attempt planner routing if enabled and specs exist
             try:
                 preagg_env = load_env_config()
                 if preagg_env.enabled:
                     preagg_service = get_service()
-                    requested_dimensions = [d.query for d in (metric.dimensions or [])]
-                    requested_measures = [m.query for m in (metric.measures or [])]
+                    requested_dimensions = [d.query for d in (resolved_metric.dimensions or [])]
+                    requested_measures = [m.query for m in (resolved_metric.measures or [])]
                     
                     # Debug: Check how many specs are available
                     available_specs = preagg_service.list_specs(metric_id=metric.id)
@@ -92,8 +101,8 @@ class QueryExecutor(TSModel):
                             object_name = _sanitize_identifier(spec.name or f"mv_{spec.metric_id}")
                             qualified = f'"{spec.source.schema}"."{object_name}"' if getattr(spec.source, "schema", None) else f'"{object_name}"'
                             # Build a minimal binding mapping from dimension/measure names to canonical columns
-                            dimension_map = {d: f"{d}" for d in ([dim for dim in (metric.dimensions or []) if dim.query] and [dim.query for dim in (metric.dimensions or [])])}
-                            measure_map = {m: f"{m}" for m in ([ms for ms in (metric.measures or []) if ms.query] and [ms.query for ms in (metric.measures or [])])}
+                            dimension_map = {d: f"{d}" for d in ([dim for dim in (resolved_metric.dimensions or []) if dim.query] and [dim.query for dim in (resolved_metric.dimensions or [])])}
+                            measure_map = {m: f"{m}" for m in ([ms for ms in (resolved_metric.measures or []) if ms.query] and [ms.query for ms in (resolved_metric.measures or [])])}
                             binding = RollupBindingModel(
                                 qualified_table=qualified,
                                 dimension_columns=dimension_map,
@@ -102,7 +111,7 @@ class QueryExecutor(TSModel):
                                 pre_aggregation_spec_id=None,
                             ).to_query_binding()
                             # Use the standard generator but attach binding so FROM and SELECT map to rollup
-                            generator = QueryGeneratorFactory.create_generator(metric, source_type)
+                            generator = QueryGeneratorFactory.create_generator(resolved_metric, source_type)
                             generator.binding = binding  # type: ignore[attr-defined]
                             generated_query = generator.generate_query(parameters, limit, offset, grouped)
                             query_results = self._execute_database_query(generated_query, metric.data_source_id)
@@ -162,6 +171,7 @@ class QueryExecutor(TSModel):
                         "bucket": bucket,
                         "metric_version": getattr(metric, "version", None),
                         "compiled_query": getattr(metric, "compiled_query", None),
+                        "modifiers": [m.model_dump(mode="json", exclude_none=True) for m in modifiers] if modifiers else None,
                     }
                     cache_signature = build_query_signature(signature_payload)
                     cache_key = build_cache_key(cache_signature)
@@ -200,7 +210,6 @@ class QueryExecutor(TSModel):
                 cache_enabled = False
                 print(f"[CORTEX CACHE] read path error: {e}")
 
-            resolved_metric = metric
             enhanced_parameters = self._enhance_parameters_with_context(parameters, context_id)
             query_generator = QueryGeneratorFactory.create_generator(resolved_metric, source_type)
             generated_query = query_generator.generate_query(enhanced_parameters, limit, offset, grouped)

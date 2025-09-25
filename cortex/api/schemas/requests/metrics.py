@@ -11,6 +11,7 @@ from cortex.core.semantics.order_sequences import SemanticOrderSequence
 from cortex.core.semantics.refresh_keys import RefreshPolicy
 from cortex.core.semantics.cache import CachePreference
 from cortex.core.semantics.parameters import ParameterDefinition
+from cortex.core.semantics.metrics.modifiers import MetricModifiers
 
 
 class MetricCreateRequest(BaseModel):
@@ -78,6 +79,7 @@ class MetricExecutionRequest(BaseModel):
     grouped: Optional[bool] = Field(default=True, description="Whether to apply GROUP BY when dimensions are present")
     ordered: Optional[bool] = Field(default=True, description="Whether to apply ORDER BY for sorting results")
     cache: Optional[CachePreference] = None
+    modifiers: Optional[MetricModifiers] = None
 
 
 class MetricCloneRequest(BaseModel):

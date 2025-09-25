@@ -11,6 +11,7 @@ from cortex.core.exceptions.environments import EnvironmentDoesNotExistError
 from cortex.core.connectors.databases.clients.service import DBClientService
 from cortex.core.types.databases import DataSourceTypes
 from cortex.core.connectors.databases.SQL.humanizer import SchemaHumanizer
+from cortex.core.services import DataSourceSchemaService
 
 DataSourcesRouter = APIRouter()
 
@@ -182,32 +183,8 @@ async def ping_data_source(data_source_id: UUID):
 async def get_data_source_schema(data_source_id: UUID):
     """Get the schema information for a data source"""
     try:
-        # Get the data source configuration
-        data_source = DataSourceCRUD.get_data_source(data_source_id)
-        
-        # Extract connection details from config
-        config = data_source.config
-        
-        # Add dialect for SQL databases if not present
-        if data_source.source_type in [DataSourceTypes.POSTGRESQL, DataSourceTypes.MYSQL, DataSourceTypes.ORACLE, DataSourceTypes.SQLITE]:
-            config["dialect"] = data_source.source_type
-        
-        # Create database client and get schema
-        client = DBClientService.get_client(details=config, db_type=data_source.source_type)
-        client.connect()
-        
-        # Get schema information
-        schema = client.get_schema()
-        
-        return {
-            "status": "success",
-            "message": f"Successfully retrieved schema for data source {data_source.name}",
-            "data_source_id": data_source_id,
-            "data_source_name": data_source.name,
-            "source_type": data_source.source_type,
-            "schema": schema.model_dump() if hasattr(schema, 'model_dump') else schema
-        }
-        
+        service = DataSourceSchemaService()
+        return service.get_schema(data_source_id)
     except DataSourceDoesNotExistError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

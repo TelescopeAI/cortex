@@ -9,7 +9,7 @@ from cortex.core.consumers.consumer import Consumer
 from cortex.core.consumers.db.consumer import ConsumerORM
 from cortex.core.exceptions.consumers import ConsumerDoesNotExistError, ConsumerAlreadyExistsError
 from cortex.core.exceptions.environments import EnvironmentDoesNotExistError
-from cortex.core.stores.connection import LocalSession
+from cortex.core.storage.connection import CortexStorage
 from cortex.core.types.telescope import TSModel
 from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
 
@@ -18,7 +18,7 @@ class ConsumerCRUD(TSModel):
 
     @staticmethod
     def get_consumer_by_email_and_environment(email: str, environment_id: UUID) -> Optional[Consumer]:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_consumer = db_session.query(ConsumerORM).filter(
                 ConsumerORM.email == email,
@@ -34,7 +34,7 @@ class ConsumerCRUD(TSModel):
 
     @staticmethod
     def add_consumer(consumer: Consumer) -> Consumer:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             # Check if environment exists
             EnvironmentCRUD.get_environment(consumer.environment_id)
@@ -78,7 +78,7 @@ class ConsumerCRUD(TSModel):
 
     @staticmethod
     def get_consumer(consumer_id: UUID) -> Consumer:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_consumer = db_session.query(ConsumerORM).filter(
                 ConsumerORM.id == consumer_id
@@ -94,7 +94,7 @@ class ConsumerCRUD(TSModel):
 
     @staticmethod
     def get_consumers_by_environment(environment_id: UUID) -> List[Consumer]:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             # Verify environment exists
             EnvironmentCRUD.get_environment(environment_id)
@@ -111,7 +111,7 @@ class ConsumerCRUD(TSModel):
 
     @staticmethod
     def update_consumer(consumer: Consumer) -> Consumer:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             # Get existing consumer
             db_consumer = db_session.query(ConsumerORM).filter(
@@ -159,7 +159,7 @@ class ConsumerCRUD(TSModel):
 
     @staticmethod
     def delete_consumer(consumer_id: UUID) -> bool:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             result = db_session.query(ConsumerORM).filter(
                 ConsumerORM.id == consumer_id

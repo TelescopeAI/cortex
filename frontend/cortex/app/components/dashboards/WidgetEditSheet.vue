@@ -439,7 +439,7 @@ onMounted(() => {
       </SheetHeader>
 
       <!-- Main content area -->
-      <div class="flex-1 overflow-y-auto min-h-0">
+      <div class="flex-1 overflow-y-auto min-h-0 p-4">
         <!-- Configuration Panel -->
         <div :class="{ 'hidden': currentMode === 'view' }" class="space-y-6 py-4">
           <div class="space-y-4">
@@ -888,7 +888,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <SheetFooter class="mt-6">
+      <SheetFooter>
         <Button variant="outline" @click="close">
           <X class="w-4 h-4 mr-2" />
           Cancel

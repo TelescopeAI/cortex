@@ -5,6 +5,7 @@ class DataSourceTypes(str, Enum):
     POSTGRESQL = "postgresql"
     MYSQL = "mysql"
     SQLITE = "sqlite"
+    DUCKDB = "duckdb"
     ORACLE = "oracle"
     BIGQUERY = "bigquery"
     SNOWFLAKE = "snowflake"

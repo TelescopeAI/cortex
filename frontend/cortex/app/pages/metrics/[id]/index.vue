@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
+import { ref, computed, watch, onMounted } from 'vue'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card'
 import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
 import { Input } from '~/components/ui/input'
 import { Textarea } from '~/components/ui/textarea'
-import { Separator } from '~/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
 import { Switch } from '~/components/ui/switch'
 import { Label } from '~/components/ui/label'
-import { ArrowLeft, Edit, PlayCircle, Settings, Copy, History, Code, Save, Loader2, CheckCircle, XCircle, Database } from 'lucide-vue-next'
+import { ArrowLeft, Edit, PlayCircle, Settings, Copy, History, Code, Save, Loader2, CheckCircle, XCircle, Database, Plus, Trash2 } from 'lucide-vue-next'
+import type { SemanticOrderSequence } from '~/types/order'
 import ExecutionResultViewer from '@/components/ExecutionResultViewer.vue'
 import { toast } from 'vue-sonner'
 import SchemaSheet from '~/components/metric-builder/SchemaSheet.vue'
@@ -19,6 +19,14 @@ import KeyValuePairs from '~/components/KeyValuePairs.vue'
 import ContextIdBuilder from '~/components/ContextIdBuilder.vue'
 import MetricQueryHistory from '~/components/MetricQueryHistory.vue'
 import { useDateFormat, useTimeAgo, useNavigatorLanguage } from '@vueuse/core'
+import MeasuresBuilder from '~/components/metric-builder/MeasuresBuilder.vue'
+import DimensionsBuilder from '~/components/metric-builder/DimensionsBuilder.vue'
+import JoinsBuilder from '~/components/metric-builder/JoinsBuilder.vue'
+import FiltersBuilder from '~/components/metric-builder/FiltersBuilder.vue'
+import OrderingBuilder from '~/components/metric-builder/OrderingBuilder.vue'
+import { useDataSources } from '~/composables/useDataSources'
+import type { MetricModifier, MetricModifiers } from '~/types/metric-modifiers'
+import { createMetricModifier } from '~/types/metric-modifiers'
 
 // Page metadata
 definePageMeta({
@@ -45,6 +53,53 @@ const loading = ref(true)
 const executing = ref(false)
 const validating = ref(false)
 
+// Schema support for execution modifiers
+const tableSchema = ref<any>(null)
+const availableTables = computed(() => tableSchema.value?.tables || [])
+const availableColumns = computed(() => {
+  if (!tableSchema.value?.tables) return []
+  const columns: Array<{ name: string; type: string }> = []
+  tableSchema.value.tables.forEach((table: any) => {
+    table.columns?.forEach((column: any) => {
+      columns.push({ name: `${table.name}.${column.name}`, type: column.type })
+    })
+  })
+  return columns
+})
+
+const { getDataSourceSchema } = useDataSources()
+const schemaLoading = ref(false)
+const schemaError = ref<string | null>(null)
+
+const currentDataSourceId = computed(() =>
+  metric.value?.data_source_id || parentModel.value?.data_source_id || selectedDataSourceId.value || ''
+)
+
+const loadTableSchema = async (dataSourceId?: string) => {
+  if (!dataSourceId) {
+    tableSchema.value = null
+    return
+  }
+
+  schemaLoading.value = true
+  schemaError.value = null
+
+  try {
+    tableSchema.value = await getDataSourceSchema(dataSourceId)
+  } catch (error: any) {
+    console.error('Failed to load table schema:', error)
+    schemaError.value = error?.data?.detail || error?.message || 'Failed to load data source schema'
+    tableSchema.value = null
+  } finally {
+    schemaLoading.value = false
+  }
+}
+
+const reloadCurrentSchema = () => {
+  if (currentDataSourceId.value) {
+    loadTableSchema(currentDataSourceId.value)
+  }
+}
 
 // Schema sheet state
 const schemaSheetOpen = ref(false)
@@ -64,6 +119,70 @@ const groupedValue = ref(false)
 // Cache preference state
 const requestCacheEnabled = ref<boolean>(true)
 const requestCacheTtl = ref<number | undefined>(undefined)
+
+// Modifiers state
+const modifiersEnabled = ref(false)
+const modifiers = ref<MetricModifiers>([])
+
+const ensureModifierAt = (index: number) => {
+  if (!modifiers.value[index]) {
+    modifiers.value[index] = createMetricModifier()
+  }
+  return modifiers.value[index]
+}
+
+const addModifier = () => {
+  modifiers.value.push(createMetricModifier())
+}
+
+const removeModifier = (index: number) => {
+  modifiers.value.splice(index, 1)
+  if (modifiers.value.length === 0) {
+    modifiersEnabled.value = false
+  }
+}
+
+const clearModifierSection = (index: number, key: keyof MetricModifier) => {
+  const modifier = ensureModifierAt(index)
+  switch (key) {
+    case 'measures':
+      modifier.measures = []
+      break
+    case 'dimensions':
+      modifier.dimensions = []
+      break
+    case 'joins':
+      modifier.joins = []
+      break
+    case 'filters':
+      modifier.filters = []
+      break
+    case 'order':
+      modifier.order = []
+      break
+    case 'limit':
+      delete modifier.limit
+      break
+  }
+  modifiers.value[index] = { ...modifier }
+}
+
+const updateModifierLimit = (index: number, value?: number | null) => {
+  const modifier = modifiers.value[index]
+  if (!modifier) return
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    delete modifier.limit
+  } else {
+    modifier.limit = Number(value)
+  }
+  modifiers.value[index] = { ...modifier }
+}
+
+watch(modifiersEnabled, (enabled) => {
+  if (enabled && modifiers.value.length === 0) {
+    addModifier()
+  }
+})
 
 // Schema sheet functions
 const onOpenSchema = () => {
@@ -245,7 +364,20 @@ const onExecute = async () => {
     if (useGrouped.value) {
       executionRequest.grouped = groupedValue.value
     }
-    
+ 
+    if (modifiersEnabled.value && modifiers.value.length > 0) {
+      executionRequest.modifiers = modifiers.value.map((modifier) => {
+        const payload: any = {}
+        if (modifier.measures && modifier.measures.length > 0) payload.measures = modifier.measures
+        if (modifier.dimensions && modifier.dimensions.length > 0) payload.dimensions = modifier.dimensions
+        if (modifier.joins && modifier.joins.length > 0) payload.joins = modifier.joins
+        if (modifier.filters && modifier.filters.length > 0) payload.filters = modifier.filters
+        if (modifier.order && modifier.order.length > 0) payload.order = modifier.order as SemanticOrderSequence[]
+        if (modifier.limit !== undefined && modifier.limit !== null) payload.limit = modifier.limit
+        return payload
+      }).filter((entry: any) => Object.keys(entry).length > 0)
+    }
+
     const result = await executeMetric(metricId, executionRequest) as any
     executionResults.value = result
     
@@ -377,7 +509,16 @@ watch(() => metric.value, (newMetric) => {
 onMounted(() => {
   loadData().then(() => {
     initializeParameters()
+    if (currentDataSourceId.value) {
+      loadTableSchema(currentDataSourceId.value)
+    }
   })
+})
+
+watch(currentDataSourceId, (newId, oldId) => {
+  if (newId && newId !== oldId) {
+    loadTableSchema(newId)
+  }
 })
 </script>
 
@@ -785,6 +926,190 @@ onMounted(() => {
               
               <div v-else class="text-xs text-muted-foreground">
                 Using metric's default grouping setting: <span class="font-medium">{{ metric?.grouped ? 'Grouped' : 'Ungrouped' }}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <!-- Modifiers -->
+          <Card>
+            <CardHeader>
+              <div class="flex items-center justify-between">
+                <div>
+                  <CardTitle>Metric Modifiers</CardTitle>
+                  <CardDescription>
+                    Temporarily adjust measures, dimensions, joins, filters, ordering, or limits when executing this metric.
+                  </CardDescription>
+                </div>
+                <div class="flex items-center space-x-2">
+                  <Switch id="modifiers-enabled" v-model="modifiersEnabled" />
+                  <Label for="modifiers-enabled">Enable modifiers</Label>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent class="space-y-4">
+              <div class="text-xs text-muted-foreground">
+                <p>Modifiers are applied in-order. Each section upserts or overrides matching items on the base metric.</p>
+              </div>
+
+            <div v-if="modifiersEnabled" class="space-y-6">
+              <div v-if="schemaError" class="rounded border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                Failed to load data source schema: {{ schemaError }}. Some builder features may be limited.
+                <Button variant="link" size="sm" class="ml-2 p-0" @click="reloadCurrentSchema" :disabled="schemaLoading">
+                  {{ schemaLoading ? 'Reloading...' : 'Retry' }}
+                </Button>
+              </div>
+
+              <div v-if="schemaLoading" class="rounded border border-dashed p-4 text-sm text-muted-foreground">
+                Loading data source schema...
+              </div>
+
+              <div class="flex justify-end">
+                  <Button variant="outline" size="sm" @click="addModifier">
+                    <Plus class="h-4 w-4 mr-2" />
+                    Add Modifier
+                  </Button>
+                </div>
+
+                <div v-if="modifiers.length === 0" class="rounded border border-dashed p-6 text-center text-sm text-muted-foreground">
+                No modifiers defined. Add one to customize this execution.
+                </div>
+
+                <div v-for="(modifier, index) in modifiers" :key="`modifier-${index}`" class="space-y-4 rounded-lg border p-4">
+                  <div class="flex items-center justify-between">
+                    <div class="font-medium text-sm">Modifier {{ index + 1 }}</div>
+                    <div class="flex items-center space-x-2">
+                      <Button variant="ghost" size="sm" @click="() => removeModifier(index)">
+                        <Trash2 class="h-4 w-4" />
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div class="space-y-6">
+                    <div class="space-y-2">
+                      <div class="flex items-center justify-between">
+                        <Label>Measures</Label>
+                        <Button variant="ghost" size="sm" @click="() => clearModifierSection(index, 'measures')"
+                          :disabled="!modifier.measures || modifier.measures.length === 0">
+                          Clear
+                        </Button>
+                      </div>
+                      <MeasuresBuilder
+                        :table-schema="tableSchema"
+                        :available-columns="availableColumns"
+                        :measures="modifier.measures || []"
+                        @update:measures="(value: any) => {
+                          ensureModifierAt(index).measures = value
+                          modifiers[index] = { ...ensureModifierAt(index) }
+                        }"
+                      />
+                    </div>
+
+                    <div class="space-y-2">
+                      <div class="flex items-center justify-between">
+                        <Label>Dimensions</Label>
+                        <Button variant="ghost" size="sm" @click="() => clearModifierSection(index, 'dimensions')"
+                          :disabled="!modifier.dimensions || modifier.dimensions.length === 0">
+                          Clear
+                        </Button>
+                      </div>
+                      <DimensionsBuilder
+                        :table-schema="tableSchema"
+                        :dimensions="modifier.dimensions || []"
+                        @update:dimensions="(value: any) => {
+                          ensureModifierAt(index).dimensions = value
+                          modifiers[index] = { ...ensureModifierAt(index) }
+                        }"
+                      />
+                    </div>
+
+                  <div class="space-y-2">
+                      <div class="flex items-center justify-between">
+                        <Label>Joins</Label>
+                        <Button variant="ghost" size="sm" @click="() => clearModifierSection(index, 'joins')"
+                          :disabled="!modifier.joins || modifier.joins.length === 0">
+                          Clear
+                        </Button>
+                      </div>
+                      <JoinsBuilder
+                        :model-value="modifier.joins || []"
+                        :available-tables="availableTables"
+                        @update:model-value="(value: any) => {
+                          ensureModifierAt(index).joins = value
+                          modifiers[index] = { ...ensureModifierAt(index) }
+                        }"
+                      />
+                    </div>
+
+                  <div class="space-y-2">
+                      <div class="flex items-center justify-between">
+                        <Label>Filters</Label>
+                        <Button variant="ghost" size="sm" @click="() => clearModifierSection(index, 'filters')"
+                          :disabled="!modifier.filters || modifier.filters.length === 0">
+                          Clear
+                        </Button>
+                      </div>
+                      <FiltersBuilder
+                        :filters="modifier.filters || []"
+                        :table-schema="tableSchema"
+                        @update:filters="(value: any) => {
+                          ensureModifierAt(index).filters = value
+                          modifiers[index] = { ...ensureModifierAt(index) }
+                        }"
+                      />
+                    </div>
+
+                    <div class="space-y-2">
+                      <div class="flex items-center justify-between">
+                        <Label>Ordering</Label>
+                        <Button variant="ghost" size="sm" @click="() => clearModifierSection(index, 'order')"
+                          :disabled="!modifier.order || modifier.order.length === 0">
+                          Clear
+                        </Button>
+                      </div>
+                      <OrderingBuilder
+                        :order="modifier.order || []"
+                        :ordered="true"
+                        :available-columns="availableColumns"
+                        :measures="metric.value?.measures || []"
+                        :dimensions="metric.value?.dimensions || []"
+                        :available-tables="availableTables"
+                        @update:order="(value: any) => {
+                          ensureModifierAt(index).order = value
+                          modifiers[index] = { ...ensureModifierAt(index) }
+                        }"
+                      />
+                    </div>
+
+                    <div class="space-y-2">
+                      <Label>Limit Override</Label>
+                      <div class="flex items-center space-x-3">
+                        <Switch
+                          :id="`modifier-limit-toggle-${index}`"
+                          :model-value="modifier.limit !== undefined && modifier.limit !== null"
+                          @update:model-value="(enabled: boolean) => {
+                            if (enabled) {
+                              updateModifierLimit(index, 100)
+                            } else {
+                              clearModifierSection(index, 'limit')
+                            }
+                          }"
+                        />
+                        <div v-if="modifier.limit !== undefined && modifier.limit !== null" class="flex items-center space-x-2">
+                          <Input
+                            class="w-32"
+                            type="number"
+                            min="1"
+                            placeholder="100"
+                            :model-value="modifier.limit ?? ''"
+                            @input="(event: any) => updateModifierLimit(index, parseInt(event?.target?.value || '0', 10))"
+                          />
+                          <span class="text-sm text-muted-foreground">rows</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

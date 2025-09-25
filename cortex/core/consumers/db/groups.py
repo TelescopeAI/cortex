@@ -3,7 +3,7 @@ import pytz
 from sqlalchemy import String, JSON, ForeignKey, Table, Column, DateTime, UUID
 from sqlalchemy.orm import mapped_column, relationship
 
-from cortex.core.stores.sqlalchemy import BaseDBModel
+from cortex.core.storage.sqlalchemy import BaseDBModel
 
 # Association table for many-to-many relationship
 consumer_group_members = Table(

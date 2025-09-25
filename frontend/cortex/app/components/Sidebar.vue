@@ -187,10 +187,10 @@ watch([selectedWorkspaceId, selectedEnvironmentId], ([workspaceId, environmentId
           <BarChart3 class="w-4 h-4 mr-2" />
           Dashboards
         </SidebarMenuButton>
-        <SidebarMenuButton @click="router.push('/pre-aggregations')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
+        <!-- <SidebarMenuButton @click="router.push('/pre-aggregations')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
           <Zap class="w-4 h-4 mr-2" />
           Pre-Aggregations
-        </SidebarMenuButton>
+        </SidebarMenuButton> -->
         <SidebarMenuButton @click="router.push('/consumers')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
           <Users class="w-4 h-4 mr-2" />
           Consumers

@@ -56,13 +56,13 @@
     <!-- Execution Stats -->
     <Card v-if="executionStats">
       <CardHeader>
-        <CardTitle class="text-base">Execution Statistics</CardTitle>
+        <CardTitle class="text-base">Execution Summary</CardTitle>
       </CardHeader>
       <CardContent>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div class="text-center">
             <div class="text-2xl font-bold text-primary">{{ executionStats.total_executions }}</div>
-            <div class="text-sm text-muted-foreground">Total Executions</div>
+            <div class="text-sm text-muted-foreground">Total</div>
           </div>
           <div class="text-center">
             <div class="text-2xl font-bold text-green-600">{{ executionStats.successful_executions }}</div>

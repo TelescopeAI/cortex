@@ -10,7 +10,7 @@ from sqlalchemy import and_, desc
 from cortex.core.data.db.models import DataModelORM, ModelVersionORM, MetricORM
 from cortex.core.data.modelling.model import DataModel
 from cortex.core.data.modelling.model_version import ModelVersion
-from cortex.core.storage.connection import CortexStorage
+from cortex.core.storage.store import CortexStorage
 
 
 class DataModelService:

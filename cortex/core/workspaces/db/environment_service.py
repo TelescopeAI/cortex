@@ -11,7 +11,7 @@ from cortex.core.workspaces.environments.environment import WorkspaceEnvironment
 from cortex.core.exceptions.environments import (EnvironmentAlreadyExistsError, EnvironmentDoesNotExistError,
                                                  NoEnvironmentsExistError)
 from cortex.core.exceptions.workspaces import WorkspaceDoesNotExistError
-from cortex.core.storage.connection import CortexStorage
+from cortex.core.storage.store import CortexStorage
 
 
 class EnvironmentCRUD:

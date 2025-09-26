@@ -3,19 +3,16 @@ from typing import List, Optional
 from uuid import UUID, uuid4
 
 import pytz
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
-from cortex.core.exceptions.dashboards import (
-    DashboardDoesNotExistError, DashboardAlreadyExistsError,
-    DashboardViewDoesNotExistError, DashboardSectionDoesNotExistError,
-    DashboardWidgetDoesNotExistError, InvalidDefaultViewError
-)
-from cortex.core.storage.connection import CortexStorage
-from cortex.core.types.telescope import TSModel
 from cortex.core.dashboards.dashboard import Dashboard
 from cortex.core.dashboards.db.dashboard import DashboardORM
-from sqlalchemy.orm.attributes import flag_modified
+from cortex.core.exceptions.dashboards import (
+    DashboardDoesNotExistError, DashboardAlreadyExistsError,
+    InvalidDefaultViewError
+)
+from cortex.core.storage.store import CortexStorage
+from cortex.core.types.telescope import TSModel
 
 
 class DashboardCRUD(TSModel):

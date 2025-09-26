@@ -22,6 +22,23 @@ class DuckDBClient(DatabaseClient):
     def close(self) -> None:
         if self.connection is not None:
             self.connection.close()
+            self.connection = None
+
+    def get_uri(self) -> str:
+        return self._build_uri()
+
+    @property
+    def db_url(self) -> str:
+        return self._build_uri()
+
+    def _build_uri(self) -> str:
+        # Produce a duckdb-engine compatible URL for Alembic/SQLAlchemy
+        if self.credentials.in_memory:
+            return "duckdb:///:memory:"
+        from pathlib import Path
+        file_path = self.credentials.file_path or "./cortex.duckdb"
+        abs_path = Path(file_path).expanduser().resolve().as_posix()
+        return f"duckdb:///{abs_path}"
 
     def query(self, sql: str, params: Optional[Mapping[str, Any]] = None) -> Any:
         try:

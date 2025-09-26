@@ -14,9 +14,9 @@ sqlalchemy = "^2.0.38"
 sqlalchemy-bigquery = "^1.12.1"
 psycopg = {extras = ["binary", "pool"], version = "3.2.9"}
 pytz = "^2025.1"
-alembic = "^1.14.1"
+alembic = "^1.16.5"
 duckdb = "^1.4.0"
-duckdb-engine = "^0.11.1"
+duckdb-engine = "^0.17.0"
 
 
 [tool.poetry.group.api]

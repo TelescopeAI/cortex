@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from cortex.core.config.execution_env import ExecutionEnv
 from cortex.core.connectors.databases.clients.service import DBClientService
 from cortex.core.storage.sqlalchemy import BaseDBModel
 from cortex.core.types.databases import DataSourceTypes
@@ -13,10 +14,13 @@ from cortex.core.utils.json import json_dumps
 
 
 class CortexStorage:
+    Base = BaseDBModel
+
     def __init__(self):
         self._env = _StorageEnv.from_environ()
         self._client = self._create_client()
         self._session_factory: Optional[sessionmaker] = None
+        self.connection = self._client
 
     @cached_property
     def client(self):
@@ -65,10 +69,20 @@ class CortexStorage:
                 f"@{self._env.host}:{self._env.port}/{self._env.database}"
             )
         if self._env.db_type == DataSourceTypes.SQLITE:
-            return "sqlite+pysqlite:///:memory:" if self._env.in_memory else f"sqlite+pysqlite:///{self._env.file_path}"
+            if self._env.in_memory:
+                return "sqlite+pysqlite:///:memory:"
+            from pathlib import Path
+            sqlite_path = Path(str(self._env.file_path or "./cortex.db")).expanduser().resolve()
+            return f"sqlite+pysqlite:///{sqlite_path.as_posix()}"
         if self._env.db_type == DataSourceTypes.DUCKDB:
-            return "duckdb:///:memory:" if self._env.in_memory else f"duckdb:///{self._env.file_path}"
+            raise RuntimeError(
+                "DuckDB SQLAlchemy sessions are temporarily disabled. Set CORTEX_DB_TYPE to 'sqlite' or 'postgresql'."
+            )
         raise ValueError(f"Unsupported storage type: {self._env.db_type}")
+
+    @property
+    def db_url(self) -> str:
+        return self._build_sqlalchemy_url()
 
 
 class _StorageEnv:
@@ -85,16 +99,16 @@ class _StorageEnv:
 
     @classmethod
     def from_environ(cls) -> "_StorageEnv":
-        db_type = DataSourceTypes(os.getenv("CORTEX_DB_TYPE", DataSourceTypes.POSTGRESQL.value))
+        db_type = DataSourceTypes(ExecutionEnv.get_key("CORTEX_DB_TYPE", DataSourceTypes.POSTGRESQL.value))
         return cls(
             db_type=db_type,
-            host=os.getenv("CORTEX_DB_HOST"),
-            port=int(os.getenv("CORTEX_DB_PORT", "0")) or None,
-            username=os.getenv("CORTEX_DB_USERNAME"),
-            password=os.getenv("CORTEX_DB_PASSWORD"),
-            database=os.getenv("CORTEX_DB_NAME"),
-            file_path=os.getenv("CORTEX_DB_FILE"),
-            in_memory=os.getenv("CORTEX_DB_MEMORY", "false").lower() == "true",
+            host = ExecutionEnv.get_key("CORTEX_DB_HOST"),
+            port = int(ExecutionEnv.get_key("CORTEX_DB_PORT", "0")) or None,
+            username = ExecutionEnv.get_key("CORTEX_DB_USERNAME"),
+            password = ExecutionEnv.get_key("CORTEX_DB_PASSWORD"),
+            database = ExecutionEnv.get_key("CORTEX_DB_NAME"),
+            file_path = ExecutionEnv.get_key("CORTEX_DB_FILE"),
+            in_memory = str(ExecutionEnv.get_key("CORTEX_DB_MEMORY", "false")).lower() == "true",
         )
 
     def to_dict(self) -> dict:

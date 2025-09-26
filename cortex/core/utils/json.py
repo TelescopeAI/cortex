@@ -5,11 +5,13 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any
 from uuid import UUID
-
+from cortex.core.types.telescope import TSModel
 
 def json_default_encoder(value: Any) -> Any:
     if isinstance(value, (datetime, date)):
         return value.isoformat()
+    if isinstance(value, TSModel):
+        return value.model_dump()
     if isinstance(value, UUID):
         return str(value)
     if isinstance(value, Decimal):

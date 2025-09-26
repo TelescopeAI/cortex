@@ -6,10 +6,8 @@ from sqlalchemy import pool
 from alembic import context
 import sys
 
-from cortex.core.storage.connection import CortexStorage
-
+from cortex.core.storage.store import CortexStorage
 sys.path = ['', '..'] + sys.path[1:]
-
 
 
 
@@ -46,7 +44,26 @@ print("Total Tables: ", count)
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
-db_uri = CortexStorage().connection.db_url.replace('%', '%%')
+# Resolve DB URI and normalize file-based paths for SQLite/DuckDB to project root
+from pathlib import Path
+from sqlalchemy.engine import make_url
+
+raw_uri = CortexStorage().connection.db_url
+try:
+    parsed = make_url(raw_uri)
+    driver = parsed.drivername or ""
+    is_sqlite = "sqlite" in driver
+    if "duckdb" in driver:
+        raise RuntimeError("DuckDB migrations are temporarily unsupported in env.py. Use SQLite/Postgres/MySQL.")
+    if is_sqlite and parsed.database and parsed.database != ":memory:":
+        db_path = Path(parsed.database)
+        if not db_path.is_absolute():
+            project_root = Path(__file__).resolve().parents[2]
+            abs_path = (project_root / db_path).resolve()
+            parsed = parsed.set(database=abs_path.as_posix())
+    db_uri = str(parsed).replace('%', '%%')
+except Exception:
+    db_uri = raw_uri.replace('%', '%%')
 config.set_main_option('sqlalchemy.url', r"{}".format(db_uri))
 
 
@@ -63,11 +80,13 @@ def run_migrations_offline() -> None:
 
     """
     url = config.get_main_option("sqlalchemy.url")
+    is_sqlite = url is not None and url.startswith("sqlite")
     context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        render_as_batch=is_sqlite,
     )
 
     with context.begin_transaction():
@@ -90,8 +109,13 @@ def run_migrations_online():
     # print("DB URL: ", db_uri)
 
     with connectable.connect() as connection:
+        is_sqlite = connection.dialect.name == "sqlite"
         context.configure(
-            connection=connection, target_metadata=target_metadata, include_schemas=True, compare_type=True
+            connection=connection,
+            target_metadata=target_metadata,
+            include_schemas=True,
+            compare_type=True,
+            render_as_batch=is_sqlite,
         )
 
         with context.begin_transaction():

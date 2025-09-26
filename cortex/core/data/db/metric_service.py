@@ -9,7 +9,7 @@ from sqlalchemy import and_, desc
 
 from cortex.core.data.db.models import MetricORM, MetricVersionORM
 from cortex.core.semantics.metrics.metric import SemanticMetric
-from cortex.core.storage.connection import CortexStorage
+from cortex.core.storage.store import CortexStorage
 
 
 class MetricService:

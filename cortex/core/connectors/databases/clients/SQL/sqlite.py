@@ -38,6 +38,13 @@ class SQLiteClient(DatabaseClient):
             self.engine.dispose()
             self.engine = None
 
+    def get_uri(self) -> str:
+        return self._build_uri()
+
+    @property
+    def db_url(self) -> str:
+        return self._build_uri()
+
     def query(self, sql: str, params: Optional[Mapping[str, Any]] = None) -> Any:
         try:
             if self.client is None:

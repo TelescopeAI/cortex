@@ -9,7 +9,7 @@ from cortex.core.consumers.consumer import Consumer
 from cortex.core.consumers.db.consumer import ConsumerORM
 from cortex.core.exceptions.consumers import ConsumerDoesNotExistError, ConsumerAlreadyExistsError
 from cortex.core.exceptions.environments import EnvironmentDoesNotExistError
-from cortex.core.storage.connection import CortexStorage
+from cortex.core.storage.store import CortexStorage
 from cortex.core.types.telescope import TSModel
 from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
 

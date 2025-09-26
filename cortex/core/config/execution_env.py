@@ -17,8 +17,8 @@ class ExecutionEnv(TSModel):
     profiling: bool = False
 
     @staticmethod
-    def get_key(key: str) -> str | bool:
-        return os.getenv(key, False)
+    def get_key(key: str, default: str | bool | None = None) -> str | bool | None:
+        return os.getenv(key, default)
 
     @staticmethod
     def get_env():

@@ -6,7 +6,7 @@ import pytz
 from sqlalchemy.exc import IntegrityError
 
 from cortex.core.exceptions.workspaces import WorkspaceDoesNotExistError, NoWorkspacesExistError, WorkspaceAlreadyExistsError
-from cortex.core.storage.connection import CortexStorage
+from cortex.core.storage.store import CortexStorage
 from cortex.core.types.telescope import TSModel
 from cortex.core.workspaces.workspace import Workspace
 from cortex.core.workspaces.db.workspace import WorkspaceORM

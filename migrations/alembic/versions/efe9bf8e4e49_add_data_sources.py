@@ -9,7 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+from cortex.core.types.databases import DatabaseTypeResolver
 
 # revision identifiers, used by Alembic.
 revision: str = 'efe9bf8e4e49'
@@ -28,7 +28,7 @@ def upgrade() -> None:
     sa.Column('description', sa.String(), nullable=True),
     sa.Column('source_catalog', sa.String(), nullable=False),
     sa.Column('source_type', sa.String(), nullable=False),
-    sa.Column('config', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+    sa.Column('config', DatabaseTypeResolver.json_type(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.Column('updated_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['environment_id'], ['environments.id'], ),

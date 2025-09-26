@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from cortex.core.data.db.sources import DataSourceORM
 from cortex.core.data.sources.data_sources import DataSource
 from cortex.core.exceptions.data.sources import DataSourceAlreadyExistsError, DataSourceDoesNotExistError
-from cortex.core.storage.connection import CortexStorage
+from cortex.core.storage.store import CortexStorage
 from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
 
 

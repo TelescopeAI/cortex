@@ -4,7 +4,7 @@ from uuid import UUID
 
 import pytz
 
-from cortex.core.storage.connection import CortexStorage
+from cortex.core.storage.store import CortexStorage
 from cortex.core.types.telescope import TSModel
 from cortex.core.query.history.logger import QueryLog, QueryCacheMode
 from cortex.core.query.db.models import QueryHistoryORM

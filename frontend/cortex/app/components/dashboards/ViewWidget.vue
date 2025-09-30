@@ -8,6 +8,7 @@ interface Props {
   dashboardId: string
   viewAlias: string
   widget: any
+  refreshKey?: number
 }
 
 interface Emits {
@@ -54,6 +55,8 @@ const is2DChart = computed(() => {
 
 onMounted(load)
 watch(() => [props.dashboardId, props.viewAlias, props.widget?.alias], load)
+// Refresh when the parent increments the refreshKey
+watch(() => props.refreshKey, () => load())
 </script>
 
 <template>

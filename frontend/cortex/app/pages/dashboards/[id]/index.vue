@@ -10,7 +10,7 @@ import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
 import { toast } from 'vue-sonner'
 import { 
-  ArrowLeft, Settings, Play, MoreHorizontal, Edit, Trash2, 
+  ArrowLeft, Settings, MoreHorizontal, Edit, Trash2, 
   Plus, RefreshCw, Clock, Eye, Layout, GripVertical 
 } from 'lucide-vue-next'
 import type { Dashboard, DashboardView, DashboardWidget, DashboardSection, VisualizationConfig } from '~/types/dashboards'
@@ -39,7 +39,6 @@ const {
   error, 
   fetchDashboard, 
   updateDashboard,
-  executeDashboard,
   setDefaultView,
   getDefaultView,
   getViewById 
@@ -51,6 +50,7 @@ const selectedViewId = ref<string>('')
 const isExecuting = ref(false)
 const executionResults = ref<any>(null)
 const lastExecutionTime = ref<string>('')
+const refreshKey = ref(0)
 
 // Dialogs
 const showAddViewDialog = ref(false)
@@ -217,18 +217,19 @@ async function loadDashboard() {
 }
 
 async function executeDashboardView() {
-  if (!dashboard.value || !selectedViewId.value) return
-  
+  // Repurposed as Refresh: trigger all widgets to reload
+  if (!currentView.value) return
   isExecuting.value = true
   try {
-    const result = await executeDashboard((dashboard.value!).id, selectedViewId.value)
-    executionResults.value = result
+    refreshKey.value++
+    executionResults.value = null
     lastExecutionTime.value = new Date().toLocaleTimeString()
-    toast.success('Dashboard executed successfully')
+    toast.success('Refreshed all widgets')
   } catch (err) {
-    toast.error('Failed to execute dashboard')
+    toast.error('Failed to refresh widgets')
   } finally {
-    isExecuting.value = false
+    // small delay for UX so spinner is visible
+    setTimeout(() => { isExecuting.value = false }, 300)
   }
 }
 
@@ -568,7 +569,7 @@ useHead({
           class="gap-2"
         >
           <RefreshCw :class="{ 'animate-spin': isExecuting, 'w-4 h-4': true }" />
-          {{ isExecuting ? 'Executing...' : 'Execute' }}
+          {{ isExecuting ? 'Refreshing...' : 'Refresh' }}
         </Button>
       </div>
     </div>
@@ -599,6 +600,7 @@ useHead({
       :view="currentView"
       :execution-results="executionResults"
       :last-execution-time="lastExecutionTime"
+      :refresh-key="refreshKey"
       @execute-widget="(widgetId) => { toast.info('Widget execution coming soon') }"
       @widget-updated="() => { loadDashboard() }"
       @add-section="() => { showAddSectionDialog = true }"

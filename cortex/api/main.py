@@ -17,6 +17,7 @@ from __version__ import version
 from cortex.api.docs.meta import DocsMeta
 from cortex.api.routers import PUBLIC_ROUTES
 from cortex.core.config.execution_env import ExecutionEnv
+from cortex.core.storage.migrations import auto_apply_migrations
 from fastapi.logger import logger as fastapi_logger
 
 API_PREFIX = "/api"
@@ -31,19 +32,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
 
-class CORSMiddlewareCustom(BaseHTTPMiddleware):
-    def __init__(self, app: ASGIApp):
-        super().__init__(app)
-
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        response.headers["Access-Control-Allow-Origin"] = "https://doorbeen.dev"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-        response.headers[
-            "Access-Control-Allow-Headers"] = "Access-Control-Allow-Headers, Content-Type, Authorization, Accept, Access-Control-Allow-Origin, Set-Cookie"
-        return response
-
 
 if ExecutionEnv.https_enabled():
     SSL_KEYFILE = os.getenv("LOCAL_SSL_KEY")
@@ -51,15 +39,32 @@ if ExecutionEnv.https_enabled():
 
 ORIGINS = os.getenv("ALLOWED_ORIGINS").split(",")
 
-app = FastAPI(title="Telescope Semantic API", version=version, description=DocsMeta.API_GLOBAL_DESCRIPTION,
+app = FastAPI(title="Cortex Semantic API", version=version, description=DocsMeta.API_GLOBAL_DESCRIPTION,
               docs_url=None, redoc_url=None, openapi_url=API_URL_PREFIX + "/openapi.json",
               openapi_tags=DocsMeta.TAGS_META,
-              contact={"name": "Telescope Support", "url": "https://jointelescope.com",
+              contact={"name": "Telescope Team", "url": "https://jointelescope.com",
                        "email": "info@jointelescope.com"})
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
-# app.add_middleware(CORSMiddlewareCustom)
+@app.on_event("startup")
+async def startup_event():
+    """Handle application startup, including database migrations."""
+    logger = logging.getLogger(__name__)
+    logger.info("Starting Cortex API server...")
+    
+    # Apply database migrations if auto-migration is enabled
+    try:
+        success = auto_apply_migrations()
+        if success:
+            logger.info("Database migration check completed successfully.")
+        else:
+            logger.error("Database migration failed. Please check your database configuration.")
+            # Note: We don't exit here to allow the application to start for debugging
+    except Exception as e:
+        logger.error(f"Error during database migration: {e}")
+        # Note: We don't exit here to allow the application to start for debugging
+
 
 # FastAPIInstrumentor.instrument_app(app)
 if not ExecutionEnv.is_local():
@@ -93,13 +98,28 @@ for route in PUBLIC_ROUTES:
 
 @app.get('/', tags=["Health"])
 def health():
+    """Basic health check endpoint."""
     return {"status": "running"}
+
+
+@app.get('/health', tags=["Health"])
+def health_detailed():
+    """Detailed health check endpoint including migration status."""
+    from cortex.core.storage.migrations import get_migration_manager
+    
+    migration_manager = get_migration_manager()
+    migration_status = migration_manager.get_migration_status()
+    
+    return {
+        "status": "running",
+        "migration_status": migration_status
+    }
 
 
 # @app.options("/{path:path}")
 # async def options_handler():
 #     return JSONResponse(content="OK", headers={
-#         "Access-Control-Allow-Origin": "https://doorbeen.dev",
+#         "Access-Control-Allow-Origin": "https://cortex.jointelescope.com",
 #         "Access-Control-Allow-Credentials": "true",
 #         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 #         "Access-Control-Allow-Headers": "Access-Control-Allow-Headers, Content-Type, Authorization, Accept,"

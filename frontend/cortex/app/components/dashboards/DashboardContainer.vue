@@ -15,6 +15,7 @@ interface Props {
   view: DashboardView
   executionResults?: any
   lastExecutionTime?: string
+  refreshKey?: number
 }
 
 interface Emits {
@@ -172,6 +173,7 @@ function getWidgetExecutionResult(widgetId: string) {
         :draggable="false"
         :dashboard-id="props.dashboard.id as any"
         :view-alias="props.view.alias"
+        :refresh-key="props.refreshKey"
         @execute-widget="executeWidget"
         @widget-updated="handleWidgetUpdate"
         @section-updated="handleSectionUpdate"

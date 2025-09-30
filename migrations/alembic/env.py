@@ -48,7 +48,7 @@ print("Total Tables: ", count)
 from pathlib import Path
 from sqlalchemy.engine import make_url
 
-raw_uri = CortexStorage().connection.db_url
+raw_uri = CortexStorage().db_url
 try:
     parsed = make_url(raw_uri)
     driver = parsed.drivername or ""

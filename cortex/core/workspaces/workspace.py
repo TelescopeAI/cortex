@@ -2,10 +2,12 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 import pytz
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
+
+from cortex.core.types.telescope import TSModel
 
 
-class Workspace(BaseModel):
+class Workspace(TSModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID = -1
     name: str

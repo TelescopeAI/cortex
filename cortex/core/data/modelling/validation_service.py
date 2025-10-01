@@ -2,7 +2,6 @@ from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 
 from cortex.core.data.modelling.model import DataModel
-from cortex.core.data.modelling.metric_service import MetricService
 from cortex.core.semantics.metrics.metric import SemanticMetric
 from cortex.core.types.telescope import TSModel
 
@@ -170,27 +169,9 @@ class ValidationService(TSModel):
     @staticmethod
     def _validate_dependencies(data_model: DataModel) -> List[str]:
         """Validate metric dependencies and extensions."""
-        errors = []
-        
-        try:
-            metrics = MetricService.extract_metrics_from_model(data_model)
-            
-            for metric in metrics:
-                if metric.extends:
-                    # Check if the extended metric exists
-                    base_metric = MetricService.get_metric_by_alias(data_model, metric.extends)
-                    if not base_metric:
-                        errors.append(f"Metric '{metric.name}' extends '{metric.extends}' which does not exist")
-                    
-                    # Check for circular dependencies
-                    dependencies = MetricService.get_metric_dependencies(data_model, metric.alias or metric.name)
-                    if metric.alias in dependencies or metric.name in dependencies:
-                        errors.append(f"Circular dependency detected for metric '{metric.name}'")
-        
-        except Exception as e:
-            errors.append(f"Error validating dependencies: {str(e)}")
-        
-        return errors
+        # Dependency validation is now handled at the metric level via the metrics API.
+        # The modelling MetricService has been removed.
+        return []
     
     @staticmethod
     def validate_metric_execution(metric: SemanticMetric, data_model: DataModel) -> ValidationResult:

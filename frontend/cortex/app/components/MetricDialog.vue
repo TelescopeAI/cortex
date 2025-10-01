@@ -189,10 +189,16 @@ const { getDataSourceSchema } = useDataSources()
 const isLoading = ref(false)
 const activeTab = ref('basic')
 const schemaData = ref<{
+  name?: string
+  alias?: string
+  title?: string
+  description?: string
   table_name?: string
   query?: string
   data_source_id?: string
   limit?: number
+  ordered?: boolean
+  order?: any[]
   measures?: any[]
   dimensions?: any[]
   joins?: any[]
@@ -258,7 +264,10 @@ const resetForm = () => {
   }
   aliasManuallyEdited.value = false
   aliasError.value = ''
-  schemaData.value = {}
+  schemaData.value = {
+    ordered: true,
+    order: []
+  }
   tableSchema.value = null
   selectedDataSourceId.value = ''
 }
@@ -312,10 +321,16 @@ const loadMetricData = async (metricId: string) => {
       
       // Populate schema data
       schemaData.value = {
+        name: metric.name,
+        alias: metric.alias || '',
+        title: metric.title || '',
+        description: metric.description || '',
         table_name: metric.table_name,
         query: metric.query,
         data_source_id: metric.data_source_id,
         limit: metric.limit,
+        ordered: metric.ordered,
+        order: metric.order || [],
         measures: metric.measures || [],
         dimensions: metric.dimensions || [],
         joins: metric.joins || [],
@@ -354,13 +369,14 @@ const handleSubmit = async () => {
   try {
     const metricData = {
       data_model_id: form.value.data_model_id,
-      name: form.value.name.trim(),
-      alias: form.value.alias.trim() || undefined,
-      title: form.value.title.trim() || undefined,
-      description: form.value.description.trim() || undefined,
       public: form.value.public,
-      // Include schema data from the builder
-      ...schemaData.value
+      // Include all data from the schema builder (including basic fields)
+      ...schemaData.value,
+      // Override with form values for fields that are only in the form
+      name: schemaData.value.name?.trim() || form.value.name.trim(),
+      alias: schemaData.value.alias?.trim() || form.value.alias.trim() || undefined,
+      title: schemaData.value.title?.trim() || form.value.title.trim() || undefined,
+      description: schemaData.value.description?.trim() || form.value.description.trim() || undefined,
     }
 
     if (props.isEditing && props.metricToEdit?.id) {
@@ -400,6 +416,56 @@ watch(schemaData, (newSchemaData) => {
     tableSchema.value = newSchemaData.tableSchema
   }
 }, { deep: true })
+
+// Sync basic fields between form and schemaData
+watch(() => form.value.name, (newName) => {
+  if (schemaData.value.name !== newName) {
+    schemaData.value.name = newName
+  }
+})
+
+watch(() => form.value.alias, (newAlias) => {
+  if (schemaData.value.alias !== newAlias) {
+    schemaData.value.alias = newAlias
+  }
+})
+
+watch(() => form.value.title, (newTitle) => {
+  if (schemaData.value.title !== newTitle) {
+    schemaData.value.title = newTitle
+  }
+})
+
+watch(() => form.value.description, (newDescription) => {
+  if (schemaData.value.description !== newDescription) {
+    schemaData.value.description = newDescription
+  }
+})
+
+// Sync back from schemaData to form
+watch(() => schemaData.value.name, (newName) => {
+  if (form.value.name !== newName) {
+    form.value.name = newName || ''
+  }
+})
+
+watch(() => schemaData.value.alias, (newAlias) => {
+  if (form.value.alias !== newAlias) {
+    form.value.alias = newAlias || ''
+  }
+})
+
+watch(() => schemaData.value.title, (newTitle) => {
+  if (form.value.title !== newTitle) {
+    form.value.title = newTitle || ''
+  }
+})
+
+watch(() => schemaData.value.description, (newDescription) => {
+  if (form.value.description !== newDescription) {
+    form.value.description = newDescription || ''
+  }
+})
 
 // Load metric data when editing mode is enabled
 watch(() => props.open, async (isOpen) => {

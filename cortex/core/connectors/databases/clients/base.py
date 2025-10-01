@@ -1,10 +1,13 @@
 from abc import abstractmethod
 from typing import Any, Optional
 
+from pydantic import ConfigDict
+
 from cortex.core.types.telescope import TSModel
 
 
 class DatabaseClient(TSModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     credentials: TSModel
     client: Optional[Any] = None
 

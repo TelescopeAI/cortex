@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
-from cortex.core.semantics.refresh_keys import RefreshKey, RefreshKeyType
+from cortex.core.semantics.refresh_keys import RefreshPolicy, RefreshType
 
 
 def _canonicalize(obj: Dict[str, Any]) -> str:
@@ -18,17 +18,16 @@ def build_query_signature(payload: Dict[str, Any]) -> str:
     return hashlib.md5(canonical.encode("utf-8")).hexdigest()
 
 
-def derive_time_bucket(now: datetime, refresh_key: Optional[RefreshKey]) -> Optional[str]:
-    """Derive a coarse time bucket label based on RefreshKey.
+def derive_time_bucket(now: datetime, refresh: Optional[RefreshPolicy]) -> Optional[str]:
+    """Derive a coarse time bucket label based on RefreshPolicy.
 
     For type 'every', we floor to the nearest period boundary. For other types, return None.
     """
-    if not refresh_key:
+    if not refresh:
         return None
-    if refresh_key.type == RefreshKeyType.EVERY and refresh_key.every:
-        # naive parser for formats like "1 hour", "30 minutes", "1 day"
+    if refresh.type == RefreshType.EVERY and refresh.every:
         try:
-            parts = refresh_key.every.strip().split()
+            parts = refresh.every.strip().split()
             if len(parts) != 2:
                 return None
             amount = int(parts[0])
@@ -44,11 +43,9 @@ def derive_time_bucket(now: datetime, refresh_key: Optional[RefreshKey]) -> Opti
                 step = timedelta(days=amount)
             else:
                 return None
-            # compute bucket start aligned to step
             delta = now - floored
             steps = int(delta.total_seconds() // step.total_seconds())
             bucket_start = floored + steps * step
-            # format label
             if unit.startswith("hour"):
                 return f"hour:{bucket_start.strftime('%Y-%m-%dT%H')}"
             if unit.startswith("minute"):

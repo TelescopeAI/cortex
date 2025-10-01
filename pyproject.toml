@@ -1,22 +1,23 @@
 [tool.poetry]
 name = "telescope-cortex"
-version = "0.0.1"
-description = "Semantic Layer for Databases with optional API components"
+version = "0.0.1a1"
+description = "Headless BI for AI Native applications"
 authors = ["Nilotpal Roychowdhury <nilotpal@jointelescope.com>"]
 license = "MIT"
 readme = "README.md"
 packages = [{include = "cortex"}]
 
 [tool.poetry.dependencies]
-python = ">=3.12,<3.13"
+python = ">=3.12"
 pydantic = "^2.10.6"
 sqlalchemy = "^2.0.38"
 sqlalchemy-bigquery = "^1.12.1"
 psycopg = {extras = ["binary", "pool"], version = "3.2.9"}
 pytz = "^2025.1"
-alembic = "^1.14.1"
-langgraph = "^0.6.3"
-langchain = {extras = ["openai"], version = "^0.3.27"}
+alembic = "^1.16.5"
+duckdb = "^1.4.0"
+duckdb-engine = "^0.17.0"
+pymysql = {extras = ["rsa"], version = "^1.1.2"}
 
 
 [tool.poetry.group.api]

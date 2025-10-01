@@ -1,10 +1,8 @@
 from cortex.core.connectors.databases.clients.factory.abstracts import DatabaseClientFactory
-from cortex.core.types.telescope import TSModel
 
 
-class DatabaseClientGenerator(TSModel):
+class DatabaseClientGenerator:
 
-    def parse(self, factory: DatabaseClientFactory, credentials: TSModel, **kwargs) -> TSModel:
-        creds = factory.create_client(credentials=credentials, **kwargs)
-        return creds
+    def parse(self, factory: DatabaseClientFactory, credentials, **kwargs):
+        return factory.create_client(credentials=credentials, **kwargs)
 

@@ -1,6 +1,7 @@
 from typing import Optional, Dict, Any, List
 
 from cortex.core.query.engine.modules.sql.base_sql import SQLQueryGenerator
+from cortex.core.types.time import TimeGrain
 from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.measures import SemanticMeasure
 from cortex.core.semantics.output_formats import OutputFormat, OutputFormatType, FormatType, OutputFormatMode, FormattingMap
@@ -34,6 +35,14 @@ class PostgresQueryGenerator(SQLQueryGenerator):
             return f"OFFSET {offset}"
         
         return None
+
+    # Hierarchical grouping support (ROLLUP)
+    def _supports_hierarchical_grouping(self) -> bool:
+        return True
+
+    def _group_by_hierarchical(self, dim_cols_sql: list[str]) -> str:
+        inner = ", ".join(dim_cols_sql)
+        return f"GROUP BY ROLLUP ({inner})"
 
     def _apply_database_formatting(self, column_expression: str, object_name: str, formatting_map: FormattingMap) -> str:
         """Apply PostgreSQL-specific formatting to a column expression"""

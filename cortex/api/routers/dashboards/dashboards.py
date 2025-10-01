@@ -144,7 +144,10 @@ async def update_dashboard(dashboard_id: UUID, dashboard_data: DashboardUpdateRe
                 tags=existing_dashboard.tags,
                 alias=existing_dashboard.alias,
             )
-        updated_model = _convert_create_request_to_dashboard(temp_request)
+            updated_model = _convert_create_request_to_dashboard(temp_request)
+        else:
+            # If no views update, use existing dashboard as updated model
+            updated_model = existing_dashboard
 
         # Merge strategy: preserve existing widget data_mapping fields when the incoming update omits them
         merged_views = []
@@ -375,8 +378,7 @@ async def execute_widget(dashboard_id: UUID, view_alias: str, widget_alias: str)
         # Execute metric using shared service
         execution_result = MetricExecutionService.execute_metric(
             metric_id=target_widget.metric_id,
-            context_id=target_view.context_id,
-            limit=100,
+            context_id=target_view.context_id
         )
 
         if not execution_result.get("success"):
@@ -407,6 +409,72 @@ async def execute_widget(dashboard_id: UUID, view_alias: str, widget_alias: str)
     except WidgetExecutionError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@DashboardRouter.delete(
+    "/dashboards/{dashboard_id}/views/{view_alias}/widgets/{widget_alias}",
+    response_model=DashboardResponse,
+    tags=["Dashboards"]
+)
+async def delete_widget(dashboard_id: UUID, view_alias: str, widget_alias: str):
+    """Delete a specific widget from a dashboard view.
+    
+    Returns the updated dashboard configuration after widget removal.
+    """
+    try:
+        # Load dashboard
+        dashboard = DashboardCRUD.get_dashboard_by_id(dashboard_id)
+        if dashboard is None:
+            raise DashboardDoesNotExistError(dashboard_id)
+
+        # Find view
+        target_view = None
+        view_index = None
+        for i, v in enumerate(dashboard.views):
+            if v.alias == view_alias:
+                target_view = v
+                view_index = i
+                break
+        if target_view is None:
+            raise DashboardViewDoesNotExistError(view_alias)
+
+        # Find widget by alias across sections and remove it
+        widget_found = False
+        for section in target_view.sections:
+            for widget_index, widget in enumerate(section.widgets):
+                if widget.alias == widget_alias:
+                    section.widgets.pop(widget_index)
+                    widget_found = True
+                    break
+            if widget_found:
+                break
+        
+        if not widget_found:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Widget '{widget_alias}' not found in view '{view_alias}'"
+            )
+
+        # Update dashboard in database
+        updated_dashboard = DashboardCRUD.update_dashboard(dashboard_id, dashboard)
+        
+        return DashboardResponse.model_validate(updated_dashboard, from_attributes=True)
+        
+    except DashboardDoesNotExistError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except DashboardViewDoesNotExistError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
     except Exception as e:
@@ -584,8 +652,7 @@ async def preview_dashboard_config(dashboard_id: UUID, config: DashboardUpdateRe
                     # Execute metric using the shared service
                     execution_result = MetricExecutionService.execute_metric(
                         metric_id=widget.metric_id,
-                        context_id=preview_view.context_id,
-                        limit=100  # Limit preview results for performance
+                        context_id=preview_view.context_id
                     )
 
                     if not execution_result.get("success"):

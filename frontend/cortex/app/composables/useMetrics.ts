@@ -1,4 +1,5 @@
 import { ref, type Ref } from 'vue'
+import type { SemanticOrderSequence } from '~/types/order'
 
 export interface SemanticMetric {
   id: string
@@ -16,6 +17,7 @@ export interface SemanticMetric {
   table_name?: string
   limit?: number
   grouped?: boolean
+  ordered?: boolean
   parameters?: MetricParameter[]
   public: boolean
   model_version?: number
@@ -24,6 +26,7 @@ export interface SemanticMetric {
   joins?: any[]
   aggregations?: any[]
   filters?: any[]
+  order?: SemanticOrderSequence[]
   output_formats?: any[]
   extends?: string
   add?: Record<string, any>
@@ -58,6 +61,7 @@ export interface ExecutionRequest {
   limit?: number
   offset?: number
   grouped?: boolean
+  ordered?: boolean
 }
 
 export const useMetrics = () => {

@@ -3,6 +3,7 @@ from typing import Optional, List
 from pydantic import ConfigDict
 
 from cortex.core.types.semantics.measure import SemanticMeasureType
+from cortex.core.types.semantics.column_source import ColumnSourceType, ColumnSourceMeta
 from cortex.core.semantics.output_formats import OutputFormat
 from cortex.core.types.telescope import TSModel
 
@@ -24,6 +25,8 @@ class SemanticMeasure(TSModel):
         query: Optional custom query expression that defines this measure
         table: The source table or view where this measure's data resides
         primary_key: Optional identifier for the primary key column of the table
+        source_type: Auto-inferred database column type for intelligent processing
+        source_meta: Auto-inferred metadata about the source column
     """
     name: str
     description: Optional[str]
@@ -33,5 +36,9 @@ class SemanticMeasure(TSModel):
     query: Optional[str] = None
     table: Optional[str] = None
     primary_key: Optional[str] = None
+    
+    # Auto-inferred source column information
+    source_type: Optional[ColumnSourceType] = None
+    source_meta: Optional[ColumnSourceMeta] = None
 
     model_config = ConfigDict(use_enum_values=True)

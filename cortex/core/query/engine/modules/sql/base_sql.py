@@ -11,10 +11,16 @@ from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.measures import SemanticMeasure
 from cortex.core.types.semantics.measure import SemanticMeasureType
 from cortex.core.semantics.output_formats import FormattingMap
+from cortex.core.types.time import TimeGrain
+from cortex.core.query.engine.processors.order_processor import OrderProcessor
+from cortex.core.utils.schema_inference import get_qualified_column_name
 
 
 class SQLQueryGenerator(BaseQueryGenerator):
     """Base implementation for SQL query generators with common functionality"""
+
+    # Optional binding that can redirect FROM and map logical names to physical columns
+    binding: Optional[Any] = None
 
     def generate_query(self, parameters: Optional[Dict[str, Any]] = None, limit: Optional[int] = None, offset: Optional[int] = None, grouped: Optional[bool] = None) -> str:
         """Generate a complete SQL query based on the metric with optional parameters and limit/offset"""
@@ -25,6 +31,10 @@ class SQLQueryGenerator(BaseQueryGenerator):
         # If grouped parameter is explicitly set in request, use that
         # Otherwise, use the metric's default grouped setting
         effective_grouped = grouped if grouped is not None else (self.metric.grouped if self.metric.grouped is not None else True)
+        
+        # Determine if ordering should be applied
+        # Use the metric's default ordered setting (defaults to True if not specified)
+        effective_ordered = self.metric.ordered if self.metric.ordered is not None else True
         
         # If custom query is provided, substitute parameters and add limit if specified
         if self.metric.query:
@@ -118,26 +128,29 @@ class SQLQueryGenerator(BaseQueryGenerator):
 
     def _get_qualified_column_name(self, column_query: str, table_name: Optional[str] = None) -> str:
         """Get a fully qualified column name with table prefix when joins are present"""
-        # If no joins are present, return the column as-is
-        if not self.metric.joins:
-            return column_query
-        
-        # If column already contains a table prefix (has a dot), return as-is
-        if '.' in column_query:
-            return column_query
-        
-        # Use provided table name or default to metric's main table
+        has_joins = bool(self.metric.joins)
         table_prefix = table_name or self.metric.table_name
-        return f"{table_prefix}.{column_query}"
+        return get_qualified_column_name(
+            column_query=column_query,
+            table_name=table_name,
+            table_prefix=table_prefix,
+            has_joins=has_joins
+        )
 
     def _format_measure(self, measure: SemanticMeasure, formatting_map: FormattingMap) -> str:
         """Format a measure for the SELECT clause based on its type and formatting"""
+        # If a binding is present and it maps this logical measure name,
+        # select the bound column directly to avoid double-aggregation.
+        if self.binding and self.binding.column_mapping.get(measure.name):
+            bound_col = self.binding.column_mapping[measure.name]
+            return f'{bound_col} AS "{measure.name}"'
+
         # Get the qualified column name (with table prefix if joins are present)
         qualified_query = self._get_qualified_column_name(measure.query, measure.table)
-        
+
         # Apply any IN_QUERY formatting using database-specific implementation
         formatted_query = self._apply_database_formatting(qualified_query, measure.name, formatting_map)
-        
+
         if measure.type == SemanticMeasureType.COUNT:
             return f'COUNT({formatted_query}) AS "{measure.name}"'
         elif measure.type == SemanticMeasureType.SUM:
@@ -149,15 +162,68 @@ class SQLQueryGenerator(BaseQueryGenerator):
 
     def _format_dimension(self, dimension: SemanticDimension, formatting_map: FormattingMap) -> str:
         """Format a dimension for the SELECT clause with formatting"""
+        # If a binding is present and it maps this logical dimension name,
+        # project the bound column directly to ensure we read from rollup definitions.
+        if self.binding and self.binding.column_mapping.get(dimension.name):
+            bound_col = self.binding.column_mapping[dimension.name]
+            return f"{bound_col} AS \"{dimension.name}\""
+
         qualified_query = self._get_qualified_column_name(dimension.query, dimension.table)
-        
+
         # Apply any IN_QUERY formatting using database-specific implementation
         formatted_query = self._apply_database_formatting(qualified_query, dimension.name, formatting_map)
-        
+
         return f"{formatted_query} AS \"{dimension.name}\""
 
+    def _can_re_aggregate(self, measure: SemanticMeasure) -> bool:
+        """Check if a measure is re-aggregatable (additive)."""
+        return measure.type in [SemanticMeasureType.SUM, SemanticMeasureType.COUNT]
+
+    def _re_aggregate_measure(self, measure: SemanticMeasure, bound_column: str) -> str:
+        """Re-aggregate a bound column for coarser grain requests."""
+        if measure.type == SemanticMeasureType.SUM:
+            return f'SUM({bound_column}) AS "{measure.name}"'
+        elif measure.type == SemanticMeasureType.COUNT:
+            return f'SUM({bound_column}) AS "{measure.name}"'
+        elif measure.type == SemanticMeasureType.AVG:
+            # For AVG, we need separate sum/count columns in the rollup
+            sum_col = bound_column.replace("_avg", "_sum")
+            count_col = bound_column.replace("_avg", "_count")
+            return f'CASE WHEN SUM({count_col}) > 0 THEN SUM({sum_col}) / SUM({count_col}) ELSE NULL END AS "{measure.name}"'
+        else:
+            # Fallback: select the bound column directly
+            return f'{bound_column} AS "{measure.name}"'
+
+    def _needs_time_re_aggregation(self, requested_grain: Optional[TimeGrain]) -> bool:
+        """Check if we need to re-aggregate time buckets for a coarser grain."""
+        if not self.binding or not self.binding.rollup_grain or not requested_grain:
+            return False
+        
+        grain_hierarchy = [TimeGrain.HOUR, TimeGrain.DAY, TimeGrain.WEEK, TimeGrain.MONTH, TimeGrain.QUARTER, TimeGrain.YEAR]
+        try:
+            rollup_idx = grain_hierarchy.index(self.binding.rollup_grain)
+            requested_idx = grain_hierarchy.index(requested_grain)
+            return requested_idx > rollup_idx  # Coarser grain requested
+        except ValueError:
+            return False
+
+    def _get_table_prefix(self) -> str:
+        """Get the appropriate table prefix/name for column qualification."""
+        if self.binding and getattr(self.binding, 'qualified_table', None):
+            # Extract table name from qualified table (remove quotes and schema)
+            qualified_table = self.binding.qualified_table
+            if '.' in qualified_table:
+                # Handle "schema"."table" format
+                return qualified_table.split('.')[-1].strip('"')
+            else:
+                # Handle "table" format
+                return qualified_table.strip('"')
+        return self.metric.table_name
+
     def _build_from_clause(self) -> str:
-        """Build the FROM clause based on metric's table"""
+        """Build the FROM clause based on metric's table or binding."""
+        if self.binding and getattr(self.binding, 'qualified_table', None):
+            return f"FROM\n  {self.binding.qualified_table}"
         return f"FROM\n  {self.metric.table_name}"
 
     def _build_where_clause(self) -> Optional[str]:
@@ -167,7 +233,7 @@ class SQLQueryGenerator(BaseQueryGenerator):
         
         where_clause, _ = FilterProcessor.process_filters(
             self.metric.filters, 
-            table_prefix=self.metric.table_name,
+            table_prefix=self._get_table_prefix(),
             formatting_map=self.formatting_map
         )
         
@@ -206,7 +272,7 @@ class SQLQueryGenerator(BaseQueryGenerator):
         
         _, having_clause = FilterProcessor.process_filters(
             self.metric.filters, 
-            table_prefix=self.metric.table_name,
+            table_prefix=self._get_table_prefix(),
             formatting_map=self.formatting_map
         )
         
@@ -215,9 +281,72 @@ class SQLQueryGenerator(BaseQueryGenerator):
         return None
 
     def _build_order_by_clause(self) -> Optional[str]:
-        """Build ORDER BY clause with qualified column names when joins are present"""
-        # This is a basic implementation - can be enhanced based on specific needs
-        # When implementing ORDER BY, ensure to use self._get_qualified_column_name() for column references
+        """Build ORDER BY clause with context-aware semantic resolution"""
+        # Get table prefix/name for qualified column names
+        table_prefix = self._get_primary_table_name()
+        
+        # Determine if this is a grouped query
+        is_grouped_query = self.metric.grouped and self.metric.dimensions
+        
+        # Build SELECT expressions mapping for semantic resolution
+        select_expressions = self._build_select_expressions_map()
+        
+        return OrderProcessor.process_order_sequences(
+            order_sequences=self.metric.order,
+            measures=self.metric.measures,
+            dimensions=self.metric.dimensions,
+            table_prefix=table_prefix,
+            formatting_map=getattr(self, 'formatting_map', None),
+            apply_default_ordering=self.metric.ordered if self.metric.ordered is not None else True,
+            is_grouped_query=is_grouped_query,
+            select_expressions=select_expressions
+        )
+    
+    def _build_select_expressions_map(self) -> Dict[str, str]:
+        """Build a mapping of column aliases to their actual SELECT expressions"""
+        expressions = {}
+        
+        # Add measure expressions
+        if self.metric.measures:
+            formatting_map = getattr(self, 'formatting_map', None)
+            for measure in self.metric.measures:
+                # Build the expression using the same logic as _format_measure
+                formatted_expression = self._format_measure(measure, formatting_map or {})
+                # Extract just the expression part (before AS "alias")
+                if ' AS "' in formatted_expression:
+                    expression = formatted_expression.split(' AS "')[0]
+                    expressions[measure.name] = expression
+                else:
+                    expressions[measure.name] = formatted_expression
+        
+        # Add dimension expressions
+        if self.metric.dimensions:
+            formatting_map = getattr(self, 'formatting_map', None)
+            for dimension in self.metric.dimensions:
+                # Build the expression using the same logic as _format_dimension  
+                formatted_expression = self._format_dimension(dimension, formatting_map or {})
+                # Extract just the expression part (before AS "alias")
+                if ' AS "' in formatted_expression:
+                    expression = formatted_expression.split(' AS "')[0]
+                    expressions[dimension.name] = expression
+                else:
+                    expressions[dimension.name] = formatted_expression
+        
+        return expressions
+    
+    def _get_primary_table_name(self) -> Optional[str]:
+        """Get the primary table name for column qualification"""
+        # Use the metric's table_name if available
+        if self.metric.table_name:
+            return self.metric.table_name
+        
+        # Extract from first measure or dimension if available
+        if self.metric.measures and self.metric.measures[0].table:
+            return self.metric.measures[0].table
+        
+        if self.metric.dimensions and self.metric.dimensions[0].table:
+            return self.metric.dimensions[0].table
+            
         return None
 
     def _build_limit_clause(self, limit: Optional[int] = None, offset: Optional[int] = None) -> Optional[str]:

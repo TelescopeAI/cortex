@@ -10,7 +10,9 @@ from cortex.core.semantics.measures import SemanticMeasure
 from cortex.core.semantics.joins import SemanticJoin
 from cortex.core.semantics.aggregations import SemanticAggregation
 from cortex.core.semantics.filters import SemanticFilter
-from cortex.core.semantics.refresh_keys import RefreshKey
+from cortex.core.semantics.order_sequences import SemanticOrderSequence
+from cortex.core.semantics.refresh_keys import RefreshPolicy
+from cortex.core.semantics.cache import CachePreference
 from cortex.core.semantics.parameters import ParameterDefinition
 from cortex.core.types.telescope import TSModel
 
@@ -32,6 +34,7 @@ class SemanticMetric(TSModel):
         dimensions: List of categorical attributes by which the measures can be grouped
         joins: List of joins to be applied in the query
         aggregations: List of aggregations to be applied to the data
+        order: List of order sequences defining how results should be sorted
         parameters: Runtime parameters for dynamic query generation
     """
     model_config = ConfigDict(from_attributes=True)
@@ -50,6 +53,7 @@ class SemanticMetric(TSModel):
     data_source_id: Optional[UUID] = None  # Foreign key to the data source
     limit: Optional[int] = None  # Default limit for query results
     grouped: Optional[bool] = Field(default=True, description="Whether to apply GROUP BY when dimensions are present")
+    ordered: Optional[bool] = Field(default=True, description="Whether to apply ORDER BY for sorting results")
     
     # Metric components
     measures: Optional[List[SemanticMeasure]] = None
@@ -57,6 +61,7 @@ class SemanticMetric(TSModel):
     joins: Optional[List[SemanticJoin]] = None
     aggregations: Optional[List[SemanticAggregation]] = None
     filters: Optional[List[SemanticFilter]] = None
+    order: Optional[List[SemanticOrderSequence]] = None
     
     # Parameters for dynamic query generation
     parameters: Optional[Dict[str, ParameterDefinition]] = None
@@ -71,7 +76,8 @@ class SemanticMetric(TSModel):
     public: bool = True  # Whether this metric can be queried via API
     
     # Caching and refresh
-    refresh_key: Optional[RefreshKey] = None
+    refresh: Optional[RefreshPolicy] = Field(default=None, description="Pre-aggregation refresh policy")
+    cache: Optional[CachePreference] = Field(default=None, description="Result cache preference")
     
     # Custom metadata
     meta: Optional[Dict[str, Any]] = None

@@ -26,7 +26,7 @@ import {
 } from '~/components/ui/dropdown-menu';
 import CreateWorkspaceDialog from '~/components/CreateWorkspaceDialog.vue';
 import CreateEnvironmentDialog from '~/components/CreateEnvironmentDialog.vue';
-import { ChevronDown, Check, Database, Target, Users, BarChart3 } from 'lucide-vue-next';
+import { ChevronDown, Check, Database, Target, Users, BarChart3, Zap } from 'lucide-vue-next';
 import Logo from '~/components/Logo.vue';
 import ThemeToggle from '~/components/ThemeToggle.vue';
 
@@ -187,6 +187,10 @@ watch([selectedWorkspaceId, selectedEnvironmentId], ([workspaceId, environmentId
           <BarChart3 class="w-4 h-4 mr-2" />
           Dashboards
         </SidebarMenuButton>
+        <!-- <SidebarMenuButton @click="router.push('/pre-aggregations')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
+          <Zap class="w-4 h-4 mr-2" />
+          Pre-Aggregations
+        </SidebarMenuButton> -->
         <SidebarMenuButton @click="router.push('/consumers')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
           <Users class="w-4 h-4 mr-2" />
           Consumers

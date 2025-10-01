@@ -165,7 +165,7 @@ function removeYAxis(index: number) {
 
       <div class="space-y-3">
         <Label class="text-sm font-medium">Y Axes</Label>
-        <div class="space-y-3">
+        <div class="max-h-48 overflow-y-auto border rounded-lg p-3 space-y-3">
           <FieldMappingSelector
             v-for="(ym, idx) in (currentMapping.y_axes || [])"
             :key="idx"

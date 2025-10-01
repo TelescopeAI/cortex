@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from enum import Enum
 
 from cortex.core.types.telescope import TSModel
@@ -34,9 +34,4 @@ class SemanticJoin(TSModel):
     right_table: str
     conditions: List[JoinCondition]
     alias: Optional[str] = None  # Optional alias for the joined table
-    
-    # For complex joins with multiple conditions
-    additional_conditions: Optional[List[JoinCondition]] = None
-    
-    # For join hints and optimizations
-    join_hints: Optional[Dict[str, Any]] = None
+

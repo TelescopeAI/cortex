@@ -201,3 +201,7 @@ logs
 .env
 .env.*
 !.env.example
+
+# Local Databases
+*.db
+*.duckdb

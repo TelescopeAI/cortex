@@ -3,12 +3,11 @@ from typing import Optional
 from uuid import uuid4
 
 import pytz
-from sqlalchemy import String, DateTime, UUID, Boolean, Integer, Text
-from sqlalchemy.dialects.postgresql import JSONB, ARRAY
+from sqlalchemy import String, DateTime, UUID, Boolean, Integer, Text, ForeignKey
 from sqlalchemy.orm import mapped_column
-from sqlalchemy import ForeignKey
 
-from cortex.core.stores.sqlalchemy import BaseDBModel
+from cortex.core.storage.sqlalchemy import BaseDBModel
+from cortex.core.types.databases import DatabaseTypeResolver
 
 
 class DataModelORM(BaseDBModel):
@@ -26,11 +25,11 @@ class DataModelORM(BaseDBModel):
     parent_version_id = mapped_column(UUID, ForeignKey("data_models.id"), nullable=True)
     
     # Custom configuration dictionary for model-level settings
-    config = mapped_column(JSONB, nullable=False, default={})
+    config = mapped_column(DatabaseTypeResolver.json_type(), nullable=False, default={})
     
     # Validation state
     is_valid = mapped_column(Boolean, nullable=False, default=False, index=True)
-    validation_errors = mapped_column(ARRAY(String), nullable=True)
+    validation_errors = mapped_column(DatabaseTypeResolver.array_type(), nullable=True, default=list)
     
     # Timestamps
     created_at = mapped_column(DateTime, default=datetime.now(pytz.UTC), index=True)
@@ -45,20 +44,20 @@ class ModelVersionORM(BaseDBModel):
     version_number = mapped_column(Integer, nullable=False, index=True)
     
     # Complete semantic model snapshot
-    semantic_model = mapped_column(JSONB, nullable=False, default={})
+    semantic_model = mapped_column(DatabaseTypeResolver.json_type(), nullable=False, default={})
     
     # Validation state at time of version creation
     is_valid = mapped_column(Boolean, nullable=False, default=False)
-    validation_errors = mapped_column(ARRAY(String), nullable=True)
-    compiled_queries = mapped_column(JSONB, nullable=True)  # metric_alias -> query
+    validation_errors = mapped_column(DatabaseTypeResolver.array_type(), nullable=True, default=list)
+    compiled_queries = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # metric_alias -> query
     
     # Version metadata
     description = mapped_column(Text, nullable=True)  # Description of changes in this version
     created_by = mapped_column(UUID, nullable=True)  # User who created this version
-    tags = mapped_column(ARRAY(String), nullable=True)  # Tags for categorizing versions
+    tags = mapped_column(DatabaseTypeResolver.array_type(), nullable=True, default=list)  # Tags for categorizing versions
     
     # Legacy config (for backward compatibility)
-    config = mapped_column(JSONB, nullable=False, default={})
+    config = mapped_column(DatabaseTypeResolver.json_type(), nullable=False, default={})
     
     # Timestamps
     created_at = mapped_column(DateTime, default=datetime.now(pytz.UTC), index=True)
@@ -81,25 +80,28 @@ class MetricORM(BaseDBModel):
     data_source_id = mapped_column(UUID, ForeignKey("data_sources.id"), nullable=True, index=True)
     limit = mapped_column(Integer, nullable=True)  # Default limit for query results
     grouped = mapped_column(Boolean, nullable=True, default=True)  # Whether to apply GROUP BY when dimensions are present
+    ordered = mapped_column(Boolean, nullable=True, default=True)  # Whether to apply ORDER BY for sorting results
     
     # Metric components (stored as JSON)
-    measures = mapped_column(JSONB, nullable=True)  # Array of SemanticMeasure objects
-    dimensions = mapped_column(JSONB, nullable=True)  # Array of SemanticDimension objects
-    joins = mapped_column(JSONB, nullable=True)  # Array of SemanticJoin objects
-    aggregations = mapped_column(JSONB, nullable=True)  # Array of SemanticAggregation objects
-    filters = mapped_column(JSONB, nullable=True)  # Array of SemanticFilter objects
+    measures = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # Array of SemanticMeasure objects
+    dimensions = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # Array of SemanticDimension objects
+    joins = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # Array of SemanticJoin objects
+    aggregations = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # Array of SemanticAggregation objects
+    filters = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # Array of SemanticFilter objects
+    order = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # Array of SemanticOrderSequence objects
     
     # Configuration
-    parameters = mapped_column(JSONB, nullable=True)  # Parameter definitions
+    parameters = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # Parameter definitions
     version = mapped_column(Integer, nullable=False, default=1)
     extends = mapped_column(UUID, ForeignKey("metrics.id"), nullable=True, index=True)  # Parent metric for inheritance
     public = mapped_column(Boolean, nullable=False, default=True, index=True)
-    refresh_key = mapped_column(JSONB, nullable=True)  # RefreshKey object
-    meta = mapped_column(JSONB, nullable=True)  # Custom metadata
+    refresh = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # RefreshPolicy object
+    cache = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # CachePreference object
+    meta = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # Custom metadata
     
     # Validation and compilation
     is_valid = mapped_column(Boolean, nullable=False, default=False, index=True)
-    validation_errors = mapped_column(ARRAY(String), nullable=True)
+    validation_errors = mapped_column(DatabaseTypeResolver.array_type(), nullable=True, default=list)
     compiled_query = mapped_column(Text, nullable=True)  # Generated SQL
     
     # Timestamps
@@ -115,10 +117,10 @@ class MetricVersionORM(BaseDBModel):
     version_number = mapped_column(Integer, nullable=False, index=True)
     
     # Complete metric snapshot
-    snapshot_data = mapped_column(JSONB, nullable=False)  # Complete metric definition snapshot
+    snapshot_data = mapped_column(DatabaseTypeResolver.json_type(), nullable=False)  # Complete metric definition snapshot
     description = mapped_column(Text, nullable=True)  # Version change description
     created_by = mapped_column(UUID, nullable=True)  # User who created this version
-    tags = mapped_column(ARRAY(String), nullable=True)  # Tags for categorizing versions
+    tags = mapped_column(DatabaseTypeResolver.array_type(), nullable=True, default=list)  # Tags for categorizing versions
     
     # Timestamps
     created_at = mapped_column(DateTime, default=datetime.now(pytz.UTC), index=True)

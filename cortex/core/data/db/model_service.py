@@ -10,7 +10,7 @@ from sqlalchemy import and_, desc
 from cortex.core.data.db.models import DataModelORM, ModelVersionORM, MetricORM
 from cortex.core.data.modelling.model import DataModel
 from cortex.core.data.modelling.model_version import ModelVersion
-from cortex.core.stores.connection import LocalSession
+from cortex.core.storage.store import CortexStorage
 
 
 class DataModelService:
@@ -20,7 +20,7 @@ class DataModelService:
         if session:
             self.session = session
         else:
-            self.local_session = LocalSession()
+            self.local_session = CortexStorage()
             self.session = self.local_session.get_session()
     
     def create_data_model(self, data_model: DataModel) -> DataModelORM:
@@ -205,4 +205,4 @@ class DataModelService:
     def close(self):
         """Close the database session"""
         if hasattr(self, 'local_session'):
-            self.local_session.close_session() 
+            self.local_session.close_session(self.session)

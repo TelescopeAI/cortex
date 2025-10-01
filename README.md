@@ -1,4 +1,4 @@
-# cortex
+# Cortex Headless BI
 
 ## Lightweight Modular Analytics Platform
 
@@ -11,33 +11,54 @@ This platform is designed to abstract complex data sources into a business-frien
 ### Key Features
 
 - **Semantic Layer**
-  - Define and manage data models in JSON with measures, dimensions, and filters
-  - Dynamic schema generation with plugin support
-  - Advanced output formatting with IN_QUERY and POST_QUERY transformation modes
-  - Versioning and audit trails
+  - Define and manage data models in JSON with measures, dimensions, filters, and aggregations
+  - Dynamic context aware schema generation
+  - Advanced output formatting with IN_QUERY and POST_QUERY(Coming Soon) transformation modes
+  - Versioning and audit trails for metrics and data models
+  - Parameter system for dynamic query generation
+  - Metric extension and inheritance support (Coming Soon)
 
 - **Query Engine**
   - Translates semantic definitions into optimized queries
-  - Supports multi-source queries (SQL, NoSQL, files, APIs)
   - Real-time output formatting during query execution and post-processing
-  - Integration with caching for enhanced performance [PLANNED]
+  - Multi-layer caching with Redis and in-memory backends
+  - Planned support for multi-source queries (PostgreSQL, MySQL, BigQuery, SQLite)
+  - Pre-aggregations and rollup tables for performance optimization
+  - Query bindings for automatic rollup table utilization
 
 - **Data Source Integration**
-  - Connectors for PostgreSQL, MySQL, BigQuery, Snowflake, MongoDB
-  - Support for file-based sources (CSV, Excel, Google Sheets) [PLANNED]
+  - PostgreSQL, MySQL, BigQuery with persistent connectors
+  - SQLite for in-memory analytics
+  - Extensible factory pattern for adding new data sources
+  - Schema introspection and humanized schema generation
+
+- **Dashboard & Visualization Engine**
+  - Multi-view dashboard system with executive, operational, and tactical types
+  - Support for 10+ visualization types: single value, gauge, bar/line/area/pie/donut charts, scatter plots, heatmaps, and tables
+  - Advanced chart features with ECharts integration
+  - Field mapping and data transformation for visualizations
+  - Widget-level metric execution with override support
+
+- **Multi-Tenancy**
+  - Hierarchical organization: Workspaces → Environments → Consumers
+  - Consumer groups for organizing users with shared properties
+  - Environment-level isolation for dev/staging/production
+  - Context-aware query execution based on consumer properties
 
 - **API-First Approach**
   - All functionality exposed via FastAPI-based REST endpoints
-  - Clear separation of admin and end-user API flows
+  - Auto-generated OpenAPI documentation with Scalar FastAPI
+  - Comprehensive request/response validation with Pydantic
 
-- **Monitoring & Metrics**
-  - Event logging and metrics aggregation to track system health
+- **Query History & Monitoring**
+  - Automatic logging of all query executions
+  - Query performance analytics and slow query identification
+  - Cache hit rate tracking and statistics
+  - Execution history with filtering and search capabilities
 
-- **Automated Configuration**
-  - Auto-detect and update semantic models based on underlying data source changes
-
-- **Multi-Tenancy & Environment Isolation**
-  - Workspace and environment-level isolation to support multiple tenants
+- **Performance Optimization**
+  - Pre-aggregation specs with rollup [IN PROGRESS]
+  - Configurable TTL-based caching strategies
 
 ## Architecture
 
@@ -79,7 +100,23 @@ This foundation will enable AI agents to:
 
 ### Installation
 
-#### Basic Installation (Core Only)
+#### Production Installation (Recommended)
+```bash
+# Install core package
+pip install telescope-cortex
+
+# Install with API extras
+pip install telescope-cortex[api]
+
+# Set up environment variables
+export CORTEX_AUTO_APPLY_DB_MIGRATIONS=true
+# Configure your database settings (see Environment Configuration below)
+
+# Start the API server
+python -m cortex.api
+```
+
+#### Local Development Installation
 ```bash
 # Clone the repository
 git clone https://github.com/TelescopeAI/cortex
@@ -88,40 +125,53 @@ cd cortex
 # Install core dependencies only
 poetry install --only main
 
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your configuration
-
-# Run database migrations
-alembic upgrade head
-
-# Start the development server (core only)
-poetry run python -m cortex.core.main
-```
-
-#### Full Installation with API Extras
-```bash
 # Install with all dependencies including FastAPI
 poetry install --with api
 
 # Set up environment variables
-cp .env.example .env
+cp local.env .env
 # Edit .env with your configuration
 
-# Run database migrations
-alembic upgrade head
+# Enable auto-migration for development
+export CORTEX_AUTO_APPLY_DB_MIGRATIONS=true
 
-# Start the development server with API
-poetry run uvicorn cortex.api.main:app --reload
+# Start the API server
+poetry run uvicorn cortex.api.main:app --reload --host 0.0.0.0 --port 9002
 ```
 
-#### Using pip with Extras
-```bash
-# Install core package
-pip install .
+#### Database Migrations
 
-# Install with API extras
-pip install .[api]
+The platform supports automatic database migrations on startup. Set the following environment variable to enable:
+
+```bash
+export CORTEX_AUTO_APPLY_DB_MIGRATIONS=true
+```
+
+For more information on running migrations manually or troubleshooting migration issues, see the [Migration Guide](migrations/MIGRATION_GUIDE.md).
+
+#### Environment Configuration
+
+Key environment variables:
+```bash
+# Database configuration
+CORTEX_DB_TYPE=postgresql  # postgresql, sqlite
+CORTEX_DB_HOST=localhost
+CORTEX_DB_PORT=5432
+CORTEX_DB_NAME=cortex
+CORTEX_DB_USERNAME=root
+CORTEX_DB_PASSWORD=password
+
+# Cache configuration
+CORTEX_CACHE_ENABLED=true
+CORTEX_CACHE_BACKEND=redis  # redis or memory
+CORTEX_CACHE_REDIS_URL=redis://localhost:6379
+
+# Pre-aggregations
+CORTEX_PREAGGREGATIONS_ENABLED=true
+
+# API configuration
+API_BASE_URL=http://localhost:9002
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
 ```
 
 ### Quick Start - Creating Your First Semantic Model
@@ -164,7 +214,7 @@ pip install .[api]
   "dimensions": [
     {
       "name": "month",
-      "query": "DATE_TRUNC('month', sale_date)",
+      "query": "sale_date",
       "formatting": [
         {
           "name": "date_format",
@@ -191,22 +241,104 @@ result = executor.execute_metric(
 )
 ```
 
-## Frontend
+## Studio
 
-The platform includes a modern Vue.js frontend built with Nuxt.js for creating and managing dashboards, metrics, and data visualizations.
+The platform includes a modern Vue.js frontend built with Nuxt 4 and TypeScript for creating and managing dashboards, metrics, and data visualizations.
 
-### Frontend Features
-- **Metric Builder**: Visual interface for creating semantic metrics with measures, dimensions, and filters
-- **Output Format Editor**: Configure data transformations for each semantic object
-- **Dashboard Builder**: Drag-and-drop dashboard creation with multiple chart types
-- **Advanced Charting**: ECharts integration with support for stacked charts, data zoom, and toolbox features
+### Features
+- **Workspace & Environment Management**: Multi-tenant workspace management with environment isolation
+- **Data Source Configuration**: Visual interface for connecting and configuring data sources
+- **Data Model Builder**: Create and manage data models with schema introspection
+- **Metric Builder**: Visual interface for creating semantic metrics with measures, dimensions, filters, and aggregations
+- **Dashboard Builder**: Create multi-view dashboards with drag-and-drop widget placement
+- **Visualization Editor**: Configure 10+ chart types with advanced field mapping
+- **Consumer & Group Management**: Manage end users and consumer groups
+- **Query History**: View and analyze query execution history and performance
+- **Pre-aggregation Management**: Configure and monitor rollup tables
 - **Real-time Preview**: Instant visualization of metric results during development
 
-### Frontend Setup
+### Stack
+- **Framework**: Nuxt 4
+- **Language**: TypeScript with full type safety
+- **Charts**: ECharts for advanced visualizations
+- **UI**: Tailwind CSS with custom components
+- **State Management**: Composables with reactive state
+
+### Setup
 ```bash
 cd frontend/cortex
 yarn install
-yarn dev
+
+# Development mode
+yarn run dev
+
+# Production build
+yarn run build
+```
+
+## API Reference
+
+The platform provides a comprehensive REST API for all operations. Access the interactive API documentation at:
+- **API Docs**: `http://localhost:9002/docs`
+- **Classic UI**: `http://localhost:9002/docs/classic`
+- **ReDoc UI**: `http://localhost:9002/redoc`
+
+### Core API Endpoints
+
+| Resource | Endpoint | Description |
+|----------|----------|-------------|
+| **Workspaces** | `/api/v1/workspaces` | Top-level organizational units |
+| **Environments** | `/api/v1/environments` | Development stages within workspaces |
+| **Data Sources** | `/api/v1/data/sources` | Database connection management |
+| **Data Models** | `/api/v1/data/models` | Business data model definitions |
+| **Metrics** | `/api/v1/metrics` | Semantic metric creation and execution |
+| **Dashboards** | `/api/v1/dashboards` | Dashboard and widget management |
+| **Consumers** | `/api/v1/consumers` | End user management |
+| **Consumer Groups** | `/api/v1/consumers/groups` | User group management |
+| **Query History** | `/api/v1/query/history` | Query execution logs and analytics |
+| **Pre-aggregations** | `/api/v1/pre-aggregations` | Rollup table management |
+
+### Example API Usage
+
+```python
+import httpx
+
+# Create a workspace
+response = httpx.post("http://localhost:9002/api/v1/workspaces", json={
+    "name": "My Workspace",
+    "description": "Production workspace"
+})
+workspace_id = response.json()["id"]
+
+# Create an environment
+response = httpx.post("http://localhost:9002/api/v1/environments", json={
+    "workspace_id": workspace_id,
+    "name": "Production",
+    "description": "Production environment"
+})
+environment_id = response.json()["id"]
+
+# Create a data source
+response = httpx.post("http://localhost:9002/api/v1/data/sources", json={
+    "environment_id": environment_id,
+    "name": "Sales Database",
+    "alias": "sales_db",
+    "source_catalog": "database",
+    "source_type": "postgresql",
+    "config": {
+        "host": "localhost",
+        "port": 5432,
+        "database": "sales",
+        "username": "user",
+        "password": "password"
+    }
+})
+
+# Execute a metric
+response = httpx.post(f"http://localhost:9002/api/v1/metrics/{metric_id}/execute", json={
+    "parameters": {"start_date": "2024-01-01"},
+    "cache": {"enabled": true, "ttl": 3600}
+})
 ```
 
 ## Development
@@ -216,15 +348,121 @@ yarn dev
 cortex/
 ├── cortex/                   # Core Python package
 │   ├── api/                  # FastAPI REST API (optional)
+│   │   ├── routers/          # API endpoint routers
+│   │   ├── schemas/          # Request/response schemas
+│   │   └── main.py           # API application
 │   ├── core/                 # Core semantic layer and query engine
-├── frontend/                 # Nuxt based admin interface
+│   │   ├── cache/            # Caching implementations
+│   │   ├── connectors/       # Database connectors
+│   │   ├── consumers/        # User management
+│   │   ├── dashboards/       # Dashboard engine
+│   │   ├── data/             # Data models and sources
+│   │   ├── preaggregations/  # Pre-aggregation system
+│   │   ├── query/            # Query engine
+│   │   ├── semantics/        # Semantic layer
+│   │   ├── storage/          # Database storage
+│   │   └── workspaces/       # Multi-tenancy
+├── frontend/cortex/          # Nuxt admin interface
+│   ├── app/                  # Application code
+│   │   ├── components/       # Vue components
+│   │   ├── composables/      # Composable functions
+│   │   ├── pages/            # Page components
+│   │   └── types/            # TypeScript types
+├── migrations/               # Alembic database migrations
 └── pyproject.toml            # Poetry configuration
 ```
 
 ### Key Components
-- **Semantic Models**: Core data modeling with measures, dimensions, and filters
-- **Query Engine**: SQL generation and execution across multiple data sources
-- **Output Processing**: Real-time data transformation and formatting
-- **Dashboard Engine**: Widget execution and visualization rendering
-- **Frontend Components**: Vue.js components for metric and dashboard management
+
+#### Backend
+- **Semantic Layer**: Core data modeling with measures, dimensions, filters, and aggregations
+- **Query Engine**: Database-agnostic SQL generation and execution
+- **Cache Manager**: Multi-backend caching with Redis and in-memory support
+- **Pre-aggregation Service**: Rollup table management and query optimization
+- **Dashboard Engine**: Widget execution and visualization data processing
+- **Consumer Management**: Multi-tenant user and group management
+- **Query History**: Execution logging and performance analytics
+
+#### Frontend
+- **Workspace Management**: Multi-tenant workspace and environment configuration
+- **Data Source Configurator**: Visual database connection setup
+- **Metric Builder**: Drag-and-drop semantic metric creation
+- **Dashboard Designer**: Multi-view dashboard builder with widget library
+- **Query Explorer**: Query history and performance monitoring
+- **User Management**: Consumer and group administration
+
+### Database Migrations
+
+The platform uses Alembic for database schema management:
+
+```bash
+# Create a new migration
+alembic revision --autogenerate -m "description"
+
+# Apply migrations
+alembic upgrade head
+
+# Rollback one migration
+alembic downgrade -1
+
+# View migration history
+alembic history
+```
+
+Auto-apply migrations on startup (for development):
+```bash
+export CORTEX_AUTO_APPLY_DB_MIGRATIONS=true
+```
+
+## Technology Stack
+
+### Backend
+- **Language**: Python 3.12+
+- **Web Framework**: FastAPI with Pydantic v2
+- **Database ORM**: SQLAlchemy 2.0
+- **Migrations**: Alembic
+- **Databases**: PostgreSQL, MySQL, BigQuery, SQLite
+- **Caching**: Redis, In-Memory
+- **Package Manager**: Poetry
+
+### Frontend
+- **Framework**: Nuxt 4
+- **Language**: Vue and TypeScript
+- **UI Library**: Tailwind CSS
+- **Charts**: Apache ECharts
+- **Package Manager**: Yarn
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Attribution
+
+Cortex was heavily inspired by [Cube's Semantic Layer](https://cube.dev) and [Metabase](https://metabase.com). We built upon their excellent work to create a lightweight, Python-focused analytics platform that integrates seamlessly with modern data stacks.
+
+## Contributions
+
+Contributions are welcome! Please feel free to submit a [Pull Request](https://github.com/TelescopeAI/cortex/compare).
+
+## Support
+
+For questions and support:
+- [Open an issue on GitHub](https://github.com/TelescopeAI/cortex/issues)
+- Email: support@jointelescope.com
+- Documentation: [docs.jointelescope.com](https://docs.jointelescope.com)
+
+## Roadmap
+
+Upcoming features:
+- [ ] File-based data sources (CSV, Excel, Google Sheets)
+- [ ] Advanced AI agent integration
+- [ ] Natural language query interface
+- [ ] Automated metric recommendations
+- [ ] Multi-database joins
+- [ ] Real-time streaming analytics
+- [ ] User authentication and authorization system
+- [ ] Advanced access control and row-level security
+- [ ] Embedded analytics SDK
+- [ ] Mobile-responsive dashboard views
+- [ ] MongoDB and DuckDB support
 

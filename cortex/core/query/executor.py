@@ -8,6 +8,11 @@ from cortex.core.data.modelling.model import DataModel
 from cortex.core.query.engine.factory import QueryGeneratorFactory
 from cortex.core.query.engine.processors.output_processor import OutputProcessor
 from cortex.core.semantics.metrics.metric import SemanticMetric
+from cortex.core.semantics.metrics.modifiers import (
+    MetricModifier,
+    MetricModifiers,
+    apply_metric_modifiers,
+)
 from cortex.core.types.databases import DataSourceTypes
 from cortex.core.data.db.source_service import DataSourceCRUD
 from cortex.core.connectors.databases.clients.service import DBClientService
@@ -21,7 +26,10 @@ from cortex.core.cache.manager import QueryCacheManager
 from cortex.core.cache.factory import get_cache_storage
 from cortex.core.config.models.cache import CacheConfig
 from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
-from cortex.core.semantics.refresh_keys import CachePreference
+from cortex.core.semantics.cache import CachePreference
+from cortex.core.preaggregations import get_service, load_env_config
+from cortex.core.preaggregations.service import _sanitize_identifier
+from cortex.core.query.engine.bindings.rollup_binding import RollupBindingModel
 
 
 class QueryExecutor(TSModel):
@@ -43,23 +51,14 @@ class QueryExecutor(TSModel):
         source_type: DataSourceTypes = DataSourceTypes.POSTGRESQL,
         context_id: Optional[str] = None,
         grouped: Optional[bool] = None,
-        cache_preference: Optional[CachePreference] = None
+        cache_preference: Optional[CachePreference] = None,
+        modifiers: Optional[MetricModifiers] = None,
     ) -> Dict[str, Any]:
         """
         Execute a specific metric from a data model with comprehensive logging.
-        
-        Args:
-            metric: SemanticMetric to execute
-            data_model: DataModel containing the metric
-            parameters: Optional runtime parameters
-            source_type: Database source type for query generation
-            
-        Returns:
-            Dict containing query results and execution metadata
         """
         start_time = datetime.now()
 
-        # Cache integration flags and precomputed elements
         cache_mode: QueryCacheMode = QueryCacheMode.UNCACHED
         cache_signature: Optional[str] = None
         cache_enabled = False
@@ -67,7 +66,6 @@ class QueryExecutor(TSModel):
         cache_key: Optional[str] = None
         cached_payload: Optional[Dict[str, Any]] = None
         
-        # Prepare meta information
         meta = {
             "source_type": source_type.value,
             "limit": limit,
@@ -75,15 +73,75 @@ class QueryExecutor(TSModel):
             "grouped": grouped
         }
         
+        # Apply metric modifiers up-front so planning, generation and formatting see updated components
+        resolved_metric = apply_metric_modifiers(metric, modifiers)
+
         try:
+            # Pre-aggregations: attempt planner routing if enabled and specs exist
+            try:
+                preagg_env = load_env_config()
+                if preagg_env.enabled:
+                    preagg_service = get_service()
+                    requested_dimensions = [d.query for d in (resolved_metric.dimensions or [])]
+                    requested_measures = [m.query for m in (resolved_metric.measures or [])]
+                    
+                    # Debug: Check how many specs are available
+                    available_specs = preagg_service.list_specs(metric_id=metric.id)
+                    print(f"[PREAGG] Available specs for metric {metric.id}: {len(available_specs)}")
+                    print(f"[PREAGG] Requested dimensions: {requested_dimensions}")
+                    print(f"[PREAGG] Requested measures: {requested_measures}")
+                    
+                    plan_result = preagg_service.plan(metric, requested_dimensions=requested_dimensions, requested_measures=requested_measures)
+                    print(f"[PREAGG] Plan result: covered={plan_result.covered}, spec_id={plan_result.spec_id}, reason={plan_result.reason}")
+                    
+                    if plan_result.covered and plan_result.spec_id:
+                        # Route to rollup: select only needed columns using the standard generator with a binding
+                        spec = preagg_service.registry.get_spec(plan_result.spec_id)
+                        if spec and (spec.name or spec.metric_id):
+                            object_name = _sanitize_identifier(spec.name or f"mv_{spec.metric_id}")
+                            qualified = f'"{spec.source.schema}"."{object_name}"' if getattr(spec.source, "schema", None) else f'"{object_name}"'
+                            # Build a minimal binding mapping from dimension/measure names to canonical columns
+                            dimension_map = {d: f"{d}" for d in ([dim for dim in (resolved_metric.dimensions or []) if dim.query] and [dim.query for dim in (resolved_metric.dimensions or [])])}
+                            measure_map = {m: f"{m}" for m in ([ms for ms in (resolved_metric.measures or []) if ms.query] and [ms.query for ms in (resolved_metric.measures or [])])}
+                            binding = RollupBindingModel(
+                                qualified_table=qualified,
+                                dimension_columns=dimension_map,
+                                measure_columns=measure_map,
+                                time_bucket_columns={},
+                                pre_aggregation_spec_id=None,
+                            ).to_query_binding()
+                            # Use the standard generator but attach binding so FROM and SELECT map to rollup
+                            generator = QueryGeneratorFactory.create_generator(resolved_metric, source_type)
+                            generator.binding = binding  # type: ignore[attr-defined]
+                            generated_query = generator.generate_query(parameters, limit, offset, grouped)
+                            query_results = self._execute_database_query(generated_query, metric.data_source_id)
+                            end_time = datetime.now()
+                            duration = (end_time - start_time).total_seconds() * 1000
+                            return {
+                                "success": True,
+                                "data": query_results,
+                                "metadata": {
+                                    "metric_id": str(metric.id),
+                                    "duration": duration,
+                                    "row_count": len(query_results) if query_results else 0,
+                                    "query": generated_query,
+                                    "parameters": parameters,
+                                    "pre_aggregation_spec_id": plan_result.spec_id,
+                                    "rollup_binding": {
+                                        "qualified_table": qualified,
+                                        "dimension_columns": dimension_map,
+                                        "measure_columns": measure_map,
+                                    },
+                                }
+                            }
+            except Exception:
+                raise
+
             # Initialize caching if enabled and we have enough context to key it
             try:
-                cache_config = CacheConfig.from_env()
-                # Resolve enablement in this order: request override > (env AND metric default)
-                env_enabled = bool(cache_config.enabled)
-                metric_enabled = True
-                if getattr(metric, "refresh_key", None) and getattr(metric.refresh_key, "cache", None):
-                    metric_enabled = bool(getattr(metric.refresh_key.cache, "enabled", True))
+                cfg = CacheConfig.from_env()
+                env_enabled = bool(cfg.enabled)
+                metric_enabled = bool(getattr(getattr(metric, 'cache', None), 'enabled', True))
                 request_enabled = None
                 if cache_preference is not None and hasattr(cache_preference, 'enabled'):
                     request_enabled = bool(getattr(cache_preference, 'enabled'))
@@ -91,15 +149,14 @@ class QueryExecutor(TSModel):
                 print(f"[CORTEX CACHE] resolve enabled -> env={env_enabled} metric={metric_enabled} request={request_enabled} final={cache_enabled}")
 
                 if cache_enabled and metric.data_source_id:
-                    # resolve environment and workspace
                     ds = DataSourceCRUD.get_data_source(metric.data_source_id)
                     environment_id = getattr(ds, "environment_id", None)
                     workspace_id = None
                     if environment_id:
                         env = EnvironmentCRUD.get_environment(environment_id)
                         workspace_id = getattr(env, "workspace_id", None)
-                    # derive time bucket and signature
-                    bucket = derive_time_bucket(start_time, metric.refresh_key)
+                    # derive bucket from pre-aggregation policy
+                    bucket = derive_time_bucket(start_time, getattr(metric, 'refresh', None))
                     signature_payload = {
                         "workspace_id": str(workspace_id) if workspace_id else None,
                         "environment_id": str(environment_id) if environment_id else None,
@@ -114,16 +171,15 @@ class QueryExecutor(TSModel):
                         "bucket": bucket,
                         "metric_version": getattr(metric, "version", None),
                         "compiled_query": getattr(metric, "compiled_query", None),
+                        "modifiers": [m.model_dump(mode="json", exclude_none=True) for m in modifiers] if modifiers else None,
                     }
                     cache_signature = build_query_signature(signature_payload)
                     cache_key = build_cache_key(cache_signature)
-                    cache_storage = get_cache_storage(cache_config)
-                    cache_manager = QueryCacheManager(cache_storage)
-                    print(f"[CORTEX CACHE] prepared key={cache_key} sig={cache_signature} backend={cache_config.backend}")
+                    cache_manager = QueryCacheManager(get_cache_storage(cfg))
+                    print(f"[CORTEX CACHE] prepared key={cache_key} sig={cache_signature} backend={cfg.backend}")
                     cached_payload = cache_manager.get(cache_key)
                     if cached_payload is not None:
                         cache_mode = QueryCacheMode.CACHE_HIT
-                        # Persist a lightweight history entry for caching hit
                         lookup_duration = (datetime.now() - start_time).total_seconds() * 1000
                         try:
                             log_entry = self.query_history.log_success(
@@ -141,9 +197,7 @@ class QueryExecutor(TSModel):
                             QueryHistoryCRUD.add_query_log(log_entry)
                         except Exception:
                             pass
-                        # return cached result using cached metadata
                         result_metadata = (cached_payload.get("metadata", {}) or {}).copy()
-                        # overwrite duration to reflect actual caching lookup time
                         result_metadata["duration"] = lookup_duration
                         result_metadata.setdefault("metric_id", str(metric.id))
                         print(f"[CORTEX CACHE] HIT key={cache_key} sig={cache_signature} duration_ms={lookup_duration:.2f}")
@@ -153,37 +207,25 @@ class QueryExecutor(TSModel):
                             "metadata": result_metadata,
                         }
             except Exception as e:
-                # On any caching init/fetch error, continue uncached
                 cache_enabled = False
                 print(f"[CORTEX CACHE] read path error: {e}")
 
-            # Resolve metric extensions if needed
-            resolved_metric = metric
-            
-            # Process context_id if provided and enhance parameters with consumer properties for $CORTEX_ substitution
             enhanced_parameters = self._enhance_parameters_with_context(parameters, context_id)
-            
-            # Generate the query
             query_generator = QueryGeneratorFactory.create_generator(resolved_metric, source_type)
             generated_query = query_generator.generate_query(enhanced_parameters, limit, offset, grouped)
-            
-            # Execute the query (placeholder - would integrate with actual database execution)
             query_results = self._execute_database_query(generated_query, metric.data_source_id)
             
-            # Collect all formatting from semantic objects
             all_formats = OutputProcessor.collect_semantic_formatting(
                 measures=resolved_metric.measures,
                 dimensions=resolved_metric.dimensions,
                 filters=resolved_metric.filters
             )
             
-            # Flatten all formats into a single list for processing
             flat_formats = []
             for format_list in all_formats.values():
                 if format_list:
                     flat_formats.extend(format_list)
             
-            # Apply output format transformations if defined
             if flat_formats:
                 transformed_results = OutputProcessor.process_output_formats(
                     query_results, 
@@ -192,14 +234,15 @@ class QueryExecutor(TSModel):
             else:
                 transformed_results = query_results
             
-            # Calculate execution time
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds() * 1000
 
-            # Cache write (on success only)
+            # Cache write
             if cache_enabled and cache_manager and cache_key and cache_signature:
-                # Derive TTL from refresh_key (fallback to default)
-                ttl_seconds = self._derive_ttl_seconds(metric.refresh_key, CacheConfig.from_env().ttl_seconds_default)
+                # Resolve TTL: request cache.ttl > metric.cache.ttl > env default
+                req_ttl = getattr(cache_preference, 'ttl', None) if cache_preference else None
+                metric_ttl = getattr(getattr(metric, 'cache', None), 'ttl', None)
+                ttl_seconds = int(req_ttl if req_ttl is not None else (metric_ttl if metric_ttl is not None else cfg.ttl_seconds_default))
                 cache_value = {
                     "data": transformed_results,
                     "metadata": {
@@ -221,7 +264,6 @@ class QueryExecutor(TSModel):
                     cache_mode = QueryCacheMode.UNCACHED
                 print(f"[CORTEX CACHE] MISS/STORE key={cache_key} sig={cache_signature} ttl={ttl_seconds}s rows={len(transformed_results) if transformed_results else 0}")
             
-            # Log successful execution (in-memory)
             log_entry = self.query_history.log_success(
                 metric_id=metric.id,
                 data_model_id=data_model.id,
@@ -235,12 +277,10 @@ class QueryExecutor(TSModel):
                 query_hash=cache_signature,
             )
             
-            # Persist to database
             try:
                 QueryHistoryCRUD.add_query_log(log_entry)
             except Exception as db_error:
                 print(f"Failed to persist query log to database: {db_error}")
-                # Continue execution even if database logging fails
             
             return {
                 "success": True,
@@ -253,13 +293,10 @@ class QueryExecutor(TSModel):
                     "parameters": parameters
                 }
             }
-            
         except Exception as e:
-            # Calculate execution time even for failures
             end_time = datetime.now()
             duration = (end_time - start_time).total_seconds() * 1000
             
-            # Log failed execution (in-memory)
             log_entry = self.query_history.log_failure(
                 metric_id=metric.id,
                 data_model_id=data_model.id,
@@ -273,12 +310,10 @@ class QueryExecutor(TSModel):
                 query_hash=cache_signature,
             )
             
-            # Persist to database
             try:
                 QueryHistoryCRUD.add_query_log(log_entry)
             except Exception as db_error:
                 print(f"Failed to persist failed query log to database: {db_error}")
-                # Continue execution even if database logging fails
             
             return {
                 "success": False,

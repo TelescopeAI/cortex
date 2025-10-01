@@ -9,7 +9,7 @@ from sqlalchemy import and_, desc
 
 from cortex.core.data.db.models import MetricORM, MetricVersionORM
 from cortex.core.semantics.metrics.metric import SemanticMetric
-from cortex.core.stores.connection import LocalSession
+from cortex.core.storage.store import CortexStorage
 
 
 class MetricService:
@@ -19,7 +19,7 @@ class MetricService:
         if session:
             self.session = session
         else:
-            self.local_session = LocalSession()
+            self.local_session = CortexStorage()
             self.session = self.local_session.get_session()
     
     def create_metric(self, metric: SemanticMetric) -> MetricORM:
@@ -45,7 +45,8 @@ class MetricService:
                 version=metric.version,
                 extends=metric.extends,
                 public=metric.public,
-                refresh_key=metric.refresh_key,
+                refresh=metric.refresh,
+                cache=metric.cache,
                 meta=metric.meta,
                 is_valid=metric.is_valid,
                 validation_errors=metric.validation_errors,
@@ -129,7 +130,7 @@ class MetricService:
             version_bump_fields = {
                 'name', 'alias', 'description', 'title', 'query', 'table_name',
                 'data_source_id', 'limit', 'grouped', 'measures', 'dimensions',
-                'joins', 'aggregations', 'filters', 'parameters', 'refresh_key', 'meta'
+                'joins', 'aggregations', 'filters', 'parameters', 'refresh', 'cache', 'meta'
             }
 
             should_bump = any(k in version_bump_fields for k in updates.keys())

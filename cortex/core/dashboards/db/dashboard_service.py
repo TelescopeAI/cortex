@@ -3,19 +3,16 @@ from typing import List, Optional
 from uuid import UUID, uuid4
 
 import pytz
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
-from cortex.core.exceptions.dashboards import (
-    DashboardDoesNotExistError, DashboardAlreadyExistsError,
-    DashboardViewDoesNotExistError, DashboardSectionDoesNotExistError,
-    DashboardWidgetDoesNotExistError, InvalidDefaultViewError
-)
-from cortex.core.stores.connection import LocalSession
-from cortex.core.types.telescope import TSModel
 from cortex.core.dashboards.dashboard import Dashboard
 from cortex.core.dashboards.db.dashboard import DashboardORM
-from sqlalchemy.orm.attributes import flag_modified
+from cortex.core.exceptions.dashboards import (
+    DashboardDoesNotExistError, DashboardAlreadyExistsError,
+    InvalidDefaultViewError
+)
+from cortex.core.storage.store import CortexStorage
+from cortex.core.types.telescope import TSModel
 
 
 class DashboardCRUD(TSModel):
@@ -23,7 +20,7 @@ class DashboardCRUD(TSModel):
     @staticmethod
     def get_dashboard_by_id(dashboard_id: UUID) -> Optional[Dashboard]:
         """Get dashboard by ID; views/sections/widgets are stored in dashboards.config."""
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_dashboard = db_session.query(DashboardORM).filter(
                 DashboardORM.id == dashboard_id
@@ -46,7 +43,7 @@ class DashboardCRUD(TSModel):
     @staticmethod
     def get_dashboards_by_environment(environment_id: UUID) -> List[Dashboard]:
         """Get all dashboards for an environment."""
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_dashboards = db_session.query(DashboardORM).filter(
                 DashboardORM.environment_id == environment_id
@@ -69,7 +66,7 @@ class DashboardCRUD(TSModel):
     @staticmethod
     def add_dashboard(dashboard: Dashboard) -> Dashboard:
         """Create a new dashboard. Stores nested structures in dashboards.config."""
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             # Check if dashboard with same name exists in environment
             existing = db_session.query(DashboardORM).filter(
@@ -117,7 +114,7 @@ class DashboardCRUD(TSModel):
     @staticmethod
     def update_dashboard(dashboard_id: UUID, dashboard: Dashboard) -> Dashboard:
         """Update an existing dashboard and its JSON config."""
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_dashboard = db_session.query(DashboardORM).filter(
                 DashboardORM.id == dashboard_id
@@ -169,7 +166,7 @@ class DashboardCRUD(TSModel):
     @staticmethod
     def delete_dashboard(dashboard_id: UUID) -> bool:
         """Delete a dashboard and all its related data."""
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_dashboard = db_session.query(DashboardORM).filter(
                 DashboardORM.id == dashboard_id
@@ -190,7 +187,7 @@ class DashboardCRUD(TSModel):
     @staticmethod
     def set_default_view(dashboard_id: UUID, view_id: UUID) -> Dashboard:
         """Set the default view for a dashboard."""
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             # Verify dashboard exists
             db_dashboard = db_session.query(DashboardORM).filter(

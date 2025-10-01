@@ -7,8 +7,11 @@ from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.joins import SemanticJoin
 from cortex.core.semantics.aggregations import SemanticAggregation
 from cortex.core.semantics.filters import SemanticFilter
-from cortex.core.semantics.refresh_keys import RefreshKey, CachePreference
+from cortex.core.semantics.order_sequences import SemanticOrderSequence
+from cortex.core.semantics.refresh_keys import RefreshPolicy
+from cortex.core.semantics.cache import CachePreference
 from cortex.core.semantics.parameters import ParameterDefinition
+from cortex.core.semantics.metrics.modifiers import MetricModifiers
 
 
 class MetricCreateRequest(BaseModel):
@@ -23,15 +26,18 @@ class MetricCreateRequest(BaseModel):
     data_source_id: Optional[UUID] = None
     limit: Optional[int] = None
     grouped: Optional[bool] = Field(default=True, description="Whether to apply GROUP BY when dimensions are present")
+    ordered: Optional[bool] = Field(default=True, description="Whether to apply ORDER BY for sorting results")
     measures: Optional[List[SemanticMeasure]] = None
     dimensions: Optional[List[SemanticDimension]] = None
     joins: Optional[List[SemanticJoin]] = None
     aggregations: Optional[List[SemanticAggregation]] = None
     filters: Optional[List[SemanticFilter]] = None
+    order: Optional[List[SemanticOrderSequence]] = None
     parameters: Optional[Dict[str, ParameterDefinition]] = None
     extends: Optional[UUID] = None
     public: Optional[bool] = True
-    refresh_key: Optional[RefreshKey] = None
+    refresh: Optional[RefreshPolicy] = None
+    cache: Optional[CachePreference] = None
     meta: Optional[Dict[str, Any]] = None
 
 
@@ -46,15 +52,18 @@ class MetricUpdateRequest(BaseModel):
     data_source_id: Optional[UUID] = None
     limit: Optional[int] = None
     grouped: Optional[bool] = None
+    ordered: Optional[bool] = None
     measures: Optional[List[SemanticMeasure]] = None
     dimensions: Optional[List[SemanticDimension]] = None
     joins: Optional[List[SemanticJoin]] = None
     aggregations: Optional[List[SemanticAggregation]] = None
     filters: Optional[List[SemanticFilter]] = None
+    order: Optional[List[SemanticOrderSequence]] = None
     parameters: Optional[Dict[str, ParameterDefinition]] = None
     extends: Optional[UUID] = None
     public: Optional[bool] = None
-    refresh_key: Optional[RefreshKey] = None
+    refresh: Optional[RefreshPolicy] = None
+    cache: Optional[CachePreference] = None
     meta: Optional[Dict[str, Any]] = None
 
     model_config = ConfigDict(use_enum_values=True)
@@ -68,7 +77,9 @@ class MetricExecutionRequest(BaseModel):
     offset: Optional[int] = None
     context_id: Optional[str] = None
     grouped: Optional[bool] = Field(default=True, description="Whether to apply GROUP BY when dimensions are present")
+    ordered: Optional[bool] = Field(default=True, description="Whether to apply ORDER BY for sorting results")
     cache: Optional[CachePreference] = None
+    modifiers: Optional[MetricModifiers] = None
 
 
 class MetricCloneRequest(BaseModel):

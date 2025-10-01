@@ -4,7 +4,7 @@ from uuid import UUID
 
 import pytz
 
-from cortex.core.stores.connection import LocalSession
+from cortex.core.storage.store import CortexStorage
 from cortex.core.types.telescope import TSModel
 from cortex.core.query.history.logger import QueryLog, QueryCacheMode
 from cortex.core.query.db.models import QueryHistoryORM
@@ -15,7 +15,7 @@ class QueryHistoryCRUD(TSModel):
     @staticmethod
     def get_query_log_by_id(query_id: UUID) -> Optional[QueryLog]:
         """Get query log entry by ID."""
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_query_log = db_session.query(QueryHistoryORM).filter(
                 QueryHistoryORM.id == query_id
@@ -40,7 +40,7 @@ class QueryHistoryCRUD(TSModel):
         executed_before: Optional[datetime] = None
     ) -> List[QueryLog]:
         """Get recent query logs with optional filtering."""
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             query = db_session.query(QueryHistoryORM)
             
@@ -80,7 +80,7 @@ class QueryHistoryCRUD(TSModel):
     @staticmethod
     def add_query_log(query_log: QueryLog) -> QueryLog:
         """Create a new query log entry."""
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_query_log = QueryHistoryORM(
                 id=query_log.id,
@@ -117,7 +117,7 @@ class QueryHistoryCRUD(TSModel):
         time_range: Optional[str] = None
     ) -> Dict[str, Any]:
         """Get aggregated execution statistics."""
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             query = db_session.query(QueryHistoryORM)
             
@@ -188,7 +188,7 @@ class QueryHistoryCRUD(TSModel):
         threshold_ms: Optional[float] = 1000.0
     ) -> List[QueryLog]:
         """Get slowest queries for performance analysis."""
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             query = db_session.query(QueryHistoryORM).filter(
                 QueryHistoryORM.duration >= threshold_ms
@@ -233,7 +233,7 @@ class QueryHistoryCRUD(TSModel):
     @staticmethod
     def clear_query_history(older_than: Optional[datetime] = None) -> int:
         """Clear query history with optional time-based filtering."""
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             query = db_session.query(QueryHistoryORM)
             

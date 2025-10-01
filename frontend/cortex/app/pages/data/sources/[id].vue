@@ -15,6 +15,13 @@ import { ArrowLeft, Calendar, Edit, Trash2, Database, Globe, FileText, Settings,
 import EditDataSourceDialog from '~/components/EditDataSourceDialog.vue';
 import { toast } from 'vue-sonner';
 
+// Import database configuration components
+import PostgreSQLConfig from '~/components/data-sources/PostgreSQLConfig.vue'
+import MySQLConfig from '~/components/data-sources/MySQLConfig.vue'
+import SQLiteConfig from '~/components/data-sources/SQLiteConfig.vue'
+import BigQueryConfig from '~/components/data-sources/BigQueryConfig.vue'
+import CommonSQLConfig from '~/components/data-sources/CommonSQLConfig.vue'
+
 const route = useRoute();
 const router = useRouter();
 const { apiUrl } = useApi();
@@ -230,10 +237,43 @@ function goBack() {
       <!-- Configuration Card -->
       <Card>
         <CardHeader>
-          <CardTitle class="text-lg">Configuration</CardTitle>
+          <CardTitle class="text-lg">Database Configuration</CardTitle>
         </CardHeader>
         <CardContent>
-          <pre class="bg-gray-100 p-4 rounded text-sm overflow-x-auto">{{ JSON.stringify(currentDataSource.config, null, 2) }}</pre>
+          <div v-if="currentDataSource.source_type" class="border rounded-lg p-4 bg-muted/50">
+            <PostgreSQLConfig
+              v-if="currentDataSource.source_type === 'postgresql'"
+              :model-value="currentDataSource.config"
+              disabled
+            />
+            <MySQLConfig
+              v-else-if="currentDataSource.source_type === 'mysql'"
+              :model-value="currentDataSource.config"
+              disabled
+            />
+            <SQLiteConfig
+              v-else-if="currentDataSource.source_type === 'sqlite'"
+              :model-value="currentDataSource.config"
+              disabled
+            />
+            <BigQueryConfig
+              v-else-if="currentDataSource.source_type === 'bigquery'"
+              :model-value="currentDataSource.config"
+              disabled
+            />
+            <CommonSQLConfig
+              v-else-if="['oracle', 'snowflake', 'redshift'].includes(currentDataSource.source_type)"
+              :model-value="currentDataSource.config"
+              :database-type="currentDataSource.source_type as 'oracle' | 'snowflake' | 'redshift'"
+              disabled
+            />
+            <div v-else class="text-center py-4 text-muted-foreground">
+              <p>Configuration display not available for this database type.</p>
+            </div>
+          </div>
+          <div v-else class="text-center py-4 text-muted-foreground">
+            <p>No configuration available</p>
+          </div>
         </CardContent>
       </Card>
 

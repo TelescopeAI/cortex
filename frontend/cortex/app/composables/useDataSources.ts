@@ -1,5 +1,5 @@
 import { useFetch } from 'nuxt/app';
-import { computed, watch } from 'vue';
+import { computed, watch, ref } from 'vue';
 import { useStorage } from '@vueuse/core';
 import type { DataSource } from '~/types';
 
@@ -9,32 +9,56 @@ export function useDataSources() {
   // Get selected environment ID from storage
   const selectedEnvironmentId = useStorage<string | null>('selectedEnvironmentId', null);
 
-  // Fetch data sources for the selected environment
-  const { data, pending, error, refresh, execute } = useFetch<DataSource[]>(
-    apiUrl('/api/v1/environments/{environment_id}/data/sources'),
-    { 
-      watch: false, // Disable automatic watching
-      default: () => [],
-      immediate: false // Don't execute immediately
-    }
-  );
+  // Manual loading state since we're not using useFetch properly
+  const loading = ref(false);
+  const error = ref<string | null>(null);
+  const data = ref<DataSource[]>([]);
 
   // Watch for environment changes and execute fetch only when environment is selected
-  watch(selectedEnvironmentId, (newEnvironmentId) => {
+  watch(selectedEnvironmentId, async (newEnvironmentId) => {
     if (newEnvironmentId) {
-      // Manually construct the URL and execute
-      const url = apiUrl(`/api/v1/environments/${newEnvironmentId}/data/sources`);
-      $fetch(url).then(result => {
-        data.value = result as DataSource[];
-      }).catch(err => {
+      loading.value = true;
+      error.value = null;
+      
+      try {
+        // Manually construct the URL and execute
+        const url = apiUrl(`/api/v1/environments/${newEnvironmentId}/data/sources`);
+        const result = await $fetch<DataSource[]>(url);
+        data.value = result;
+      } catch (err: any) {
         console.error('Failed to fetch data sources:', err);
+        error.value = err.message || 'Failed to fetch data sources';
         data.value = [];
-      });
+      } finally {
+        loading.value = false;
+      }
     } else {
       // Clear data when no environment is selected
       data.value = [];
+      loading.value = false;
+      error.value = null;
     }
   }, { immediate: true });
+
+  // Refresh function to manually reload data
+  async function refresh() {
+    if (selectedEnvironmentId.value) {
+      loading.value = true;
+      error.value = null;
+      
+      try {
+        const url = apiUrl(`/api/v1/environments/${selectedEnvironmentId.value}/data/sources`);
+        const result = await $fetch<DataSource[]>(url);
+        data.value = result;
+      } catch (err: any) {
+        console.error('Failed to refresh data sources:', err);
+        error.value = err.message || 'Failed to refresh data sources';
+        data.value = [];
+      } finally {
+        loading.value = false;
+      }
+    }
+  }
 
   // Create a new data source
   async function createDataSource(dataSource: {
@@ -111,7 +135,7 @@ export function useDataSources() {
 
   return {
     dataSources,
-    loading: pending,
+    loading,
     error,
     refresh,
     selectedEnvironmentId,

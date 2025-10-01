@@ -20,7 +20,8 @@ export interface CreateDashboardRequest {
 }
 
 export interface CreateDashboardViewRequest {
-  name: string
+  title: string
+  alias?: string
   description?: string
   sections: CreateDashboardSectionRequest[]
   context_id?: string
@@ -237,9 +238,22 @@ export function useDashboards() {
     error.value = null
     
     try {
-      const dashboard = await $fetch<Dashboard>(apiUrl(`/api/v1/dashboards/${dashboardId}/default-view`), {
-        method: 'POST',
-        body: { view_id: viewId }
+      // Find the current dashboard to verify the view exists
+      const dashboardToUpdate = dashboards.value.find(d => d.id === dashboardId) || currentDashboard.value
+      if (!dashboardToUpdate) {
+        throw new Error('Dashboard not found')
+      }
+      
+      // Verify the view exists in the dashboard
+      const viewExists = dashboardToUpdate.views.some(v => v.alias === viewId)
+      if (!viewExists) {
+        throw new Error(`View ${viewId} does not exist in this dashboard`)
+      }
+      
+      // Update the dashboard with the new default_view
+      const dashboard = await $fetch<Dashboard>(apiUrl(`/api/v1/dashboards/${dashboardId}`), {
+        method: 'PUT',
+        body: { default_view: viewId }
       })
       
       const index = dashboards.value.findIndex(d => d.id === dashboardId)
@@ -296,6 +310,36 @@ export function useDashboards() {
       return result
     } catch (err: any) {
       error.value = err.message || 'Failed to execute widget'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function deleteWidget(dashboardId: string, viewAlias: string, widgetAlias: string) {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const dashboard = await $fetch<Dashboard>(
+        apiUrl(`/api/v1/dashboards/${dashboardId}/views/${viewAlias}/widgets/${widgetAlias}`),
+        { method: 'DELETE' }
+      )
+      
+      // Update current dashboard if it's the one being modified
+      if (currentDashboard.value?.id === dashboardId) {
+        currentDashboard.value = dashboard
+      }
+      
+      // Update in dashboards list
+      const index = dashboards.value.findIndex(d => d.id === dashboardId)
+      if (index !== -1) {
+        dashboards.value[index] = dashboard
+      }
+      
+      return dashboard
+    } catch (err: any) {
+      error.value = err.message || 'Failed to delete widget'
       throw err
     } finally {
       loading.value = false
@@ -424,6 +468,7 @@ export function useDashboards() {
     setDefaultView,
     executeDashboard,
     executeWidget,
+    deleteWidget,
     previewDashboardConfig,
     
     // Utilities

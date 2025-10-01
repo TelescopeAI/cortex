@@ -163,41 +163,54 @@ const selectedDataSourceIdLocal = ref<string | undefined>(undefined)
 
 // Schema data structure
 const schema = ref({
+  name: '',
+  alias: '',
+  title: '',
+  description: '',
   table_name: '',
   query: '',
   data_source_id: undefined as string | undefined,
   limit: undefined as number | undefined,
   grouped: true,
+  ordered: true,
+  order: [],
   measures: [],
   dimensions: [],
   joins: [],
   aggregations: [],
   filters: [],
   parameters: {},
-  refresh_key: undefined as any
+  refresh: undefined as any,
+  cache: undefined as any
 })
 
 // Initialize schema from metric
 watch(() => props.metric, (newMetric) => {
   if (newMetric) {
     schema.value = {
+      name: newMetric.name || '',
+      alias: newMetric.alias || '',
+      title: newMetric.title || '',
+      description: newMetric.description || '',
       table_name: newMetric.table_name || '',
       query: newMetric.query || '',
       data_source_id: newMetric.data_source_id || undefined,
       limit: newMetric.limit || undefined,
       grouped: newMetric.grouped !== undefined ? newMetric.grouped : true,
+      ordered: newMetric.ordered !== undefined ? newMetric.ordered : true,
+      order: newMetric.order || [],
       measures: newMetric.measures || [],
       dimensions: newMetric.dimensions || [],
       joins: newMetric.joins || [],
       aggregations: newMetric.aggregations || [],
       filters: newMetric.filters || [],
       parameters: newMetric.parameters || {},
-      refresh_key: newMetric.refresh_key || undefined
+      refresh: newMetric.refresh || undefined,
+      cache: newMetric.cache || undefined
     }
     
     // Initialize local data source id
     selectedDataSourceIdLocal.value = newMetric.data_source_id || props.selectedDataSourceId
-    // Auto-load schema if we have a data source ID and no schema loaded yet
     if (selectedDataSourceIdLocal.value && !tableSchema.value) {
       loadSchemaFromDataSource(selectedDataSourceIdLocal.value)
     }
@@ -215,11 +228,11 @@ watch(() => props.selectedDataSourceId, (newId) => {
 const generatedJson = computed(() => {
   const cleanSchema = JSON.parse(JSON.stringify(schema.value))
   
-  // Remove empty arrays and null values, but preserve data_source_id and refresh_key
+  // Remove empty arrays and null values, but preserve data_source_id and refresh
   Object.keys(cleanSchema).forEach(key => {
     if (Array.isArray(cleanSchema[key]) && cleanSchema[key].length === 0) {
       delete cleanSchema[key]
-    } else if ((cleanSchema[key] === null || cleanSchema[key] === undefined || cleanSchema[key] === '') && !['data_source_id', 'refresh_key'].includes(key)) {
+    } else if ((cleanSchema[key] === null || cleanSchema[key] === undefined || cleanSchema[key] === '') && !['data_source_id', 'refresh'].includes(key)) {
       delete cleanSchema[key]
     }
   })
@@ -239,8 +252,15 @@ async function loadSchemaFromDataSource(dataSourceId?: string) {
   try {
     tableSchema.value = await getDataSourceSchema(src)
     const firstTable = tableSchema.value?.tables?.[0]?.name
+    // Only set table_name if it's not already set or if current table doesn't exist in new schema
     if (firstTable) {
-      schema.value.table_name = firstTable
+      const currentTable = schema.value.table_name
+      const tableExists = tableSchema.value?.tables?.some((t: any) => t.name === currentTable)
+      
+      // Only override if no table is currently selected OR current table doesn't exist in new schema
+      if (!currentTable || !tableExists) {
+        schema.value.table_name = firstTable
+      }
     } else {
       schema.value.table_name = ''
     }

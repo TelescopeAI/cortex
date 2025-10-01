@@ -12,7 +12,7 @@ from cortex.core.consumers.consumer import Consumer
 from cortex.core.consumers.db.consumer import ConsumerORM
 from cortex.core.exceptions.consumers import ConsumerDoesNotExistError, ConsumerGroupDoesNotExistError, \
     ConsumerGroupAlreadyExistsError
-from cortex.core.stores.connection import LocalSession
+from cortex.core.storage.store import CortexStorage
 from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
 
 
@@ -20,7 +20,7 @@ class ConsumerGroupCRUD:
 
     @staticmethod
     def get_consumer_group_by_name_and_environment(name: str, environment_id: UUID) -> Optional[ConsumerGroup]:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_group = db_session.query(ConsumerGroupORM).filter(
                 ConsumerGroupORM.name == name,
@@ -34,7 +34,7 @@ class ConsumerGroupCRUD:
 
     @staticmethod
     def add_consumer_group(group: ConsumerGroup) -> ConsumerGroup:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             # Check if environment exists
             EnvironmentCRUD.get_environment(group.environment_id)
@@ -75,7 +75,7 @@ class ConsumerGroupCRUD:
 
     @staticmethod
     def get_consumer_group(group_id: UUID) -> ConsumerGroup:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_group = db_session.query(ConsumerGroupORM).filter(
                 ConsumerGroupORM.id == group_id
@@ -88,7 +88,7 @@ class ConsumerGroupCRUD:
 
     @staticmethod
     def get_consumer_group_with_consumers(group_id: UUID) -> tuple[ConsumerGroup, List[Consumer]]:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_group = db_session.query(ConsumerGroupORM).filter(
                 ConsumerGroupORM.id == group_id
@@ -104,7 +104,7 @@ class ConsumerGroupCRUD:
 
     @staticmethod
     def get_consumer_groups_by_environment(environment_id: UUID) -> List[ConsumerGroup]:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             # Verify environment exists
             EnvironmentCRUD.get_environment(environment_id)
@@ -118,7 +118,7 @@ class ConsumerGroupCRUD:
 
     @staticmethod
     def get_groups_for_consumer(consumer_id: UUID) -> List[ConsumerGroup]:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             # Check if consumer exists
             db_consumer = db_session.query(ConsumerORM).filter(
@@ -140,7 +140,7 @@ class ConsumerGroupCRUD:
 
     @staticmethod
     def update_consumer_group(group: ConsumerGroup) -> ConsumerGroup:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_group = db_session.query(ConsumerGroupORM).filter(
                 ConsumerGroupORM.id == group.id
@@ -183,7 +183,7 @@ class ConsumerGroupCRUD:
 
     @staticmethod
     def delete_consumer_group(group_id: UUID) -> bool:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             result = db_session.query(ConsumerGroupORM).filter(
                 ConsumerGroupORM.id == group_id
@@ -198,7 +198,7 @@ class ConsumerGroupCRUD:
 
     @staticmethod
     def add_consumer_to_group(group_id: UUID, consumer_id: UUID) -> bool:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             # Check if group exists
             db_group = db_session.query(ConsumerGroupORM).filter(
@@ -243,7 +243,7 @@ class ConsumerGroupCRUD:
 
     @staticmethod
     def remove_consumer_from_group(group_id: UUID, consumer_id: UUID) -> bool:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             # Check if group exists
             if not db_session.query(ConsumerGroupORM).filter(ConsumerGroupORM.id == group_id).first():
@@ -271,7 +271,7 @@ class ConsumerGroupCRUD:
 
     @staticmethod
     def is_consumer_in_group(group_id: UUID, consumer_id: UUID) -> bool:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             # Check if group exists
             if not db_session.query(ConsumerGroupORM).filter(ConsumerGroupORM.id == group_id).first():

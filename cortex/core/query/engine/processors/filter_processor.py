@@ -5,6 +5,7 @@ from cortex.core.types.telescope import TSModel
 from cortex.core.semantics.filters import SemanticFilter
 from cortex.core.types.semantics.filter import FilterOperator, FilterType
 from cortex.core.query.engine.processors.output_processor import OutputProcessor
+from cortex.core.utils.schema_inference import get_qualified_column_name
 
 
 class FilterProcessor(TSModel):
@@ -79,8 +80,11 @@ class FilterProcessor(TSModel):
             )
         
         # Get qualified column name
-        column = FilterProcessor._get_qualified_column_name(
-            filter_obj.query, filter_obj.table, table_prefix
+        column = get_qualified_column_name(
+            column_query=filter_obj.query,
+            table_name=filter_obj.table,
+            table_prefix=table_prefix,
+            has_joins=False  # FilterProcessor doesn't have access to joins info
         )
         
         # Apply any IN_QUERY formatting to the column
@@ -100,21 +104,6 @@ class FilterProcessor(TSModel):
             column, filter_obj.operator, value, filter_obj
         )
 
-    @staticmethod
-    def _get_qualified_column_name(column_query: str, 
-                                  table_name: Optional[str] = None,
-                                  table_prefix: Optional[str] = None) -> str:
-        """Get a fully qualified column name with table prefix"""
-        # If column already contains a table prefix (has a dot), return as-is
-        if '.' in column_query:
-            return column_query
-        
-        # Use provided table name or table prefix
-        prefix = table_name or table_prefix
-        if prefix:
-            return f"{prefix}.{column_query}"
-        
-        return column_query
 
     @staticmethod
     def _build_operator_condition(column: str, 

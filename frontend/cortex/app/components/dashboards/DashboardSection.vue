@@ -24,6 +24,7 @@ interface Props {
   defaultCollapsed?: boolean
   dashboardId?: string
   viewAlias?: string
+  refreshKey?: number
 }
 
 interface Emits {
@@ -308,7 +309,9 @@ function getWidgetExecutionResult(widgetId: string) {
             :dashboard-id="(props as any).dashboardId" 
             :view-alias="(props as any).viewAlias" 
             :widget="widget"
+            :refresh-key="(props as any).refreshKey"
             @edit="(widget) => emit('edit-widget', widget)"
+            @deleted="() => emit('widget-updated')"
           />
         </div>
       </div>

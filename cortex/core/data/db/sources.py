@@ -1,11 +1,11 @@
 from datetime import datetime
 import pytz
 from sqlalchemy import String, DateTime, UUID
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import mapped_column
 from sqlalchemy import ForeignKey
 
-from cortex.core.stores.sqlalchemy import BaseDBModel
+from cortex.core.storage.sqlalchemy import BaseDBModel
+from cortex.core.types.databases import DatabaseTypeResolver
 
 
 class DataSourceORM(BaseDBModel):
@@ -17,7 +17,7 @@ class DataSourceORM(BaseDBModel):
     description = mapped_column(String, nullable=True)
     source_catalog = mapped_column(String, nullable=False)  # Will store enum value
     source_type = mapped_column(String, nullable=False)     # Will store enum value
-    config = mapped_column(JSONB, nullable=False)
+    config = mapped_column(DatabaseTypeResolver.json_type(), nullable=False)
     created_at = mapped_column(DateTime, default=datetime.now(pytz.UTC))
     updated_at = mapped_column(DateTime, default=datetime.now(pytz.UTC))
     

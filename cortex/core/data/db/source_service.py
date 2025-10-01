@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from cortex.core.data.db.sources import DataSourceORM
 from cortex.core.data.sources.data_sources import DataSource
 from cortex.core.exceptions.data.sources import DataSourceAlreadyExistsError, DataSourceDoesNotExistError
-from cortex.core.stores.connection import LocalSession
+from cortex.core.storage.store import CortexStorage
 from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
 
 
@@ -16,7 +16,7 @@ class DataSourceCRUD:
 
     @staticmethod
     def get_data_source_by_name_and_environment(name: str, environment_id: UUID) -> Optional[DataSource]:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_data_source = db_session.query(DataSourceORM).filter(
                 DataSourceORM.name == name,
@@ -30,7 +30,7 @@ class DataSourceCRUD:
 
     @staticmethod
     def add_data_source(data_source: DataSource) -> DataSource:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             # Check if environment exists
             EnvironmentCRUD.get_environment(data_source.environment_id)
@@ -73,7 +73,7 @@ class DataSourceCRUD:
 
     @staticmethod
     def get_data_source(data_source_id: UUID) -> DataSource:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_data_source = db_session.query(DataSourceORM).filter(
                 DataSourceORM.id == data_source_id
@@ -86,7 +86,7 @@ class DataSourceCRUD:
 
     @staticmethod
     def get_data_sources_by_environment(environment_id: UUID) -> List[DataSource]:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             # Verify environment exists
             EnvironmentCRUD.get_environment(environment_id)
@@ -100,7 +100,7 @@ class DataSourceCRUD:
 
     @staticmethod
     def update_data_source(data_source: DataSource) -> DataSource:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_data_source = db_session.query(DataSourceORM).filter(
                 DataSourceORM.id == data_source.id
@@ -143,7 +143,7 @@ class DataSourceCRUD:
 
     @staticmethod
     def delete_data_source(data_source_id: UUID) -> bool:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             result = db_session.query(DataSourceORM).filter(
                 DataSourceORM.id == data_source_id

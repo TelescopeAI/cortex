@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~
 import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '~/components/ui/dropdown-menu'
-import { ChevronDown, Eye, Star, Settings } from 'lucide-vue-next'
+import { ChevronDown, Eye, Star, Settings, Plus } from 'lucide-vue-next'
 import type { Dashboard, DashboardView } from '~/types/dashboards'
 
 interface Props {
@@ -17,6 +17,7 @@ interface Emits {
   (e: 'view-changed', viewId: string): void
   (e: 'set-default'): void
   (e: 'edit-view', view: DashboardView): void
+  (e: 'add-view'): void
 }
 
 const props = defineProps<Props>()
@@ -32,7 +33,8 @@ const isDefaultView = computed(() => {
 })
 
 // Methods
-function handleViewChange(viewId: string) {
+function handleViewChange(value: any) {
+  const viewId = String(value)
   emit('view-changed', viewId)
 }
 
@@ -42,6 +44,10 @@ function setAsDefault() {
 
 function editView(view: DashboardView) {
   emit('edit-view', view)
+}
+
+function addView() {
+  emit('add-view')
 }
 </script>
 
@@ -95,21 +101,29 @@ function editView(view: DashboardView) {
     </Select>
 
     <!-- View Actions -->
-    <DropdownMenu v-if="selectedView">
+    <DropdownMenu>
       <DropdownMenuTrigger as-child>
         <Button variant="ghost" size="icon">
           <Settings class="w-4 h-4" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        <DropdownMenuItem @click="addView">
+          <Plus class="w-4 h-4 mr-2" />
+          Add View
+        </DropdownMenuItem>
         <DropdownMenuItem 
+          v-if="selectedView"
           @click="setAsDefault"
           :disabled="isDefaultView"
         >
           <Star class="w-4 h-4 mr-2" />
           Set as Default
         </DropdownMenuItem>
-        <DropdownMenuItem @click="editView(selectedView)">
+        <DropdownMenuItem 
+          v-if="selectedView"
+          @click="editView(selectedView)"
+        >
           <Settings class="w-4 h-4 mr-2" />
           Edit View
         </DropdownMenuItem>

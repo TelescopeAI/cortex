@@ -11,14 +11,14 @@ from cortex.core.workspaces.environments.environment import WorkspaceEnvironment
 from cortex.core.exceptions.environments import (EnvironmentAlreadyExistsError, EnvironmentDoesNotExistError,
                                                  NoEnvironmentsExistError)
 from cortex.core.exceptions.workspaces import WorkspaceDoesNotExistError
-from cortex.core.stores.connection import LocalSession
+from cortex.core.storage.store import CortexStorage
 
 
 class EnvironmentCRUD:
 
     @staticmethod
     def get_environment_by_name_and_workspace(name: str, workspace_id: UUID) -> Optional[WorkspaceEnvironment]:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_environment = db_session.query(WorkspaceEnvironmentORM).filter(
                 WorkspaceEnvironmentORM.name == name,
@@ -34,7 +34,7 @@ class EnvironmentCRUD:
 
     @staticmethod
     def add_environment(environment: WorkspaceEnvironment) -> WorkspaceEnvironment:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             # Check if workspace exists
             WorkspaceCRUD.get_workspace(environment.workspace_id)
@@ -75,7 +75,7 @@ class EnvironmentCRUD:
 
     @staticmethod
     def get_environments_by_workspace(workspace_id: UUID) -> List[WorkspaceEnvironment]:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             # Check if workspace exists
             WorkspaceCRUD.get_workspace(workspace_id)
@@ -93,7 +93,7 @@ class EnvironmentCRUD:
 
     @staticmethod
     def get_environment(environment_id: UUID) -> WorkspaceEnvironment:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_environment = db_session.query(WorkspaceEnvironmentORM).filter(
                 WorkspaceEnvironmentORM.id == environment_id
@@ -108,7 +108,7 @@ class EnvironmentCRUD:
 
     @staticmethod
     def update_environment(environment: WorkspaceEnvironment) -> WorkspaceEnvironment:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             db_environment = db_session.query(WorkspaceEnvironmentORM).filter(
                 WorkspaceEnvironmentORM.id == environment.id
@@ -131,7 +131,7 @@ class EnvironmentCRUD:
 
     @staticmethod
     def delete_environment(environment: WorkspaceEnvironment) -> bool:
-        db_session = LocalSession().get_session()
+        db_session = CortexStorage().get_session()
         try:
             result = db_session.query(WorkspaceEnvironmentORM).filter(
                 WorkspaceEnvironmentORM.id == environment.id

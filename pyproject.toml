@@ -1,14 +1,14 @@
 [tool.poetry]
 name = "telescope-cortex"
-version = "0.0.1a0"
-description = "Semantic Layer for Databases with optional API components"
+version = "0.0.1a1"
+description = "Headless BI for AI Native applications"
 authors = ["Nilotpal Roychowdhury <nilotpal@jointelescope.com>"]
 license = "MIT"
 readme = "README.md"
 packages = [{include = "cortex"}]
 
 [tool.poetry.dependencies]
-python = ">=3.12,<3.13"
+python = ">=3.12"
 pydantic = "^2.10.6"
 sqlalchemy = "^2.0.38"
 sqlalchemy-bigquery = "^1.12.1"

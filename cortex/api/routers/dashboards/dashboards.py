@@ -418,6 +418,72 @@ async def execute_widget(dashboard_id: UUID, view_alias: str, widget_alias: str)
         )
 
 
+@DashboardRouter.delete(
+    "/dashboards/{dashboard_id}/views/{view_alias}/widgets/{widget_alias}",
+    response_model=DashboardResponse,
+    tags=["Dashboards"]
+)
+async def delete_widget(dashboard_id: UUID, view_alias: str, widget_alias: str):
+    """Delete a specific widget from a dashboard view.
+    
+    Returns the updated dashboard configuration after widget removal.
+    """
+    try:
+        # Load dashboard
+        dashboard = DashboardCRUD.get_dashboard_by_id(dashboard_id)
+        if dashboard is None:
+            raise DashboardDoesNotExistError(dashboard_id)
+
+        # Find view
+        target_view = None
+        view_index = None
+        for i, v in enumerate(dashboard.views):
+            if v.alias == view_alias:
+                target_view = v
+                view_index = i
+                break
+        if target_view is None:
+            raise DashboardViewDoesNotExistError(view_alias)
+
+        # Find widget by alias across sections and remove it
+        widget_found = False
+        for section in target_view.sections:
+            for widget_index, widget in enumerate(section.widgets):
+                if widget.alias == widget_alias:
+                    section.widgets.pop(widget_index)
+                    widget_found = True
+                    break
+            if widget_found:
+                break
+        
+        if not widget_found:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Widget '{widget_alias}' not found in view '{view_alias}'"
+            )
+
+        # Update dashboard in database
+        updated_dashboard = DashboardCRUD.update_dashboard(dashboard_id, dashboard)
+        
+        return DashboardResponse.model_validate(updated_dashboard, from_attributes=True)
+        
+    except DashboardDoesNotExistError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except DashboardViewDoesNotExistError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
 # Helper functions
 def _convert_create_request_to_dashboard(request: DashboardCreateRequest) -> Dashboard:
     """Convert dashboard create request to domain model."""

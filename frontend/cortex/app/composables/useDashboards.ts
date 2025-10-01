@@ -316,6 +316,36 @@ export function useDashboards() {
     }
   }
 
+  async function deleteWidget(dashboardId: string, viewAlias: string, widgetAlias: string) {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const dashboard = await $fetch<Dashboard>(
+        apiUrl(`/api/v1/dashboards/${dashboardId}/views/${viewAlias}/widgets/${widgetAlias}`),
+        { method: 'DELETE' }
+      )
+      
+      // Update current dashboard if it's the one being modified
+      if (currentDashboard.value?.id === dashboardId) {
+        currentDashboard.value = dashboard
+      }
+      
+      // Update in dashboards list
+      const index = dashboards.value.findIndex(d => d.id === dashboardId)
+      if (index !== -1) {
+        dashboards.value[index] = dashboard
+      }
+      
+      return dashboard
+    } catch (err: any) {
+      error.value = err.message || 'Failed to delete widget'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function previewDashboardConfig(dashboardId: string, config: any) {
     loading.value = true
     error.value = null
@@ -438,6 +468,7 @@ export function useDashboards() {
     setDefaultView,
     executeDashboard,
     executeWidget,
+    deleteWidget,
     previewDashboardConfig,
     
     // Utilities

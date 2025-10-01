@@ -3,6 +3,18 @@ import { onMounted, ref, watch, computed } from 'vue'
 import { useDashboards } from '~/composables/useDashboards'
 import ChartRenderer from './ChartRenderer.vue'
 import { Toggle } from '@/components/ui/toggle'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { toast } from 'vue-sonner'
 
 interface Props {
   dashboardId: string
@@ -13,17 +25,20 @@ interface Props {
 
 interface Emits {
   (e: 'edit', widget: any): void
+  (e: 'deleted'): void
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-const { executeWidget } = useDashboards()
+const { executeWidget, deleteWidget } = useDashboards()
 
 const loading = ref(true)
 const error = ref<string | null>(null)
 const data = ref<any | null>(null)
 const dataZoom = ref(false)
+const deleteDialogOpen = ref(false)
+const deleting = ref(false)
 
 async function load() {
   try {
@@ -45,6 +60,25 @@ function refreshData() {
 
 function editWidget() {
   emit('edit', props.widget)
+}
+
+async function handleDeleteWidget() {
+  try {
+    deleting.value = true
+    await deleteWidget(props.dashboardId, props.viewAlias, props.widget.alias)
+    deleteDialogOpen.value = false
+    
+    // Show success toast
+    toast.success('Widget deleted successfully')
+    
+    // Emit deleted event to refresh dashboard config
+    emit('deleted')
+  } catch (e: any) {
+    error.value = e?.data?.detail || e?.message || 'Failed to delete widget'
+    toast.error('Failed to delete widget')
+  } finally {
+    deleting.value = false
+  }
 }
 
 // Determine if current chart type supports data zoom
@@ -101,6 +135,38 @@ watch(() => props.refreshKey, () => load())
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
           </svg>
         </button>
+
+        <AlertDialog v-model:open="deleteDialogOpen">
+          <AlertDialogTrigger as-child>
+            <button
+              class="p-1.5 text-muted-foreground hover:text-destructive hover:bg-background rounded transition-colors"
+              title="Delete widget"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Widget</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete "{{ widget.title || 'Untitled Widget' }}"? 
+                This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                @click="handleDeleteWidget"
+                :disabled="deleting"
+                class="bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {{ deleting ? 'Deleting...' : 'Delete' }}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
 

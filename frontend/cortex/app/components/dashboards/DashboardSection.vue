@@ -311,6 +311,7 @@ function getWidgetExecutionResult(widgetId: string) {
             :widget="widget"
             :refresh-key="(props as any).refreshKey"
             @edit="(widget) => emit('edit-widget', widget)"
+            @deleted="() => emit('widget-updated')"
           />
         </div>
       </div>

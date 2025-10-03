@@ -1,62 +1,41 @@
-import { useFetch } from 'nuxt/app';
-import { computed, watch, ref } from 'vue';
-import { useStorage } from '@vueuse/core';
+import { useEnvironments } from '~/composables/useEnvironments';
+import { computed, ref } from 'vue';
 import type { DataSource } from '~/types';
 
 export function useDataSources() {
   const { apiUrl } = useApi();
   
-  // Get selected environment ID from storage
-  const selectedEnvironmentId = useStorage<string | null>('selectedEnvironmentId', null);
+  // Get selected environment ID from the environments composable
+  const { selectedEnvironmentId } = useEnvironments();
 
-  // Manual loading state since we're not using useFetch properly
+  // Use ref for local state to avoid reactivity issues
   const loading = ref(false);
   const error = ref<string | null>(null);
   const data = ref<DataSource[]>([]);
 
-  // Watch for environment changes and execute fetch only when environment is selected
-  watch(selectedEnvironmentId, async (newEnvironmentId) => {
-    if (newEnvironmentId) {
-      loading.value = true;
-      error.value = null;
-      
-      try {
-        // Manually construct the URL and execute
-        const url = apiUrl(`/api/v1/environments/${newEnvironmentId}/data/sources`);
-        const result = await $fetch<DataSource[]>(url);
-        data.value = result;
-      } catch (err: any) {
-        console.error('Failed to fetch data sources:', err);
-        error.value = err.message || 'Failed to fetch data sources';
-        data.value = [];
-      } finally {
-        loading.value = false;
-      }
-    } else {
+  // Simple refresh function that fetches data for the current environment
+  async function refresh() {
+    if (!selectedEnvironmentId.value) {
       // Clear data when no environment is selected
       data.value = [];
       loading.value = false;
       error.value = null;
+      return;
     }
-  }, { immediate: true });
 
-  // Refresh function to manually reload data
-  async function refresh() {
-    if (selectedEnvironmentId.value) {
-      loading.value = true;
-      error.value = null;
-      
-      try {
-        const url = apiUrl(`/api/v1/environments/${selectedEnvironmentId.value}/data/sources`);
-        const result = await $fetch<DataSource[]>(url);
-        data.value = result;
-      } catch (err: any) {
-        console.error('Failed to refresh data sources:', err);
-        error.value = err.message || 'Failed to refresh data sources';
-        data.value = [];
-      } finally {
-        loading.value = false;
-      }
+    loading.value = true;
+    error.value = null;
+    
+    try {
+      const url = apiUrl(`/api/v1/environments/${selectedEnvironmentId.value}/data/sources`);
+      const result = await $fetch<DataSource[]>(url);
+      data.value = result;
+    } catch (err: any) {
+      console.error('Failed to fetch data sources:', err);
+      error.value = err.message || 'Failed to fetch data sources';
+      data.value = [];
+    } finally {
+      loading.value = false;
     }
   }
 
@@ -75,17 +54,19 @@ export function useDataSources() {
       body: dataSource,
     });
     
-    // Refresh the data sources list
-    await refresh();
-    
     return response;
   }
 
   // Return empty array if no environment is selected
   const dataSources = computed(() => {
-    if (!selectedEnvironmentId.value) return [];
+    if (!selectedEnvironmentId.value) {
+      return [];
+    }
+    
     return data.value || [];
   });
+
+  // Remove the deep watcher as it might cause infinite loops
 
   // Get a specific data source by ID
   const getDataSource = async (dataSourceId: string): Promise<DataSource | null> => {

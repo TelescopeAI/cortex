@@ -72,9 +72,6 @@ class ValidationService(TSModel):
         if not data_model.name:
             errors.append("Model name is required")
         
-        if not data_model.data_source_id:
-            errors.append("Data source ID is required")
-        
         if data_model.version < 1:
             errors.append("Model version must be >= 1")
         

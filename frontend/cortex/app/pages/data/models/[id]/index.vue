@@ -112,14 +112,6 @@
               </Card>
               <Card>
                 <CardHeader class="pb-2">
-                  <CardTitle class="text-sm font-medium">Data Source</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div class="text-2xl font-bold">{{ getDataSourceName(model.data_source_id) }}</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader class="pb-2">
                   <CardTitle class="text-sm font-medium">Last Updated</CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -300,7 +292,6 @@ import { Textarea } from '~/components/ui/textarea'
 import { Switch } from '~/components/ui/switch'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { useDataModels } from '~/composables/useDataModels'
-import { useDataSources } from '~/composables/useDataSources'
 
 // Route and Router
 const route = useRoute()
@@ -309,13 +300,12 @@ const modelId = computed(() => route.params.id as string)
 
 // Composables
 const {
-  selectedModel: model, isLoading, error, fetchDataModel, 
-  updateDataModel, validateModel: validateModelAction,
-  getModelMetrics
+  getModel, loading: isLoading, error, 
+  updateModel: updateDataModel, validateModel: validateModelAction
 } = useDataModels()
-const { dataSources } = useDataSources()
 
 // State
+const model = ref<any>(null)
 const activeTab = ref('overview')
 const editableModel = ref<any>({})
 const schemaJson = ref('')
@@ -325,10 +315,6 @@ const validationErrors = ref<string[]>([])
 const metrics = ref<any[]>([])
 
 // Computed
-const getDataSourceName = (dataSourceId: string) => {
-  const source = dataSources.value.find(ds => ds.id === dataSourceId)
-  return source?.name || 'Unknown'
-}
 
 const getTabTitle = (tab: string) => {
   switch (tab) {
@@ -355,15 +341,20 @@ const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString()
 }
 
-const loadModelData = () => {
-  if (model.value) {
-    editableModel.value = { ...model.value }
-    schemaJson.value = JSON.stringify(model.value.semantic_model || {}, null, 2)
-    configJson.value = JSON.stringify(model.value.config || {}, null, 2)
-    
-    // Extract metrics from semantic model
-    const semanticModel = model.value.semantic_model || {}
-    metrics.value = semanticModel.metrics || []
+const loadModelData = async () => {
+  try {
+    model.value = await getModel(modelId.value)
+    if (model.value) {
+      editableModel.value = { ...model.value }
+      schemaJson.value = JSON.stringify(model.value.semantic_model || {}, null, 2)
+      configJson.value = JSON.stringify(model.value.config || {}, null, 2)
+      
+      // Extract metrics from semantic model
+      const semanticModel = model.value.semantic_model || {}
+      metrics.value = semanticModel.metrics || []
+    }
+  } catch (err) {
+    console.error('Failed to load model:', err)
   }
 }
 
@@ -385,7 +376,7 @@ const validateSchema = async () => {
     
     // Call API validation if needed
     if (model.value) {
-      const result = await validateModelAction(model.value.id)
+      const result = await validateModelAction(model.value.id) as any
       if (!result.is_valid) {
         validationErrors.value = result.errors || []
       }
@@ -421,9 +412,8 @@ const saveChanges = async () => {
       alias: editableModel.value.alias,
       description: editableModel.value.description,
       is_active: editableModel.value.is_active,
-      semantic_model: semanticModel,
       config: config
-    })
+    } as any)
 
     hasUnsavedChanges.value = false
   } catch (error) {
@@ -443,8 +433,7 @@ watch([editableModel, schemaJson, configJson], () => {
 
 // Lifecycle
 onMounted(async () => {
-  await fetchDataModel(modelId.value)
-  loadModelData()
+  await loadModelData()
 })
 
 // Watch model changes

@@ -12,7 +12,6 @@ class DataModelResponse(TSModel):
     name: str
     alias: Optional[str] = None
     description: Optional[str] = None
-    data_source_id: UUID
     version: int
     is_active: bool
     parent_version_id: Optional[UUID] = None

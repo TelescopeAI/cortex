@@ -1,10 +1,14 @@
 import os
+import logging
 from functools import cached_property
 from typing import Optional
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+logger = logging.getLogger(__name__)
 
 from cortex.core.config.execution_env import ExecutionEnv
 from cortex.core.connectors.databases.clients.service import DBClientService
@@ -15,12 +19,21 @@ from cortex.core.utils.json import json_dumps
 
 class CortexStorage:
     Base = BaseDBModel
+    _instance: Optional['CortexStorage'] = None
+    _initialized = False
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
 
     def __init__(self):
-        self._env = _StorageEnv.from_environ()
-        self._client = self._create_client()
-        self._session_factory: Optional[sessionmaker] = None
-        self.connection = self._client
+        if not self._initialized:
+            self._env = _StorageEnv.from_environ()
+            self._client = self._create_client()
+            self._session_factory: Optional[sessionmaker] = None
+            self.connection = self._client
+            self._initialized = True
 
     @cached_property
     def client(self):
@@ -29,10 +42,8 @@ class CortexStorage:
 
     def get_session(self) -> Session:
         if self._session_factory is None:
-            engine = create_engine(
-                self._build_sqlalchemy_url(),
-                json_serializer=json_dumps,
-            )
+            # Use the same engine as _sqlalchemy_engine to ensure consistency
+            engine = self._sqlalchemy_engine
             self._session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
         assert self._session_factory is not None
         return self._session_factory()
@@ -51,7 +62,18 @@ class CortexStorage:
 
     @cached_property
     def _sqlalchemy_engine(self) -> Engine:
-        return create_engine(self._build_sqlalchemy_url())
+        return create_engine(
+            self._build_sqlalchemy_url(),
+            poolclass=self._get_pool_class(),
+        )
+
+    def _get_pool_class(self):
+        """Get the appropriate connection pool class based on database type and configuration."""
+        if self._env.db_type == DataSourceTypes.SQLITE and self._env.in_memory:
+            # Use StaticPool for in-memory SQLite to ensure all connections share the same database
+            return StaticPool
+        # For other database types, use the default pool class
+        return None
 
     def _create_client(self):
         details = self._env.to_dict()
@@ -83,6 +105,12 @@ class CortexStorage:
     @property
     def db_url(self) -> str:
         return self._build_sqlalchemy_url()
+
+    @classmethod
+    def reset_singleton(cls):
+        """Reset the singleton instance (useful for testing)."""
+        cls._instance = None
+        cls._initialized = False
 
 
 class _StorageEnv:

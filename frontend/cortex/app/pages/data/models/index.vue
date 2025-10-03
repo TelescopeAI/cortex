@@ -24,28 +24,13 @@
         />
       </div>
       
-      <Select v-model="selectedDataSource">
-        <SelectTrigger class="w-[200px]">
-          <SelectValue placeholder="All data sources" />
-        </SelectTrigger>
-        <SelectContent>
-                      <SelectItem value="all">All data sources</SelectItem>
-            <SelectItem
-              v-for="source in dataSources"
-              :key="source.id"
-              :value="source.id"
-            >
-              {{ source.name }}
-            </SelectItem>
-        </SelectContent>
-      </Select>
 
       <Select v-model="statusFilter">
         <SelectTrigger class="w-[150px]">
           <SelectValue placeholder="All statuses" />
         </SelectTrigger>
         <SelectContent>
-                      <SelectItem value="all">All statuses</SelectItem>
+          <SelectItem value="all">All statuses</SelectItem>
           <SelectItem value="active">Active</SelectItem>
           <SelectItem value="inactive">Inactive</SelectItem>
           <SelectItem value="valid">Valid</SelectItem>
@@ -197,7 +182,6 @@
             <TableHead>Name</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Version</TableHead>
-            <TableHead>Data Source</TableHead>
             <TableHead>Updated</TableHead>
             <TableHead class="text-right">Actions</TableHead>
           </TableRow>
@@ -231,7 +215,7 @@
               </div>
             </TableCell>
             <TableCell>v{{ model.version }}</TableCell>
-            <TableCell>{{ getDataSourceName(model.data_source_id) }}</TableCell>
+            <TableCell>-</TableCell>
             <TableCell>{{ formatDate(model.updated_at) }}</TableCell>
             <TableCell class="text-right">
               <div class="flex justify-end gap-2">
@@ -309,15 +293,12 @@ import { Skeleton } from '~/components/ui/skeleton'
 // Composables
 const router = useRouter()
 const { 
-  dataModels, isLoading, error, fetchDataModels, deleteDataModel, 
-  validateModel: validateModelAction, executeModel: executeModelAction,
-  getModelValidationStatus
+  models: dataModels, loading: isLoading, error, fetchModels: fetchDataModels, deleteModel: deleteDataModel, 
+  validateModel: validateModelAction, executeModel: executeModelAction
 } = useDataModels()
-const { dataSources } = useDataSources()
 
 // Reactive state
 const searchQuery = ref('')
-const selectedDataSource = ref('all')
 const statusFilter = ref('all')
 const viewMode = ref<'grid' | 'list'>('grid')
 const showDeleteDialog = ref(false)
@@ -337,10 +318,6 @@ const filteredModels = computed(() => {
     )
   }
 
-  // Data source filter
-  if (selectedDataSource.value && selectedDataSource.value !== 'all') {
-    filtered = filtered.filter(model => model.data_source_id === selectedDataSource.value)
-  }
 
   // Status filter
   if (statusFilter.value && statusFilter.value !== 'all') {
@@ -390,10 +367,6 @@ const getStatusText = (model: any) => {
   return model.is_valid ? 'Active' : 'Error'
 }
 
-const getDataSourceName = (id: string) => {
-  const source = dataSources.value?.find(s => s.id === id)
-  return source?.name || 'Unknown'
-}
 
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('en-US', {

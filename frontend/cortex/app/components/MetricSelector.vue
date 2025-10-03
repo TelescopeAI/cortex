@@ -78,7 +78,7 @@ onMounted(async () => {
             <Sigma class="h-4 w-4 mr-2" />
             <div class="flex flex-col">
               <span class="text-sm">{{ metric.name }}</span>
-              <span class="text-xs text-muted-foreground" v-if="metric.data_model?.name">{{ metric.data_model?.name }}</span>
+              <span class="text-xs text-muted-foreground" v-if="metric.data_model_name">{{ metric.data_model_name }}</span>
             </div>
           </DropdownMenuItem>
           <div v-if="loadingModelIds[model.id]" class="px-3 py-2 text-xs text-muted-foreground">Loading...</div>

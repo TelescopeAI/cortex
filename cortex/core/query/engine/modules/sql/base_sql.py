@@ -350,18 +350,33 @@ class SQLQueryGenerator(BaseQueryGenerator):
         return None
 
     def _build_limit_clause(self, limit: Optional[int] = None, offset: Optional[int] = None) -> Optional[str]:
-        """Build LIMIT clause for the query"""
-        if limit is None and offset is None:
+        """Build LIMIT clause for the query, validating parameters to avoid SQL injection"""
+        # Only allow integer values for limit and offset, else skip or raise
+        clause_parts = []
+
+        parsed_limit = None
+        parsed_offset = None
+        try:
+            if limit is not None:
+                parsed_limit = int(limit)
+                if parsed_limit < 0:
+                    raise ValueError("limit must be non-negative")
+            if offset is not None:
+                parsed_offset = int(offset)
+                if parsed_offset < 0:
+                    raise ValueError("offset must be non-negative")
+        except (ValueError, TypeError):
+            # If not valid integers, ignore and do not add clause
             return None
-        
-        if limit is not None and offset is not None:
-            return f"LIMIT {limit} OFFSET {offset}"
-        elif limit is not None:
-            return f"LIMIT {limit}"
-        elif offset is not None:
-            return f"OFFSET {offset}"
-        
-        return None
+
+        if parsed_limit is not None and parsed_offset is not None:
+            clause_parts.append(f"LIMIT {parsed_limit} OFFSET {parsed_offset}")
+        elif parsed_limit is not None:
+            clause_parts.append(f"LIMIT {parsed_limit}")
+        elif parsed_offset is not None:
+            clause_parts.append(f"OFFSET {parsed_offset}")
+
+        return " ".join(clause_parts) if clause_parts else None
 
     def _format_query_with_line_breaks(self, query_parts: list) -> str:
         """Format the query with appropriate line breaks and indentation"""

@@ -282,13 +282,10 @@ const onDataModelChange = async (value: any) => {
   const modelId = value as string
   if (!modelId) return
   
-  // Find the selected model and get its data source
-  const selectedModel = models.value?.find(m => m.id === modelId)
-  if (selectedModel?.data_source_id) {
-    selectedDataSourceId.value = selectedModel.data_source_id
-    // Load schema for the selected data source
-    await loadSchemaForDataSource(selectedModel.data_source_id)
-  }
+  // Data models no longer have data source associations
+  // Users will select data sources independently for each metric
+  selectedDataSourceId.value = ''
+  tableSchema.value = null
 }
 
 // Load schema for data source
@@ -339,10 +336,13 @@ const loadMetricData = async (metricId: string) => {
         parameters: metric.parameters || {}
       }
       
-      // Set data source and load schema
+      // Set data source and load schema if metric has one
       if (metric.data_source_id) {
         selectedDataSourceId.value = metric.data_source_id
         await loadSchemaForDataSource(metric.data_source_id)
+      } else {
+        selectedDataSourceId.value = ''
+        tableSchema.value = null
       }
     }
   } catch (error) {
@@ -485,10 +485,10 @@ watch(() => props.open, async (isOpen) => {
     if (props.prefilledDataModelId) {
       try {
         const model = await getModel(props.prefilledDataModelId)
-        if (model?.data_source_id) {
-          selectedDataSourceId.value = model.data_source_id
-          await loadSchemaForDataSource(model.data_source_id)
-        }
+        // Data models no longer have data source associations
+        // Users will select data sources independently for each metric
+        selectedDataSourceId.value = ''
+        tableSchema.value = null
       } catch (error) {
         console.error('Failed to load prefilled model:', error)
       }

@@ -32,18 +32,20 @@ class DBClientService(TSModel):
             creds_factory = CommonProtocolSQLCredentialsFactory()
             creds = DatabaseCredentialsGenerator().parse(factory=creds_factory, **details)
             client_factory = CommonProtocolSQLClientFactory()
-        if db_type == DataSourceTypes.SQLITE:
+        elif db_type == DataSourceTypes.SQLITE:
             creds_factory = SQLiteCredentialsFactory()
             creds = DatabaseCredentialsGenerator().parse(factory=creds_factory, **details)
             client_factory = SQLiteClientFactory()
-        if db_type == DataSourceTypes.DUCKDB:
+        elif db_type == DataSourceTypes.DUCKDB:
             creds_factory = DuckDBCredentialsFactory()
             creds = DatabaseCredentialsGenerator().parse(factory=creds_factory, **details)
             client_factory = DuckDBClientFactory()
-        if db_type == DataSourceTypes.BIGQUERY:
+        elif db_type == DataSourceTypes.BIGQUERY:
             creds_factory = BigQueryCredentialsFactory()
             creds = DatabaseCredentialsGenerator().parse(factory=creds_factory, **details)
             client_factory = BigQueryClientFactory()
+        else:
+            raise ValueError(f"Unsupported database type: {db_type}")
         client = DatabaseClientGenerator().parse(factory=client_factory, credentials=creds)
         return client
 

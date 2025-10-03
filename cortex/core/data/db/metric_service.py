@@ -98,6 +98,15 @@ class MetricService:
             
         return query.order_by(desc(MetricORM.updated_at)).all()
     
+    def get_metrics_by_data_source(self, data_source_id: UUID, public_only: bool = False) -> List[MetricORM]:
+        """Get all metrics for a specific data source"""
+        query = self.session.query(MetricORM).filter(MetricORM.data_source_id == data_source_id)
+        
+        if public_only:
+            query = query.filter(MetricORM.public == True)
+            
+        return query.order_by(desc(MetricORM.updated_at)).all()
+    
     def get_all_metrics(self, 
                        skip: int = 0, 
                        limit: int = 100,

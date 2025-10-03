@@ -11,12 +11,11 @@ from cortex.core.types.telescope import TSModel
 class DataModel(TSModel):
     """
     Data model that represents a collection of metrics with shared configuration.
-    Supports versioning and is tied to a specific data source.
+    Supports versioning and serves as a logical grouping for related metrics.
     """
     model_config = ConfigDict(from_attributes=True)
     
     id: UUID = Field(default_factory=uuid4)
-    data_source_id: UUID
     name: str
     alias: Optional[str] = None
     description: Optional[str] = None

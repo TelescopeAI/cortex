@@ -3,6 +3,7 @@ import { useDataSources } from '~/composables/useDataSources';
 import { useRouter } from 'vue-router';
 import { useWorkspaces } from '~/composables/useWorkspaces';
 import { useEnvironments } from '~/composables/useEnvironments';
+import { watch, onMounted } from 'vue';
 import {
   Card,
   CardHeader,
@@ -12,13 +13,32 @@ import {
 import { Badge } from '~/components/ui/badge';
 import { Skeleton } from '~/components/ui/skeleton';
 import CreateDataSourceDialog from '~/components/CreateDataSourceDialog.vue';
-import { Calendar, Database, Globe, FileText, Settings } from 'lucide-vue-next';
+import { Calendar, Database, Globe, FileText, Settings, RefreshCw } from 'lucide-vue-next';
 import { Button } from '~/components/ui/button';
 
-const { dataSources, loading, error, selectedEnvironmentId } = useDataSources();
+const { dataSources, loading, error, selectedEnvironmentId, refresh } = useDataSources();
 const { selectedWorkspaceId } = useWorkspaces();
 const { selectedEnvironmentId: envId } = useEnvironments();
 const router = useRouter();
+
+// Load data sources when component mounts
+onMounted(() => {
+  if (selectedEnvironmentId.value) {
+    refresh();
+  }
+});
+
+// Watch for environment changes and load data sources
+watch(selectedEnvironmentId, (newEnvironmentId) => {
+  if (newEnvironmentId) {
+    refresh();
+  }
+}, { immediate: true });
+
+// Handle data source creation event
+function handleDataSourceCreated() {
+  refresh();
+}
 
 // Get catalog icon based on source catalog
 function getCatalogIcon(catalog: string) {
@@ -53,7 +73,21 @@ function getCatalogColor(catalog: string) {
   <div class="p-8">
     <div class="flex justify-between items-center mb-6">
       <h1 class="text-2xl font-bold">Data Sources</h1>
-      <CreateDataSourceDialog v-if="selectedEnvironmentId" />
+      <div class="flex items-center gap-2">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          @click="refresh" 
+          :disabled="loading || !selectedEnvironmentId"
+        >
+          <RefreshCw class="w-4 h-4 mr-2" :class="{ 'animate-spin': loading }" />
+          Refresh
+        </Button>
+            <CreateDataSourceDialog 
+              v-if="selectedEnvironmentId" 
+              @data-source-created="handleDataSourceCreated"
+            />
+      </div>
     </div>
     
     <!-- Loading State -->
@@ -114,12 +148,12 @@ function getCatalogColor(catalog: string) {
         <Database class="w-12 h-12 text-gray-400 mx-auto mb-4" />
         <h3 class="text-lg font-medium text-gray-900 mb-2">No data sources found</h3>
         <p class="text-gray-500 mb-4">Get started by creating your first data source.</p>
-        <CreateDataSourceDialog />
+        <CreateDataSourceDialog @data-source-created="handleDataSourceCreated" />
       </div>
     </div>
     
     <div v-else>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" :key="dataSources.length">
         <div v-for="dataSource in dataSources" :key="dataSource.id" class="bg-white rounded-lg shadow p-6">
           <div class="flex items-start justify-between">
             <div class="flex-1">

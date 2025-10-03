@@ -134,7 +134,7 @@ const emit = defineEmits<{
   'save': [value: any]
 }>()
 
-const { getDataSourceSchema } = useDataSources()
+const { getDataSourceSchema, getDataSource } = useDataSources()
 
 // Component state
 const isEditing = ref(false)
@@ -185,7 +185,7 @@ const schema = ref({
 })
 
 // Initialize schema from metric
-watch(() => props.metric, (newMetric) => {
+watch(() => props.metric, async (newMetric) => {
   if (newMetric) {
     schema.value = {
       name: newMetric.name || '',
@@ -209,10 +209,24 @@ watch(() => props.metric, (newMetric) => {
       cache: newMetric.cache || undefined
     }
     
-    // Initialize local data source id
+    // Initialize local data source id from metric
     selectedDataSourceIdLocal.value = newMetric.data_source_id || props.selectedDataSourceId
-    if (selectedDataSourceIdLocal.value && !tableSchema.value) {
-      loadSchemaFromDataSource(selectedDataSourceIdLocal.value)
+    
+    // Load data source schema if we have a data source ID
+    if (selectedDataSourceIdLocal.value) {
+      try {
+        // Verify the data source exists and load its schema
+        const dataSource = await getDataSource(selectedDataSourceIdLocal.value)
+        if (dataSource) {
+          await loadSchemaFromDataSource(selectedDataSourceIdLocal.value)
+        } else {
+          console.warn(`Data source with ID ${selectedDataSourceIdLocal.value} not found`)
+          selectedDataSourceIdLocal.value = undefined
+        }
+      } catch (error) {
+        console.error('Failed to load data source:', error)
+        selectedDataSourceIdLocal.value = undefined
+      }
     }
   }
 }, { immediate: true })
@@ -250,16 +264,35 @@ async function loadSchemaFromDataSource(dataSourceId?: string) {
 
   schemaLoading.value = true
   try {
-    tableSchema.value = await getDataSourceSchema(src)
-    const firstTable = tableSchema.value?.tables?.[0]?.name
-    // Only set table_name if it's not already set or if current table doesn't exist in new schema
-    if (firstTable) {
+    const schemaData = await getDataSourceSchema(src)
+    tableSchema.value = schemaData
+    
+    // Update the schema with the loaded table schema
+    if (schemaData?.tables && schemaData.tables.length > 0) {
+      const firstTable = schemaData.tables[0]?.name
       const currentTable = schema.value.table_name
-      const tableExists = tableSchema.value?.tables?.some((t: any) => t.name === currentTable)
+      const tableExists = schemaData.tables.some((t: any) => t.name === currentTable)
+      
+      console.log('Schema loaded:', {
+        tables: schemaData.tables.map((t: any) => t.name),
+        currentTable,
+        firstTable,
+        tableExists,
+        originalMetricTable: props.metric?.table_name
+      })
       
       // Only override if no table is currently selected OR current table doesn't exist in new schema
-      if (!currentTable || !tableExists) {
-        schema.value.table_name = firstTable
+      // Also check if we have an original table name from the metric that exists in the new schema
+      const originalTable = props.metric?.table_name
+      if (originalTable && schemaData.tables.some((t: any) => t.name === originalTable)) {
+        // Use the original table name from the metric if it exists in the new schema
+        schema.value.table_name = originalTable
+        console.log('Using original table_name from metric:', originalTable)
+      } else if (!currentTable || currentTable === '' || !tableExists) {
+        schema.value.table_name = firstTable || ''
+        console.log('Updated table_name to:', firstTable)
+      } else {
+        console.log('Keeping existing table_name:', currentTable)
       }
     } else {
       schema.value.table_name = ''
@@ -283,7 +316,20 @@ const handleEditToggle = (pressed: boolean) => {
 
 // Handle schema updates
 const handleSchemaUpdate = (newSchema: any) => {
-  schema.value = { ...schema.value, ...newSchema }
+  console.log('SchemaSheet: handleSchemaUpdate called with:', newSchema)
+  
+  // Only update fields that have actual values (not undefined, null, or empty string)
+  const filteredUpdate: any = {}
+  Object.keys(newSchema).forEach(key => {
+    const value = newSchema[key]
+    if (value !== undefined && value !== null && value !== '') {
+      filteredUpdate[key] = value
+    }
+  })
+  
+  console.log('SchemaSheet: filtered update:', filteredUpdate)
+  schema.value = { ...schema.value, ...filteredUpdate }
+  console.log('SchemaSheet: schema after update:', schema.value)
 }
 
 // Handle data source updates from child. Do not save automatically; update local and load schema.

@@ -64,29 +64,6 @@
             />
           </div>
 
-          <div class="space-y-2">
-            <Label for="data_source">Data Source *</Label>
-            <Select v-model="form.data_source_id" required>
-              <SelectTrigger :class="{ 'border-destructive': errors.data_source_id }">
-                <SelectValue placeholder="Select a data source" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem 
-                  v-for="source in dataSources" 
-                  :key="source.id" 
-                  :value="source.id"
-                >
-                  <div class="flex items-center gap-2">
-                    <Database class="h-4 w-4" />
-                    {{ source.name }}
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p v-if="errors.data_source_id" class="text-sm text-destructive">
-              {{ errors.data_source_id }}
-            </p>
-          </div>
 
           <!-- Semantic Model Configuration -->
           <div class="space-y-4">
@@ -241,7 +218,7 @@ import {
 
 // Composables
 const router = useRouter()
-const { createDataModel } = useDataModels()
+const { createModel } = useDataModels()
 const { dataSources } = useDataSources()
 
 // Form state
@@ -249,7 +226,6 @@ const form = ref({
   name: '',
   alias: '',
   description: '',
-  data_source_id: '',
   semantic_model: '',
   config: ''
 })
@@ -274,7 +250,6 @@ const isValidJson = computed(() => {
 
 const isFormValid = computed(() => {
   return form.value.name.trim() && 
-         form.value.data_source_id && 
          isValidJson.value && 
          validationErrors.value.length === 0 &&
          Object.keys(errors.value).length === 0
@@ -322,10 +297,6 @@ const validateForm = () => {
 
   if (!form.value.name.trim()) {
     newErrors.name = 'Name is required'
-  }
-
-  if (!form.value.data_source_id) {
-    newErrors.data_source_id = 'Data source is required'
   }
 
   if (!form.value.semantic_model.trim()) {
@@ -413,17 +384,17 @@ const handleSubmit = async () => {
     }
 
     // Create the data model
-    const newModel = await createDataModel({
+    const newModel = await createModel({
       name: form.value.name,
       alias: form.value.alias || undefined,
       description: form.value.description || undefined,
-      data_source_id: form.value.data_source_id,
-      semantic_model: semanticModel,
       config
     })
 
     // Navigate to the new model
-    router.push(`/data/models/${newModel.id}`)
+    if (newModel) {
+      router.push(`/data/models/${newModel.id}`)
+    }
 
   } catch (err: any) {
     console.error('Failed to create data model:', err)

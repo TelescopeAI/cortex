@@ -12,6 +12,7 @@ from cortex.core.cache.manager import QueryCacheManager
 from cortex.core.config.models.cache import CacheConfig
 from cortex.core.connectors.databases.clients.service import DBClientService
 from cortex.core.data.db.model_service import DataModelService
+from cortex.core.data.db.metric_service import MetricService
 from cortex.core.data.db.source_service import DataSourceCRUD
 from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
 
@@ -86,13 +87,20 @@ class DataSourceSchemaService:
             model_service.close()
 
     def _collect_data_model_ids(self, model_service: DataModelService, data_source_id: UUID) -> List[str]:
-        models = model_service.get_data_models_by_data_source(data_source_id)
-        ids: List[str] = []
-        for model in models:
-            model_id = getattr(model, "id", None)
-            if model_id:
-                ids.append(str(model_id))
-        return sorted(set(ids))
+        # Since data models no longer have data_source_id, we need to get data model IDs
+        # through metrics that are associated with this data source
+        metric_service = MetricService()
+        try:
+            # Get all metrics for this data source
+            metrics = metric_service.get_metrics_by_data_source(data_source_id)
+            ids: List[str] = []
+            for metric in metrics:
+                model_id = getattr(metric, "data_model_id", None)
+                if model_id:
+                    ids.append(str(model_id))
+            return sorted(set(ids))
+        finally:
+            metric_service.close()
 
     def _build_signature_payload(
         self,

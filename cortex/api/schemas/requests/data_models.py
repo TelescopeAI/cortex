@@ -10,7 +10,6 @@ class DataModelCreateRequest(TSModel):
     name: str = Field(..., description="Name of the data model")
     alias: Optional[str] = Field(None, description="Alias for the data model")
     description: Optional[str] = Field(None, description="Description of the data model")
-    data_source_id: UUID = Field(..., description="ID of the data source")
     config: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Model configuration")
 
 
@@ -19,7 +18,6 @@ class DataModelUpdateRequest(TSModel):
     name: Optional[str] = Field(None, description="Name of the data model")
     alias: Optional[str] = Field(None, description="Alias for the data model")
     description: Optional[str] = Field(None, description="Description of the data model")
-    data_source_id: Optional[UUID] = Field(None, description="ID of the data source")
     config: Optional[Dict[str, Any]] = Field(None, description="Model configuration")
     is_active: Optional[bool] = Field(None, description="Whether the model is active")
 

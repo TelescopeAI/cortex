@@ -56,6 +56,7 @@ class PostgresComputeAdapter(ComputeAdapter):
             "database": config.get("database"),
             "dialect": data_source.source_type.value.lower()  # Use the source_type enum
         }
+        # Log only safe connection details (never username or password)
         print(f"[PREAGG] Connection details: host={conn_details['host']}, port={conn_details['port']}, database={conn_details['database']}")
         
         client: CommonProtocolSQLClient = DBClientService.get_client(
@@ -65,6 +66,7 @@ class PostgresComputeAdapter(ComputeAdapter):
         
         try:
             # Connect to the database
+            # Log only safe connection details (never username or password)
             print(f"[PREAGG] Connecting to database: {conn_details['host']}:{conn_details['port']}/{conn_details['database']}")
             client.connect()
             print(f"[PREAGG] Successfully connected to database")
@@ -94,7 +96,14 @@ class PostgresComputeAdapter(ComputeAdapter):
                 
         except Exception as exc:
             print(f"[PREAGG] Database operation failed: {exc}")
-            print(f"[PREAGG] Connection details: {conn_details}")
+            # Log only safe connection details (never username or password)
+            safe_conn_details = {
+                "host": conn_details.get("host"),
+                "port": conn_details.get("port"), 
+                "database": conn_details.get("database"),
+                "dialect": conn_details.get("dialect")
+            }
+            print(f"[PREAGG] Connection details: {safe_conn_details}")
             raise exc
         finally:
             # Ensure connection is closed

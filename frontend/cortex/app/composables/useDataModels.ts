@@ -5,12 +5,6 @@ export interface DataModel {
   name: string
   alias?: string
   description?: string
-  data_source_id: string
-  data_source?: {
-    id: string
-    name: string
-    type: string
-  }
   version: number
   is_active: boolean
   parent_version_id?: string

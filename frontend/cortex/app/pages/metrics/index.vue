@@ -28,11 +28,9 @@ definePageMeta({
 const { models, loading: modelsLoading, fetchModels, createModel } = useDataModels()
 const { metrics, loading: metricsLoading, fetchMetrics, executeMetric, validateMetric, createMetric } = useMetrics()
 const { currentView, modelFilters, metricFilters, switchView } = useMetricsView()
-const { dataSources, loading: dataSourcesLoading, getDataSourceSchema } = useDataSources()
 
 // Component state
 const searchQuery = ref('')
-const selectedDataSource = ref<string | null>(null)
 const selectedStatus = ref<string | null>(null)
 const selectedModel = ref<string | null>(null)
 
@@ -50,7 +48,6 @@ const modelForm = ref({
   name: '',
   alias: '',
   description: '',
-  data_source_id: '',
   config: {}
 })
 
@@ -67,8 +64,7 @@ const metricForm = ref({
 // Form validation
 const modelFormErrors = ref({
   name: '',
-  alias: '',
-  data_source_id: ''
+  alias: ''
 })
 
 const { 
@@ -98,10 +94,6 @@ watch(() => modelForm.value.alias, (newAlias) => {
   modelFormErrors.value.alias = getAliasError(newAlias)
 })
 
-// Watch for data source changes
-watch(() => modelForm.value.data_source_id, () => {
-  modelFormErrors.value.data_source_id = ''
-})
 
 // Computed properties
 const filteredModels = computed(() => {
@@ -112,8 +104,7 @@ const filteredModels = computed(() => {
       model.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
       model.description?.toLowerCase().includes(searchQuery.value.toLowerCase())
     
-    const matchesDataSource = !selectedDataSource.value || 
-      model.data_source_id === selectedDataSource.value
+    const matchesDataSource = true // Data models no longer have data_source_id
     
     const matchesStatus = !selectedStatus.value || 
       getModelStatus(model) === selectedStatus.value
@@ -144,12 +135,10 @@ const filteredMetrics = computed(() => {
 // Form validation computed
 const isModelFormValid = computed(() => {
   return modelForm.value.name.trim() !== '' &&
-         modelForm.value.data_source_id !== '' &&
          modelForm.value.alias !== '' &&
          validateAlias(modelForm.value.alias) &&
          !modelFormErrors.value.name &&
-         !modelFormErrors.value.alias &&
-         !modelFormErrors.value.data_source_id
+         !modelFormErrors.value.alias
 })
 
 // Utility functions
@@ -266,21 +255,19 @@ const onMetricCreated = async (metric: any) => {
 }
 
 // Form handlers
-const resetModelForm = () => {
-  modelForm.value = {
-    name: '',
-    alias: '',
-    description: '',
-    data_source_id: '',
-    config: {}
+  const resetModelForm = () => {
+    modelForm.value = {
+      name: '',
+      alias: '',
+      description: '',
+      config: {}
+    }
+    modelFormErrors.value = {
+      name: '',
+      alias: ''
+    }
+    aliasManuallyEdited.value = false
   }
-  modelFormErrors.value = {
-    name: '',
-    alias: '',
-    data_source_id: ''
-  }
-  aliasManuallyEdited.value = false
-}
 
 const resetMetricForm = () => {
   metricForm.value = {
@@ -299,9 +286,6 @@ const handleCreateModel = async () => {
     if (!modelForm.value.name.trim()) {
       modelFormErrors.value.name = 'Name is required'
     }
-    if (!modelForm.value.data_source_id) {
-      modelFormErrors.value.data_source_id = 'Data source is required'
-    }
     if (!modelForm.value.alias || !validateAlias(modelForm.value.alias)) {
       modelFormErrors.value.alias = 'Valid alias is required'
     }
@@ -314,7 +298,6 @@ const handleCreateModel = async () => {
       name: modelForm.value.name.trim(),
       alias: modelForm.value.alias,
       description: modelForm.value.description.trim() || undefined,
-      data_source_id: modelForm.value.data_source_id,
       config: modelForm.value.config || {}
     }
 
@@ -458,20 +441,6 @@ onMounted(() => {
             />
           </div>
           
-          <div class="space-y-2">
-            <Label for="model-data-source">Data Source *</Label>
-            <Select v-model="modelForm.data_source_id" :disabled="isCreatingModel || dataSourcesLoading">
-              <SelectTrigger>
-                <SelectValue :placeholder="dataSourcesLoading ? 'Loading data sources...' : 'Select a data source'" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="dataSource in dataSources" :key="dataSource.id" :value="dataSource.id">
-                  {{ dataSource.name }} ({{ dataSource.source_type }})
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p v-if="modelFormErrors.data_source_id" class="text-sm text-red-500">{{ modelFormErrors.data_source_id }}</p>
-          </div>
         </div>
         
         <DialogFooter>
@@ -516,18 +485,6 @@ onMounted(() => {
             </div>
           </div>
           
-          <!-- Data Source Filter -->
-          <Select v-model="selectedDataSource">
-            <SelectTrigger class="w-[180px]">
-              <SelectValue placeholder="Data Source" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem :value="null">All Sources</SelectItem>
-              <SelectItem value="postgres">PostgreSQL</SelectItem>
-              <SelectItem value="bigquery">BigQuery</SelectItem>
-              <SelectItem value="snowflake">Snowflake</SelectItem>
-            </SelectContent>
-          </Select>
           
           <!-- Status Filter -->
           <Select v-model="selectedStatus">
@@ -608,7 +565,7 @@ onMounted(() => {
           <p class="text-sm text-muted-foreground mb-4">
             Try adjusting your search or filter criteria
           </p>
-          <Button variant="outline" @click="searchQuery = ''; selectedDataSource = null; selectedStatus = null">
+          <Button variant="outline" @click="searchQuery = ''; selectedStatus = null">
             Clear Filters
           </Button>
         </div>
@@ -640,7 +597,7 @@ onMounted(() => {
                 <div class="flex items-center justify-between text-sm">
                   <div class="flex items-center space-x-2 text-muted-foreground">
                     <span>📊</span>
-                    <span>{{ getDataSourceSchema(model.data_source_id) }}</span>
+                    <span>Data Model</span>
                   </div>
                   <span class="text-muted-foreground">v{{ model.version }}</span>
                 </div>
@@ -704,6 +661,18 @@ onMounted(() => {
           </Card>
         </div>
 
+        <div v-else-if="!models || models.length === 0" class="text-center py-12">
+          <FolderOpen class="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <h3 class="text-lg font-medium text-muted-foreground mb-2">No data models found</h3>
+          <p class="text-sm text-muted-foreground mb-4">
+            Create your first data model to get started with metrics
+          </p>
+          <Button @click="onCreateModel">
+            <Plus class="h-4 w-4 mr-2" />
+            Create Model
+          </Button>
+        </div>
+
         <div v-else-if="!metrics || metrics.length === 0" class="text-center py-12">
           <Target class="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <h3 class="text-lg font-medium text-muted-foreground mb-2">No metrics found</h3>
@@ -757,7 +726,7 @@ onMounted(() => {
                 <div class="flex items-center justify-between text-sm">
                   <div class="flex items-center space-x-2 text-muted-foreground">
                     <FolderOpen class="h-3 w-3" />
-                    <span>{{ metric.data_model?.name || 'Unknown Model' }}</span>
+                    <span>{{ metric.data_model_name || 'Unknown Model' }}</span>
                   </div>
                   <span class="text-muted-foreground">{{ metric.alias || metric.name }}</span>
                 </div>

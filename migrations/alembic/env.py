@@ -1,12 +1,11 @@
+import sys
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, MetaData
-from sqlalchemy import pool
-
 from alembic import context
-import sys
+from sqlalchemy import MetaData
 
 from cortex.core.storage.store import CortexStorage
+
 sys.path = ['', '..'] + sys.path[1:]
 
 
@@ -100,12 +99,11 @@ def run_migrations_online():
     and associate a connection with the context.
 
     """
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-        # echo=True
-    )
+    # Use the SAME engine as the application to ensure consistency
+    storage = CortexStorage()
+    
+    # Use the application's engine instead of creating a new one
+    connectable = storage._sqlalchemy_engine
     # print("DB URL: ", db_uri)
 
     with connectable.connect() as connection:

@@ -137,6 +137,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
+
+// Define emits
+const emit = defineEmits<{
+  dataSourceCreated: []
+}>()
 import { toast } from 'vue-sonner'
 import { useDataSources } from '~/composables/useDataSources'
 import { useEnvironments } from '~/composables/useEnvironments'
@@ -350,7 +355,7 @@ async function handleSubmit() {
       delete cleanConfig.serviceAccountJson
     }
 
-    await createDataSource({
+    const result = await createDataSource({
       environment_id: selectedEnvironmentId.value!,
       name: form.name.trim(),
       alias: form.alias.trim(),
@@ -361,6 +366,11 @@ async function handleSubmit() {
     })
     
     toast.success('Data source created successfully')
+    
+    // Emit event to notify parent component to refresh
+    emit('dataSourceCreated')
+    
+    // Close dialog
     resetAndClose()
   } catch (error) {
     console.error('Failed to create data source:', error)

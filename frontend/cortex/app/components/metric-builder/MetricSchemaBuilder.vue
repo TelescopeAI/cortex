@@ -24,6 +24,13 @@
             </CardDescription>
           </CardHeader>
           <CardContent class="space-y-4">
+            <!-- Debug info -->
+            <div class="mb-4 p-2 bg-gray-100 rounded text-xs">
+              <div>MetricSchemaBuilder - schema.data_source_id: {{ schema.data_source_id }}</div>
+              <div>MetricSchemaBuilder - schema.table_name: {{ schema.table_name }}</div>
+              <div>MetricSchemaBuilder - dataSources.length: {{ dataSources.length }}</div>
+            </div>
+            
             <BasicInfoBuilder
               v-model:name="schema.name"
               v-model:alias="schema.alias"
@@ -39,6 +46,7 @@
               v-model:cache="schema.cache"
               :available-tables="availableTables"
               :table-schema="props.tableSchema"
+              :available-data-sources="dataSources"
               @update:name="updateSchema"
               @update:alias="updateSchema"
               @update:title="updateSchema"
@@ -198,7 +206,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '~/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 
@@ -224,7 +232,7 @@ const emit = defineEmits<{
   'update:selectedDataSourceId': [value: string | undefined]
 }>()
 
-const { getDataSourceSchema } = useDataSources()
+const { getDataSourceSchema, dataSources, refresh: refreshDataSources } = useDataSources()
 
 // Component state
 const activeTab = ref('basic')
@@ -275,33 +283,72 @@ const availableColumns = computed(() => {
   return columns
 })
 
+// Manual update function (following MeasuresBuilder pattern)
+const updateSchema = () => {
+  emit('update:modelValue', schema.value)
+}
+
 // When a new table schema arrives, only set table_name if not already set
 watch(
   () => props.tableSchema,
   (newSchema) => {
+    console.log('MetricSchemaBuilder: tableSchema changed', {
+      newSchema,
+      currentTableName: schema.value.table_name,
+      hasTables: newSchema?.tables?.length > 0
+    })
+    
     if (newSchema?.tables && newSchema.tables.length > 0) {
       const first = newSchema.tables[0]?.name
       const existsInNew = newSchema.tables.some((t: any) => t.name === schema.value.table_name)
+      console.log('MetricSchemaBuilder: table selection logic', {
+        first,
+        currentTable: schema.value.table_name,
+        existsInNew,
+        willUpdate: !schema.value.table_name || !existsInNew
+      })
+      
       // Only set to first table if no table is currently selected OR current table doesn't exist in new schema
-      if (!schema.value.table_name || !existsInNew) {
+      // Also check if we have a meaningful table name (not just empty string)
+      const hasValidTableName = schema.value.table_name && schema.value.table_name.trim() !== ''
+      
+      // Check if we should preserve the original table name from the parent
+      // This prevents overriding during initial load when the schema might not be fully initialized yet
+      const shouldPreserveOriginal = props.modelValue?.table_name && 
+        props.modelValue.table_name.trim() !== '' && 
+        newSchema.tables.some((t: any) => t.name === props.modelValue.table_name)
+      
+      if (shouldPreserveOriginal) {
+        schema.value.table_name = props.modelValue.table_name
+        console.log('MetricSchemaBuilder: Preserving original table_name from modelValue:', props.modelValue.table_name)
+        updateSchema() // Emit the update to parent
+      } else if (!hasValidTableName || !existsInNew) {
         schema.value.table_name = first || ''
+        console.log('MetricSchemaBuilder: Updated table_name to:', first)
+        updateSchema() // Emit the update to parent
+      } else {
+        console.log('MetricSchemaBuilder: Keeping existing table_name:', schema.value.table_name)
       }
     }
   },
   { immediate: true }
 )
 
-// Manual update function (following MeasuresBuilder pattern)
-const updateSchema = () => {
-  emit('update:modelValue', schema.value)
-}
-
 // Watch for modelValue changes from parent
 watch(() => props.modelValue, (newValue) => {
   if (newValue && JSON.stringify(newValue) !== JSON.stringify(schema.value)) {
+    console.log('MetricSchemaBuilder: modelValue updated, newValue:', newValue)
     schema.value = { ...schema.value, ...newValue }
+    console.log('MetricSchemaBuilder: schema after update:', schema.value)
   }
 }, { immediate: true })
+
+// Load data sources when component mounts
+onMounted(async () => {
+  console.log('MetricSchemaBuilder: Mounting, refreshing data sources...')
+  await refreshDataSources()
+  console.log('MetricSchemaBuilder: Data sources after refresh:', dataSources.value)
+})
 
 // Load schema from data source
 const loadSchemaFromDataSource = async (dataSourceId: string) => {

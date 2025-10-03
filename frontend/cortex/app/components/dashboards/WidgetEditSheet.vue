@@ -289,7 +289,7 @@ watch(() => form.type, (newType, oldType) => {
 const selectedMetricLabel = computed(() => {
   if (!selectedMetric.value && !form.metric_id) return ''
   const name = selectedMetric.value?.name
-  const model = selectedMetric.value?.data_model?.name
+  const model = selectedMetric.value?.data_model_name
   return name ? `${name}${model ? ' • ' + model : ''}` : ''
 })
 
@@ -303,7 +303,7 @@ function buildAvailableTablesFromMetric(metric: SemanticMetric | null) {
     ;(metric.dimensions || []).forEach((d: any) => columns.push({ name: d.name || d, type: d.type || 'dimension' }))
     ;(metric.measures || []).forEach((m: any) => columns.push({ name: m.name || m, type: m.type || 'measure' }))
   } catch {}
-  const tableName = metric.data_model?.name || metric.table_name || 'Metric'
+  const tableName = metric.data_model_name || metric.table_name || 'Metric'
   availableTables.value = [{ name: tableName, columns }]
 }
 

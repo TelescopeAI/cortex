@@ -59,7 +59,7 @@
     <!-- Data Source Selection -->
     <div class="space-y-2">
       <Label for="data-source">Data Source</Label>
-      <Select :model-value="dataSourceId" @update:model-value="(value) => handleDataSourceChange(value as string)">
+      <Select :model-value="selectedDataSourceId" @update:model-value="(value) => handleDataSourceChange(value as string)">
         <SelectTrigger>
           <SelectValue placeholder="Select a data source" />
         </SelectTrigger>
@@ -98,7 +98,7 @@
     <!-- Table Selection (shown when toggle is off) -->
     <div v-if="!useCustomQuery" class="space-y-2">
       <Label for="table-name">Source Table</Label>
-                  <Select :model-value="tableName" @update:model-value="(value) => $emit('update:tableName', value as string)">
+              <Select :model-value="selectedTableName" @update:model-value="(value) => handleTableNameChange(value as string)">
               <SelectTrigger>
                 <SelectValue placeholder="Select a table" />
               </SelectTrigger>
@@ -272,7 +272,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, watch, ref } from 'vue'
 import { Label } from '~/components/ui/label'
 import { Textarea } from '~/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
@@ -295,6 +295,7 @@ interface Props {
   ordered?: boolean
   availableTables?: Array<{ name: string; columns: any[] }>
   tableSchema?: any
+  availableDataSources?: any[]
   refresh?: { type?: 'every' | 'sql' | 'max'; every?: string; sql?: string; max?: string }
   cache?: { enabled?: boolean; ttl?: number }
 }
@@ -318,6 +319,10 @@ const emit = defineEmits<{
 // Alias generation
 const { aliasManuallyEdited, generateAlias, getAliasError, markAsManuallyEdited } = useAliasGenerator()
 
+// Reactive state for dropdowns
+const selectedDataSourceId = ref<string | undefined>(props.dataSourceId)
+const selectedTableName = ref<string | undefined>(props.tableName)
+
 // Computed alias error
 const aliasError = computed(() => {
   if (!props.alias) return ''
@@ -330,11 +335,12 @@ const debugAvailableTables = computed(() => {
   return props.availableTables || []
 })
 
-// Use data sources from tableSchema if available, otherwise fallback to useDataSources
+// Use data sources from props if available, otherwise fallback to useDataSources
 const { dataSources } = useDataSources()
 const availableDataSources = computed(() => {
-  console.log('BasicInfoBuilder - tableSchema prop:', props.tableSchema)
-  return dataSources.value || []
+  console.log('BasicInfoBuilder - availableDataSources prop:', props.availableDataSources)
+  console.log('BasicInfoBuilder - dataSources from composable:', dataSources.value)
+  return props.availableDataSources || dataSources.value || []
 })
 
 // Computed property for limit toggle
@@ -436,9 +442,28 @@ watch(() => props.name, (newName) => {
   }
 })
 
+// Sync reactive refs with props
+watch(() => props.dataSourceId, (newId) => {
+  selectedDataSourceId.value = newId
+  console.log('BasicInfoBuilder - dataSourceId prop changed to:', newId)
+})
+
+watch(() => props.tableName, (newName) => {
+  selectedTableName.value = newName
+  console.log('BasicInfoBuilder - tableName prop changed to:', newName)
+})
+
 // Handle data source change
 const handleDataSourceChange = (value: string) => {
   console.log('BasicInfoBuilder - Data source changed to:', value)
+  selectedDataSourceId.value = value
   emit('update:dataSourceId', value)
+}
+
+// Handle table name change
+const handleTableNameChange = (value: string) => {
+  console.log('BasicInfoBuilder - Table name changed to:', value)
+  selectedTableName.value = value
+  emit('update:tableName', value)
 }
 </script> 

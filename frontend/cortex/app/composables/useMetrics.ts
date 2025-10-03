@@ -9,10 +9,7 @@ export interface SemanticMetric {
   description?: string
   data_model_id: string
   data_source_id?: string
-  data_model?: {
-    id: string
-    name: string
-  }
+  data_model_name?: string
   query?: string
   table_name?: string
   limit?: number

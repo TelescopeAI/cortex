@@ -14,7 +14,6 @@ class DataModelORM(BaseDBModel):
     __tablename__ = "data_models"
     
     id = mapped_column(UUID, primary_key=True, index=True)
-    data_source_id = mapped_column(UUID, ForeignKey("data_sources.id"), nullable=False, index=True)
     name = mapped_column(String, nullable=False, index=True)
     alias = mapped_column(String, nullable=True, index=True)
     description = mapped_column(Text, nullable=True)

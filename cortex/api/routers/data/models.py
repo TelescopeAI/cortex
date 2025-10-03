@@ -39,7 +39,6 @@ async def create_data_model(model_data: DataModelCreateRequest):
             name=model_data.name,
             alias=model_data.alias,
             description=model_data.description,
-            data_source_id=model_data.data_source_id,
             config=model_data.config or {}
         )
         
@@ -111,7 +110,6 @@ async def get_data_model(model_id: UUID):
 async def list_data_models(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Page size"),
-    data_source_id: Optional[UUID] = Query(None, description="Filter by data source ID"),
     is_active: Optional[bool] = Query(None, description="Filter by active status")
 ):
     """List data models with optional filtering and pagination."""
@@ -123,7 +121,6 @@ async def list_data_models(
             db_models = db_service.get_all_data_models(
                 skip=skip,
                 limit=page_size,
-                data_source_id=data_source_id,
                 active_only=is_active
             )
             
@@ -183,8 +180,6 @@ async def update_data_model(model_id: UUID, model_data: DataModelUpdateRequest):
                 update_data['alias'] = model_data.alias
             if hasattr(model_data, 'description') and model_data.description is not None:
                 update_data['description'] = model_data.description
-            if hasattr(model_data, 'data_source_id') and model_data.data_source_id is not None:
-                update_data['data_source_id'] = model_data.data_source_id
             if hasattr(model_data, 'config') and model_data.config is not None:
                 update_data['config'] = model_data.config
             if hasattr(model_data, 'is_active') and model_data.is_active is not None:

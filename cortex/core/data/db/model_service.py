@@ -28,7 +28,6 @@ class DataModelService:
         try:
             db_model = DataModelORM(
                 id=data_model.id,
-                data_source_id=data_model.data_source_id,
                 name=data_model.name,
                 alias=data_model.alias,
                 description=data_model.description,
@@ -56,28 +55,16 @@ class DataModelService:
         """Get a data model by its ID"""
         return self.session.query(DataModelORM).filter(DataModelORM.id == model_id).first()
     
-    def get_data_models_by_data_source(self, data_source_id: UUID, active_only: bool = True) -> List[DataModelORM]:
-        """Get all data models for a specific data source"""
-        query = self.session.query(DataModelORM).filter(DataModelORM.data_source_id == data_source_id)
-        
-        if active_only:
-            query = query.filter(DataModelORM.is_active == True)
-            
-        return query.order_by(desc(DataModelORM.updated_at)).all()
     
     def get_all_data_models(self, 
                            skip: int = 0, 
                            limit: int = 100,
-                           data_source_id: Optional[UUID] = None,
                            active_only: Optional[bool] = None,
                            valid_only: Optional[bool] = None) -> List[DataModelORM]:
         """Get all data models with optional filters"""
         query = self.session.query(DataModelORM)
         
         # Apply filters
-        if data_source_id:
-            query = query.filter(DataModelORM.data_source_id == data_source_id)
-        
         if active_only is not None:
             query = query.filter(DataModelORM.is_active == active_only)
             

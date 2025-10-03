@@ -72,7 +72,7 @@ const schemaLoading = ref(false)
 const schemaError = ref<string | null>(null)
 
 const currentDataSourceId = computed(() =>
-  metric.value?.data_source_id || parentModel.value?.data_source_id || selectedDataSourceId.value || ''
+  metric.value?.data_source_id || selectedDataSourceId.value || ''
 )
 
 const loadTableSchema = async (dataSourceId?: string) => {
@@ -187,8 +187,8 @@ watch(modifiersEnabled, (enabled) => {
 // Schema sheet functions
 const onOpenSchema = () => {
   // Set data source ID for schema loading if not already set
-  if (parentModel.value?.data_source_id && !selectedDataSourceId.value) {
-    selectedDataSourceId.value = parentModel.value.data_source_id
+  if (metric.value?.data_source_id && !selectedDataSourceId.value) {
+    selectedDataSourceId.value = metric.value.data_source_id
   }
   schemaSheetOpen.value = true
 }
@@ -476,8 +476,8 @@ const loadData = async () => {
     ])
     
     // Set selected data source ID for schema loading
-    if (parentModel.value?.data_source_id) {
-      selectedDataSourceId.value = parentModel.value.data_source_id
+    if (metric.value?.data_source_id) {
+      selectedDataSourceId.value = metric.value.data_source_id
     }
   } finally {
     loading.value = false
@@ -625,11 +625,6 @@ watch(currentDataSourceId, (newId, oldId) => {
                 </div>
               </div>
 
-              <!-- Data Source Information -->
-              <div v-if="parentModel?.data_source" class="space-y-2">
-                <div class="text-sm font-medium text-muted-foreground">Data Source</div>
-                <div class="text-sm font-mono bg-muted p-2 rounded">{{ parentModel.data_source.name }}</div>
-              </div>
 
               <!-- Grouping Configuration -->
               <div class="space-y-2">

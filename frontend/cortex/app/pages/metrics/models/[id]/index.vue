@@ -12,7 +12,6 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
 import { ArrowLeft, Edit, PlayCircle, Plus, Settings, Target, MoreHorizontal, Loader2 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-import type { DataSource } from '~/types'
 import CreateMetricDialog from '~/components/CreateMetricDialog.vue'
 
 // Page metadata
@@ -28,12 +27,10 @@ const modelId = route.params.id as string
 // Use composables
 const { getModel, executeModel, validateModel, updateModel } = useDataModels()
 const { getMetricsForModel } = useMetrics()
-const { getDataSource, dataSources } = useDataSources()
 
 // Component state
 const model = ref<any>(null)
 const modelMetrics = ref<any[]>([])
-const dataSource = ref<DataSource | null>(null)
 const loading = ref(true)
 const executing = ref(false)
 const validating = ref(false)
@@ -45,7 +42,6 @@ const editForm = ref({
   name: '',
   alias: '',
   description: '',
-  data_source_id: '',
   config: '{}'
 })
 
@@ -117,7 +113,6 @@ const onEdit = () => {
     name: model.value?.name || '',
     alias: model.value?.alias || '',
     description: model.value?.description || '',
-    data_source_id: model.value?.data_source_id || '',
     config: JSON.stringify(model.value?.config || {}, null, 2)
   }
   isEditSheetOpen.value = true
@@ -151,10 +146,6 @@ const onSaveEdit = async () => {
       updateData.description = editForm.value.description.trim()
     }
     
-    if (editForm.value.data_source_id && editForm.value.data_source_id !== '') {
-      updateData.data_source_id = editForm.value.data_source_id
-    }
-    
     if (Object.keys(config).length > 0) {
       updateData.config = config
     }
@@ -165,10 +156,6 @@ const onSaveEdit = async () => {
       model.value = updatedModel
       isEditSheetOpen.value = false
       toast.success('Model updated successfully')
-      // Reload data source if changed
-      if (updateData.data_source_id && updateData.data_source_id !== model.value.data_source_id) {
-        await loadDataSource()
-      }
     }
   } catch (error) {
     console.error('Failed to update model:', error)
@@ -253,25 +240,12 @@ const loadModelMetrics = async () => {
   }
 }
 
-const loadDataSource = async () => {
-  if (!model.value?.data_source_id) return
-  
-  try {
-    dataSource.value = await getDataSource(model.value.data_source_id)
-  } catch (error) {
-    console.error('Failed to load data source:', error)
-    dataSource.value = null
-  }
-}
 
 const loadData = async () => {
   loading.value = true
   try {
     await loadModel()
-    await Promise.all([
-      loadModelMetrics(),
-      loadDataSource()
-    ])
+    await loadModelMetrics()
   } finally {
     loading.value = false
   }
@@ -338,24 +312,6 @@ onMounted(() => {
               <Badge :variant="getStatusBadgeVariant(modelStatus)">
                 {{ getStatusIcon(modelStatus) }} {{ modelStatus }}
               </Badge>
-            </div>
-            <div class="space-y-2">
-              <div class="text-sm font-medium text-muted-foreground">Data Source</div>
-              <div class="space-y-2">
-                <div class="text-sm font-medium">{{ dataSource?.name || 'Unknown Source' }}</div>
-                <div v-if="dataSource?.source_type" class="text-xs text-muted-foreground">
-                  {{ dataSource.source_type.toUpperCase() }}
-                </div>
-                <Button 
-                  variant="link" 
-                  size="sm" 
-                  class="p-0 h-auto text-xs justify-start"
-                  @click="navigateTo(`/data/sources/${model.data_source_id}`)"
-                  v-if="dataSource"
-                >
-                  View Details →
-                </Button>
-              </div>
             </div>
             <div class="space-y-2">
               <div class="text-sm font-medium text-muted-foreground">Version</div>
@@ -469,7 +425,7 @@ onMounted(() => {
           </SheetDescription>
         </SheetHeader>
         
-        <div class="grid gap-6 py-6">
+        <div class="grid gap-6 p-4">
           <div class="space-y-2">
             <Label for="edit-name">Name *</Label>
             <Input
@@ -501,19 +457,6 @@ onMounted(() => {
             />
           </div>
           
-          <div class="space-y-2">
-            <Label for="edit-data-source">Data Source *</Label>
-            <Select v-model="editForm.data_source_id" :disabled="isUpdating">
-              <SelectTrigger>
-                <SelectValue placeholder="Select data source" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="source in dataSources" :key="source.id" :value="source.id">
-                  {{ source.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           
           <div class="space-y-2">
             <Label for="edit-config">Configuration (JSON)</Label>

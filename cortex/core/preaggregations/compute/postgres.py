@@ -96,8 +96,6 @@ class PostgresComputeAdapter(ComputeAdapter):
                 
         except Exception as exc:
             print(f"[PREAGG] Database operation failed: {exc}")
-            # Log only safe connection details (never username or password)
-            print(f"[PREAGG] Connection details: host={conn_details.get('host')}, port={conn_details.get('port')}, database={conn_details.get('database')}, dialect={conn_details.get('dialect')}")
             raise exc
         finally:
             # Ensure connection is closed

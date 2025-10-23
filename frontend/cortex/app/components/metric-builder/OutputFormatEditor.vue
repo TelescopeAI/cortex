@@ -71,7 +71,6 @@
                   <SelectItem :value="OutputFormatType.CAST">Cast (Type conversion)</SelectItem>
                   <SelectItem :value="OutputFormatType.FORMAT">Format (String formatting)</SelectItem>
                   <SelectItem :value="OutputFormatType.CALCULATE">Calculate (Math operations)</SelectItem>
-                  <SelectItem :value="OutputFormatType.COMBINE">Combine (Merge columns)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -177,27 +176,6 @@
               </div>
             </div>
           </div>
-
-          <div v-if="format.type === OutputFormatType.COMBINE" class="space-y-4">
-            <div class="grid grid-cols-2 gap-4">
-              <div class="space-y-2">
-                <Label>Source Columns (comma-separated)</Label>
-                <Input
-                  v-model="sourceColumnsString"
-                  placeholder="e.g., first_name, last_name"
-                  @update:model-value="updateSourceColumns"
-                />
-              </div>
-              <div class="space-y-2">
-                <Label>Delimiter</Label>
-                <Input
-                  v-model="format.delimiter"
-                  placeholder="e.g., space, comma, dash"
-                  @update:model-value="updateFormats"
-                />
-              </div>
-            </div>
-          </div>
         </div>
       </Card>
     </div>
@@ -247,26 +225,11 @@ const operandsString = computed({
   }
 })
 
-const sourceColumnsString = computed({
-  get: () => formats.value?.find(f => f.type === OutputFormatType.COMBINE)?.source_columns?.join(', ') || '',
-  set: (value: string) => {
-    const combineFormat = formats.value?.find(f => f.type === OutputFormatType.COMBINE)
-    if (combineFormat) {
-      combineFormat.source_columns = value.split(',').map(s => s.trim()).filter(Boolean)
-      updateFormats()
-    }
-  }
- })
-
 const updateFormats = () => {
   emit('update:modelValue', formats.value || [])
 }
 
 const updateOperands = () => {
-  // Handled by computed setter
-}
-
-const updateSourceColumns = () => {
   // Handled by computed setter
 }
 

@@ -184,10 +184,24 @@ class ChartDataPointResponse(TSModel):
     metadata: Optional[Dict[str, Any]]
 
 
+class BoxPlotDataPointResponse(TSModel):
+    """Response model for box plot data point."""
+    x: str
+    min: float
+    q1: float
+    median: float
+    q3: float
+    max: float
+    outliers: Optional[List[float]]
+    label: Optional[str]
+    category: Optional[str]
+    metadata: Optional[Dict[str, Any]]
+
+
 class ChartSeriesResponse(TSModel):
     """Response model for chart series."""
     name: str
-    data: List[ChartDataPointResponse]
+    data: Union[List[ChartDataPointResponse], List[BoxPlotDataPointResponse]]
     type: Optional[str]
     color: Optional[str]
     metadata: Optional[Dict[str, Any]]

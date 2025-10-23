@@ -159,7 +159,7 @@ export interface ProcessedChartData {
 
 export interface ChartSeries {
   name: string
-  data: ChartDataPoint[]
+  data: ChartDataPoint[] | BoxPlotDataPoint[]
   type?: string
   color?: string
   metadata?: Record<string, any>
@@ -168,6 +168,19 @@ export interface ChartSeries {
 export interface ChartDataPoint {
   x: any
   y: any
+  label?: string
+  category?: string
+  metadata?: Record<string, any>
+}
+
+export interface BoxPlotDataPoint {
+  x: string
+  min: number
+  q1: number
+  median: number
+  q3: number
+  max: number
+  outliers?: number[]
   label?: string
   category?: string
   metadata?: Record<string, any>
@@ -224,6 +237,7 @@ export enum VisualizationType {
   PIE_CHART = 'pie_chart',
   DONUT_CHART = 'donut_chart',
   SCATTER_PLOT = 'scatter_plot',
+  BOX_PLOT = 'box_plot',
   HEATMAP = 'heatmap',
   TABLE = 'table'
 }

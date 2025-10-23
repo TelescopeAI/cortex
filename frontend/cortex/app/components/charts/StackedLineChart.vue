@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useChartTheme } from '~/composables/useChartTheme'
 
 interface BulletLegendItemInterface {
   name: string
@@ -30,6 +31,8 @@ const props = withDefaults(defineProps<StackedLineChartProps>(), {
   hideLegend: false,
   yGridLine: true
 })
+
+const { chartTheme } = useChartTheme()
 
 // Convert data to ECharts format with stacking
 const chartOption = computed(() => {
@@ -141,6 +144,7 @@ const chartOption = computed(() => {
   <div class="h-full w-full">
     <VChart 
       :option="chartOption" 
+      :theme="chartTheme"
       autoresize
       class="h-full w-full min-h-[24rem]"
     />

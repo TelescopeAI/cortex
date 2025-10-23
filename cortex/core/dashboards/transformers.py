@@ -4,6 +4,8 @@ from uuid import UUID
 from cortex.core.types.telescope import TSModel
 from cortex.core.types.dashboards import VisualizationType, AxisDataType
 from cortex.core.dashboards.dashboard import VisualizationConfig
+from cortex.core.dashboards.mapping.factory import MappingFactory
+from cortex.core.dashboards.mapping.modules.box_plot import BoxPlotMapping
 
 
 class ChartDataPoint(TSModel):
@@ -15,10 +17,24 @@ class ChartDataPoint(TSModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
+class BoxPlotDataPoint(TSModel):
+    """Individual data point for box plot visualizations."""
+    x: str                     # Category name
+    min: float                 # Minimum value
+    q1: float                  # First quartile
+    median: float              # Median
+    q3: float                  # Third quartile
+    max: float                 # Maximum value
+    outliers: Optional[List[float]] = None  # Outlier values
+    label: Optional[str] = None
+    category: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
 class ChartSeries(TSModel):
     """Data series for charts."""
     name: str
-    data: List[ChartDataPoint]
+    data: Union[List[ChartDataPoint], List[BoxPlotDataPoint]]
     type: Optional[str] = None
     color: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
@@ -163,6 +179,11 @@ class DataTransformationService(TSModel):
                 processed = DataTransformationService._transform_table(
                     metric_result, data_mapping
                 )
+            elif viz_type == VisualizationType.BOX_PLOT:
+                # Create box plot mapping and transform data
+                box_plot_mapping = BoxPlotMapping(data_mapping)
+                box_plot_mapping.validate(metric_result.columns)
+                processed = box_plot_mapping.transform_data(metric_result.data)
             else:
                 # Default to series-based charts (line, bar, area, etc.)
                 processed = DataTransformationService._transform_series(

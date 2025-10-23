@@ -101,6 +101,7 @@ function getVisualizationComponent() {
     case 'pie_chart':
     case 'donut_chart':
     case 'scatter_plot':
+    case 'box_plot':
     case 'heatmap':
       return ChartWidget
     default:

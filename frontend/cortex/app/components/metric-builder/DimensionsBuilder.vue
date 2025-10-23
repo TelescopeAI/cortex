@@ -21,79 +21,231 @@
       <Card 
         v-for="(dimension, index) in dimensions"
         :key="index"
-        class="p-4"
+        class="p-5 hover:shadow-md transition-shadow"
       >
-        <div class="space-y-4">
+        <div class="space-y-5">
           <!-- Header -->
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-2">
-              <Grid class="h-4 w-4 text-green-500" />
-              <span class="font-medium">{{ dimension.name || 'Unnamed Dimension' }}</span>
+              <div class="p-1.5 rounded-md bg-green-50 dark:bg-green-950">
+                <Grid class="h-4 w-4 text-green-600 dark:text-green-400" />
+              </div>
+              <span class="font-medium text-base">{{ dimension.name || 'Unnamed Dimension' }}</span>
             </div>
             <Button
               variant="ghost"
               size="sm"
               @click="removeDimension(index)"
+              class="hover:bg-red-50 hover:text-red-600"
             >
               <X class="h-4 w-4" />
             </Button>
           </div>
 
-          <!-- Form Fields -->
-          <div class="grid grid-cols-2 gap-4">
-            <!-- Name -->
-            <div class="space-y-2">
-              <Label>Name *</Label>
-              <Input
-                v-model="dimension.name"
-                placeholder="dimension_name"
+          <!-- Sentence-Completion Interface -->
+          <div class="space-y-3">
+            <!-- Row 1: Select [column] from the table [table] -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-sm text-muted-foreground">Select</span>
+              
+              <!-- Column Selection (dropdown based on selected table) -->
+              <Select 
+                v-model="dimension.query" 
                 @update:model-value="updateDimensions"
-              />
-            </div>
+                :disabled="!dimension.table"
+              >
+                <SelectTrigger class="w-auto min-w-[200px] h-9 justify-between">
+                  <SelectValue placeholder="Select column" as-child>
+                    <div class="flex items-center justify-between w-full gap-3">
+                      <span>{{ dimension.query || 'Select column' }}</span>
+                      <Badge 
+                        v-if="dimension.query && getSelectedColumnType(dimension.table, dimension.query)"
+                        :class="getColumnTypeBadgeClass(getSelectedColumnType(dimension.table, dimension.query) || '')"
+                      >
+                        {{ getSelectedColumnType(dimension.table, dimension.query) }}
+                      </Badge>
+                    </div>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem 
+                    v-for="column in getColumnsForTable(dimension.table)"
+                    :key="column.name"
+                    :value="column.name"
+                  >
+                    <div class="flex items-center justify-between w-full gap-3">
+                      <span>{{ column.name }}</span>
+                      <Badge :class="getColumnTypeBadgeClass(column.type)">
+                        {{ column.type }}
+                      </Badge>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
 
-            <!-- Table -->
-            <div class="space-y-2">
-              <Label>Table</Label>
-              <Select v-model="dimension.table" @update:model-value="updateDimensions">
-                <SelectTrigger>
+              <span class="text-sm text-muted-foreground">from the table</span>
+              
+              <!-- Table Selection -->
+              <Select v-model="dimension.table" @update:model-value="onTableChange(dimension)">
+                <SelectTrigger class="w-auto min-w-[180px] h-9">
                   <SelectValue placeholder="Select table" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem v-for="table in availableTables" :key="table.name" :value="table.name">{{ table.name }}</SelectItem>
+                  <SelectItem v-for="table in availableTables" :key="table.name" :value="table.name">
+                    {{ table.name }}
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          </div>
 
-          <div class="grid grid-cols-1 gap-4">
-            <!-- Query -->
-            <div class="space-y-2">
-              <Label>Query *</Label>
+            <!-- Row 2: Name it as [name] -->
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-muted-foreground">Name it as</span>
               <Input
-                v-model="dimension.query"
-                placeholder="e.g., column_name or CAST(column AS type)"
+                v-model="dimension.name"
+                placeholder="Dimension name"
+                class="flex-1 h-9"
                 @update:model-value="updateDimensions"
               />
             </div>
           </div>
 
-          <!-- Description -->
-          <div class="space-y-2">
-            <Label>Description</Label>
-            <Textarea
-              v-model="dimension.description"
-              placeholder="Describe what this dimension represents..."
-              rows="2"
-              @update:model-value="updateDimensions"
-            />
-          </div>
+           
 
-          <!-- Output Formatting -->
-          <OutputFormatEditor
-            v-model="dimension.formatting"
-            object-type="dimension"
-            @update:model-value="updateDimensions"
-          />
+          <!-- Advanced Section -->
+          <div class="pt-3">
+            <button 
+              type="button"
+              class="flex items-center justify-between w-full text-xs text-muted-foreground hover:text-foreground transition-colors group"
+              @click="toggleAdvanced(index)"
+            >
+              <span class="flex items-center gap-1.5">
+                <Settings class="h-3.5 w-3.5" />
+                Advanced
+              </span>
+              <ChevronDown :class="['h-3.5 w-3.5 transition-transform duration-200', showAdvanced[index] && 'rotate-180']" />
+            </button>
+
+            <div 
+              v-if="showAdvanced[index]" 
+              class="mt-4 space-y-4 pt-4 border-t"
+            >
+            <!-- Combine Columns -->
+           <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <Label class="text-xs font-medium text-muted-foreground">Combine Columns</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    @click="addCombineColumn(dimension)"
+                    class="h-7 text-xs"
+                  >
+                    <Plus class="h-3 w-3 mr-1" />
+                    Add Column
+                  </Button>
+                </div>
+                <p class="text-xs text-muted-foreground">
+                  Concatenate additional columns to this dimension (e.g., first_name + last_name)
+                </p>
+                
+                <!-- Combine columns list -->
+                <div v-if="dimension.combine && dimension.combine.length > 0" class="space-y-2 mt-2">
+                  <Card 
+                    v-for="(combineSpec, combineIndex) in dimension.combine"
+                    :key="combineIndex"
+                    class="p-3 bg-muted/30"
+                  >
+                    <div class="space-y-2">
+                      <!-- Column and table selection -->
+                      <div class="flex items-center gap-2">
+                        <Select 
+                          v-model="combineSpec.table" 
+                          @update:model-value="onCombineTableChange(dimension, combineIndex)"
+                        >
+                          <SelectTrigger class="w-auto min-w-[120px] h-8 text-xs">
+                            <SelectValue placeholder="Table" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem v-for="table in availableTables" :key="table.name" :value="table.name">
+                              {{ table.name }}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+
+                        <Select 
+                          v-model="combineSpec.query" 
+                          @update:model-value="updateDimensions"
+                          :disabled="!combineSpec.table"
+                        >
+                          <SelectTrigger class="flex-1 h-8 text-xs">
+                            <SelectValue placeholder="Select column" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem 
+                              v-for="column in getColumnsForTable(combineSpec.table)"
+                              :key="column.name"
+                              :value="column.name"
+                            >
+                              {{ column.name }}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          @click="removeCombineColumn(dimension, combineIndex)"
+                          class="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600"
+                        >
+                          <X class="h-3 w-3" />
+                        </Button>
+                      </div>
+
+                      <!-- Delimiter input -->
+                      <div class="flex items-center gap-2">
+                        <Label class="text-xs text-muted-foreground whitespace-nowrap">Delimiter:</Label>
+                        <Input
+                          v-model="combineSpec.delimiter"
+                          placeholder="Space"
+                          class="h-7 text-xs flex-1"
+                          @update:model-value="updateDimensions"
+                        />
+                        <span class="text-xs text-muted-foreground">(default: space)</span>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+                
+                <p v-else class="text-xs text-center text-muted-foreground py-4 border border-dashed rounded-md">
+                  No columns combined. Click "Add Column" to combine multiple columns.
+                </p>
+              </div>
+              
+              <!-- Description -->
+              <div class="space-y-1.5">
+                <Label class="text-xs font-medium text-muted-foreground">Description</Label>
+                <Textarea
+                  v-model="dimension.description"
+                  placeholder="Describe what this dimension represents..."
+                  rows="2"
+                  class="resize-none"
+                  @update:model-value="updateDimensions"
+                />
+              </div>
+
+              <!-- Output Formatting -->
+              <div class="space-y-1.5">
+                <Label class="text-xs font-medium text-muted-foreground">Output Formatting</Label>
+                <OutputFormatEditor
+                  v-model="dimension.formatting"
+                  object-type="dimension"
+                  @update:model-value="updateDimensions"
+                />
+              </div>
+
+             
+            </div>
+          </div>
         </div>
       </Card>
     </div>
@@ -107,19 +259,18 @@ import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
 import { Textarea } from '~/components/ui/textarea'
+import { Badge } from '~/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger
-} from '~/components/ui/dropdown-menu'
-import { Grid, X } from 'lucide-vue-next'
+import { Grid, X, Settings, ChevronDown, Plus } from 'lucide-vue-next'
 import ColumnSelector from '~/components/ColumnSelector.vue'
 import OutputFormatEditor from './OutputFormatEditor.vue'
+import { humanize } from '~/utils/stringCase'
+
+interface CombineColumnSpec {
+  query: string
+  table?: string
+  delimiter?: string
+}
 
 interface Dimension {
   name: string
@@ -127,6 +278,7 @@ interface Dimension {
   query: string
   table?: string
   formatting?: any[]
+  combine?: CombineColumnSpec[]
 }
 
 interface Props {
@@ -150,23 +302,96 @@ const availableTables = computed(() => {
 })
 
 const dimensions = ref<Dimension[]>([...props.dimensions])
+const showAdvanced = ref<Record<number, boolean>>({})
+const isLocalUpdate = ref(false)
 
-// Watch for changes from parent
+// Watch for changes from parent (but not from our own updates)
 watch(() => props.dimensions, (newDimensions) => {
+  // Skip if this was triggered by our own local update
+  if (isLocalUpdate.value) {
+    isLocalUpdate.value = false
+    return
+  }
   dimensions.value = [...newDimensions]
 })
 
 const updateDimensions = () => {
+  isLocalUpdate.value = true
   emit('update:dimensions', dimensions.value)
 }
 
+const toggleAdvanced = (index: number) => {
+  showAdvanced.value[index] = !showAdvanced.value[index]
+}
+
+const getColumnsForTable = (tableName?: string) => {
+  if (!tableName) return []
+  const table = availableTables.value.find((t: any) => t.name === tableName)
+  return table?.columns || []
+}
+
+const getSelectedColumnType = (tableName?: string, columnName?: string) => {
+  if (!tableName || !columnName) return null
+  const columns = getColumnsForTable(tableName)
+  const column = columns.find((col: any) => col.name === columnName)
+  return column?.type || null
+}
+
+const getColumnTypeBadgeClass = (type: string) => {
+  const typeUpper = type.toUpperCase()
+  
+  // Numeric types - blue
+  if (typeUpper.includes('INT') || typeUpper.includes('DECIMAL') || 
+      typeUpper.includes('NUMERIC') || typeUpper.includes('FLOAT') || 
+      typeUpper.includes('DOUBLE') || typeUpper.includes('REAL') ||
+      typeUpper.includes('MONEY')) {
+    return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 text-[10px] px-1.5 py-0.5'
+  }
+  
+  // Text types - purple
+  if (typeUpper.includes('CHAR') || typeUpper.includes('TEXT') || 
+      typeUpper.includes('VARCHAR') || typeUpper.includes('STRING') ||
+      typeUpper.includes('CLOB')) {
+    return 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 text-[10px] px-1.5 py-0.5'
+  }
+  
+  // Date/Time types - green
+  if (typeUpper.includes('DATE') || typeUpper.includes('TIME') || 
+      typeUpper.includes('TIMESTAMP')) {
+    return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 text-[10px] px-1.5 py-0.5'
+  }
+  
+  // Boolean types - amber
+  if (typeUpper.includes('BOOL') || typeUpper.includes('BIT')) {
+    return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[10px] px-1.5 py-0.5'
+  }
+  
+  // Default - gray
+  return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 text-[10px] px-1.5 py-0.5'
+}
+
+const onTableChange = (dimension: Dimension) => {
+  // Reset query if the selected column doesn't exist in new table
+  if (dimension.query) {
+    const columns = getColumnsForTable(dimension.table)
+    const columnExists = columns.some((col: any) => col.name === dimension.query)
+    if (!columnExists) {
+      dimension.query = ''
+    }
+  }
+  updateDimensions()
+}
+
 const addDimension = (tableName: string, column: any) => {
+  const humanizedName = humanize(column.name)
+  
   const newDimension: Dimension = {
-    name: column.name,
+    name: humanizedName,
     description: `Dimension based on ${tableName}.${column.name}`,
     query: column.name,
     table: tableName,
-    formatting: []
+    formatting: [],
+    combine: []
   }
   
   dimensions.value.push(newDimension)
@@ -177,4 +402,38 @@ const removeDimension = (index: number) => {
   dimensions.value.splice(index, 1)
   updateDimensions()
 }
-</script> 
+
+const addCombineColumn = (dimension: Dimension) => {
+  if (!dimension.combine) {
+    dimension.combine = []
+  }
+  dimension.combine.push({
+    query: '',
+    table: dimension.table,
+    delimiter: ' '
+  })
+  updateDimensions()
+}
+
+const removeCombineColumn = (dimension: Dimension, combineIndex: number) => {
+  if (dimension.combine) {
+    dimension.combine.splice(combineIndex, 1)
+    updateDimensions()
+  }
+}
+
+const onCombineTableChange = (dimension: Dimension, combineIndex: number) => {
+  // Reset query if the selected column doesn't exist in new table
+  if (dimension.combine && dimension.combine[combineIndex]) {
+    const combineSpec = dimension.combine[combineIndex]
+    if (combineSpec.query) {
+      const columns = getColumnsForTable(combineSpec.table)
+      const columnExists = columns.some((col: any) => col.name === combineSpec.query)
+      if (!columnExists) {
+        combineSpec.query = ''
+      }
+    }
+  }
+  updateDimensions()
+}
+</script>

@@ -7,6 +7,7 @@ import DonutChart from '@/components/charts/DonutChart.vue'
 import SingleValue from '@/components/charts/SingleValue.vue'
 import Gauge from '@/components/charts/Gauge.vue'
 import Scatter from '@/components/charts/Scatter.vue'
+import BoxPlot from '@/components/charts/BoxPlot.vue'
 import TableView from '@/components/charts/Table.vue'
 import StackedBarChart from '@/components/charts/StackedBarChart.vue'
 import StackedLineChart from '@/components/charts/StackedLineChart.vue'
@@ -194,6 +195,9 @@ const stackedAreaComponent = computed(() => {
     </div>
     <div v-else-if="type === 'scatter_plot'" class="w-full h-full">
       <Scatter :series="scatterSeries as any" :data-zoom="dataZoom" />
+    </div>
+    <div v-else-if="type === 'box_plot'" class="w-full h-full">
+      <BoxPlot :series="processed?.series || []" :x-label="metadata?.x_label" :y-label="metadata?.y_label" />
     </div>
     <div v-else-if="type === 'table'" class="w-full h-full">
       <TableView :columns="processed?.table?.columns || []" :rows="processed?.table?.rows || []" />

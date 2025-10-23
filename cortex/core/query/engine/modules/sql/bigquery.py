@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 from cortex.core.query.engine.modules.sql.base_sql import SQLQueryGenerator
 from cortex.core.semantics.dimensions import SemanticDimension
@@ -183,6 +183,33 @@ class BigQueryGenerator(SQLQueryGenerator):
             concat_parts.append(f"'{delimiter}'")
             concat_parts.append(col)
             
+        return f"CONCAT({', '.join(concat_parts)})"
+    
+    def _build_combine_expression(self, parts: List[Tuple[str, Optional[str]]]) -> str:
+        """
+        Build BigQuery CONCAT expression for combining multiple columns.
+        
+        Args:
+            parts: List of (column_expression, delimiter_before_column) tuples
+                   First tuple has None as delimiter
+                   
+        Returns:
+            BigQuery CONCAT expression
+            
+        Example:
+            parts = [("first_name", None), ("last_name", " ")]
+            returns: CONCAT(first_name, ' ', last_name)
+        """
+        if len(parts) == 1:
+            return parts[0][0]
+        
+        concat_parts = []
+        for col, delimiter in parts:
+            if delimiter is not None:
+                # Add delimiter literal before the column
+                concat_parts.append(f"'{delimiter}'")
+            concat_parts.append(col)
+        
         return f"CONCAT({', '.join(concat_parts)})"
 
     # Time bucketing support

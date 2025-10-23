@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useChartTheme } from '~/composables/useChartTheme'
 import type { DashboardWidget, StandardChartData } from '~/types/dashboards'
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const { chartTheme } = useChartTheme()
 
 // Computed values
 const gaugeConfig = computed(() => {
@@ -217,7 +219,7 @@ const finalOption = computed(() => {
   <div class="h-full min-h-[200px] flex flex-col">
     <!-- Gauge Chart -->
     <div class="flex-1">
-      <VChart :option="finalOption" autoresize class="h-full w-full" />
+      <VChart :option="finalOption" :theme="chartTheme" autoresize class="h-full w-full" />
     </div>
 
     <!-- Target Information -->

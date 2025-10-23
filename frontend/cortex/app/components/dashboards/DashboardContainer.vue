@@ -144,7 +144,7 @@ function getWidgetExecutionResult(widgetId: string) {
         </div>
         <div v-if="lastExecutionTime" class="flex items-center text-sm text-muted-foreground mt-2">
           <Clock class="w-4 h-4 mr-1" />
-          Last executed: {{ lastExecutionTime }}
+          Last refreshed at {{ lastExecutionTime }}
         </div>
       </CardHeader>
     </Card>

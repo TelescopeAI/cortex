@@ -8,7 +8,7 @@ from cortex.core.types.telescope import TSModel
 
 class OutputFormatType(str, Enum):
     RAW = "raw"                    # No transformation
-    COMBINE = "combine"            # Combine multiple columns
+    COMBINE = "combine"            # Combine multiple columns (DEPRECATED: Use SemanticDimension.combine instead)
     CALCULATE = "calculate"        # Mathematical operations
     FORMAT = "format"              # String formatting
     CAST = "cast"                  # Type casting

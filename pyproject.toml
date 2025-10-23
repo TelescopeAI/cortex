@@ -8,16 +8,17 @@ readme = "README.md"
 packages = [{include = "cortex"}]
 
 [tool.poetry.dependencies]
-python = ">=3.12"
+python = ">=3.12,<3.14"
 pydantic = "^2.10.6"
 sqlalchemy = "^2.0.38"
-sqlalchemy-bigquery = "^1.12.1"
-psycopg = {extras = ["binary", "pool"], version = "3.2.9"}
+sqlalchemy-bigquery = "1.15.0"
+psycopg = {extras = ["binary", "pool"], version = "3.2.10"}
 pytz = "^2025.1"
 alembic = "^1.16.5"
 duckdb = "^1.4.0"
 duckdb-engine = "^0.17.0"
 pymysql = {extras = ["rsa"], version = "^1.1.2"}
+redis = "^6.4.0"
 
 
 [tool.poetry.group.api]

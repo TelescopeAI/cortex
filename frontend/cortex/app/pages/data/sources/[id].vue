@@ -11,7 +11,7 @@ import {
 } from '~/components/ui/card';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
-import { ArrowLeft, Calendar, Edit, Trash2, Database, Globe, FileText, Settings, Activity } from 'lucide-vue-next';
+import { ArrowLeft, Calendar, Edit, Trash2, Database, Globe, FileText, Settings, Activity, Server, Cloud, Zap } from 'lucide-vue-next';
 import EditDataSourceDialog from '~/components/EditDataSourceDialog.vue';
 import { toast } from 'vue-sonner';
 
@@ -68,6 +68,52 @@ function getCatalogColor(catalog: string) {
       return 'bg-purple-100 text-purple-800';
     default:
       return 'bg-gray-100 text-gray-800';
+  }
+}
+
+// Humanize source type names
+function getSourceTypeName(sourceType: string): string {
+  const typeMap: Record<string, string> = {
+    'postgresql': 'PostgreSQL',
+    'mysql': 'MySQL',
+    'sqlite': 'SQLite',
+    'oracle': 'Oracle',
+    'bigquery': 'BigQuery',
+    'snowflake': 'Snowflake',
+    'redshift': 'Redshift',
+    'mongodb': 'MongoDB',
+    'dynamodb': 'DynamoDB',
+    'couchbase': 'Couchbase'
+  };
+  
+  return typeMap[sourceType] || sourceType.charAt(0).toUpperCase() + sourceType.slice(1);
+}
+
+// Get source type icon
+function getSourceTypeIcon(sourceType: string) {
+  switch (sourceType) {
+    case 'postgresql':
+      return Database;
+    case 'mysql':
+      return Database;
+    case 'sqlite':
+      return Database;
+    case 'oracle':
+      return Server;
+    case 'bigquery':
+      return Cloud;
+    case 'snowflake':
+      return Cloud;
+    case 'redshift':
+      return Cloud;
+    case 'mongodb':
+      return Database;
+    case 'dynamodb':
+      return Zap;
+    case 'couchbase':
+      return Database;
+    default:
+      return Database;
   }
 }
 
@@ -150,7 +196,6 @@ function goBack() {
           <ArrowLeft class="w-4 h-4 mr-2" />
           Back to Data Sources
         </Button>
-        <h1 class="text-2xl font-bold">Data Source Details</h1>
       </div>
       <div class="flex gap-2">
         <EditDataSourceDialog 
@@ -182,17 +227,26 @@ function goBack() {
       <!-- Main Info Card -->
       <Card>
         <CardHeader>
+          
           <div class="flex items-center justify-between">
             <CardTitle class="text-xl">{{ currentDataSource.name }}</CardTitle>
             <component :is="getCatalogIcon(currentDataSource.source_catalog)" class="w-6 h-6 text-gray-500" />
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex flex-col items-start gap-2">
+            <div class="space-y-2">
+            <div>
+              <span class="font-mono text-sm">{{ currentDataSource.id }}</span>
+            </div>
+          </div>
+          <div class="flex gap-x-4">
             <Badge :class="getCatalogColor(currentDataSource.source_catalog)">
               {{ currentDataSource.source_catalog }}
             </Badge>
-            <Badge variant="outline">
-              {{ currentDataSource.source_type }}
+            <Badge variant="outline" class="flex items-center gap-1">
+              <component :is="getSourceTypeIcon(currentDataSource.source_type)" class="w-3 h-3" />
+              {{ getSourceTypeName(currentDataSource.source_type) }}
             </Badge>
+          </div>
           </div>
         </CardHeader>
         <CardContent class="space-y-4">
@@ -201,9 +255,9 @@ function goBack() {
             <p class="text-gray-600">{{ currentDataSource.description }}</p>
           </div>
           
-          <div v-if="currentDataSource.alias">
-            <h3 class="font-medium text-gray-900 mb-2">Alias</h3>
-            <p class="font-mono text-sm bg-gray-100 px-2 py-1 rounded">{{ currentDataSource.alias }}</p>
+          <div v-if="currentDataSource.alias" class="flex gap-x-2">
+            <h3 class="font-medium text-gray-600 mb-2">Alias</h3>
+            <p class="font-mono w-fit text-sm bg-gray-100 px-2 py-1 rounded">{{ currentDataSource.alias }}</p>
           </div>
           
           <div class="flex items-center gap-2 text-sm text-gray-500">
@@ -212,32 +266,14 @@ function goBack() {
             <span>•</span>
             <span>Updated {{ new Date(currentDataSource.updated_at).toLocaleDateString() }}</span>
           </div>
-        </CardContent>
-      </Card>
-
-      <!-- Data Source Information Card -->
-      <Card>
-        <CardHeader>
-          <CardTitle class="text-lg">Data Source Information</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div class="space-y-2">
-            <div>
-              <span class="font-medium text-gray-700">Data Source ID:</span>
-              <span class="font-mono text-sm bg-gray-100 px-2 py-1 rounded ml-2">{{ currentDataSource.id }}</span>
-            </div>
-            <div>
-              <span class="font-medium text-gray-700">Environment ID:</span>
-              <span class="font-mono text-sm bg-gray-100 px-2 py-1 rounded ml-2">{{ currentDataSource.environment_id }}</span>
-            </div>
-          </div>
+          
         </CardContent>
       </Card>
 
       <!-- Configuration Card -->
       <Card>
         <CardHeader>
-          <CardTitle class="text-lg">Database Configuration</CardTitle>
+          <CardTitle class="text-lg">Configuration</CardTitle>
         </CardHeader>
         <CardContent>
           <div v-if="currentDataSource.source_type" class="border rounded-lg p-4 bg-muted/50">

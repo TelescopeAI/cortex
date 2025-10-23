@@ -4,7 +4,7 @@
       :side="isSmallScreen ? 'bottom' : 'right'" 
       :class="[
         'flex flex-col',
-        'p-4',
+        'p-6',
         isSmallScreen 
           ? '!w-full !h-[90vh]' 
           :'!w-[95vw] sm:!w-[85vw] md:!w-[75vw] lg:!w-[65vw] xl:!w-[50vw] !max-w-[50vw] sm:!max-w-none'
@@ -20,21 +20,17 @@
         </SheetDescription>
       </SheetHeader>
 
-      <div class="flex items-center justify-between mb-4 px-4">
-        <div class="flex items-center space-x-2">
-          <Button
-            :variant="isEditing ? 'default' : 'outline'"
-            size="sm"
-            @click="handleEditToggle(!isEditing)"
-            class="flex items-center"
-          >
-            <Edit class="h-4 w-4 mr-2" />
-            {{ isEditing ? 'Editing' : 'Edit' }}
-          </Button>
-          <span class="text-sm text-muted-foreground">
-            {{ isEditing ? 'Editing mode' : 'View mode' }}
-          </span>
-        </div>
+      <div class="flex items-center justify-between mb-4 px-6">
+        <Button
+          :variant="isEditing ? 'default' : 'outline'"
+          size="sm"
+          @click="handleEditToggle(!isEditing)"
+          class="flex items-center"
+        >
+          <Eye v-if="isEditing" class="h-4 w-4 mr-2" />
+          <Edit v-else class="h-4 w-4 mr-2" />
+          {{ isEditing ? 'View' : 'Edit' }}
+        </Button>
         
         <div v-if="isEditing" class="flex items-center space-x-2">
           <Button
@@ -77,7 +73,7 @@
       </Card>
 
       <!-- Schema Content -->
-      <div class="flex-1 overflow-y-auto min-h-0">
+      <div class="flex-1 overflow-y-auto min-h-0 px-6">
         <!-- Edit Mode -->
         <div v-if="isEditing">
           <MetricSchemaBuilder
@@ -114,7 +110,7 @@ import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Textarea } from '~/components/ui/textarea'
 
-import { Code, Database, Edit } from 'lucide-vue-next'
+import { Code, Database, Edit, Eye } from 'lucide-vue-next'
 import { useDataSources } from '~/composables/useDataSources'
 import { toast } from 'vue-sonner'
 
@@ -322,6 +318,16 @@ const handleSchemaUpdate = (newSchema: any) => {
   const filteredUpdate: any = {}
   Object.keys(newSchema).forEach(key => {
     const value = newSchema[key]
+    const existingValue = (schema.value as any)[key]
+    
+    // Don't overwrite existing arrays (measures, dimensions, joins, filters, etc.) with empty arrays
+    // This prevents data loss when the child component emits back during initialization
+    if (Array.isArray(value) && value.length === 0 && 
+        Array.isArray(existingValue) && existingValue.length > 0) {
+      console.log(`SchemaSheet: Skipping empty array for ${key}, preserving existing data`)
+      return
+    }
+    
     if (value !== undefined && value !== null && value !== '') {
       filteredUpdate[key] = value
     }

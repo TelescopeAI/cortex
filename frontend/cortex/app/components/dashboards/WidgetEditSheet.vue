@@ -421,20 +421,6 @@ onMounted(() => {
             <SheetTitle>Edit Widget</SheetTitle>
             <SheetDescription>Configure your widget settings and see live preview</SheetDescription>
           </div>
-          <div class="flex items-center gap-2">
-            <Tabs :value="currentMode" @update:value="currentMode = $event" class="w-auto">
-              <TabsList class="grid w-full grid-cols-2">
-                <TabsTrigger value="edit" class="flex items-center gap-1">
-                  <Settings class="w-4 h-4" />
-                  Edit
-                </TabsTrigger>
-                <TabsTrigger value="view" class="flex items-center gap-1">
-                  <Eye class="w-4 h-4" />
-                  Preview
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
         </div>
       </SheetHeader>
 
@@ -473,6 +459,7 @@ onMounted(() => {
                       <UiSelectItem value="pie_chart">Pie</UiSelectItem>
                       <UiSelectItem value="donut_chart">Donut</UiSelectItem>
                       <UiSelectItem value="scatter_plot">Scatter</UiSelectItem>
+                      <UiSelectItem value="box_plot">Box Plot</UiSelectItem>
                       <UiSelectItem value="table">Table</UiSelectItem>
                     </UiSelectContent>
                   </UiSelect>

@@ -4,7 +4,8 @@ from cortex.core.dashboards.mapping.modules import (
     SingleValueMapping,
     ChartMapping, 
     TableMapping,
-    GaugeMapping
+    GaugeMapping,
+    BoxPlotMapping
 )
 from cortex.core.types.dashboards import VisualizationType, ValueSelectionMode
 
@@ -21,6 +22,7 @@ class MappingFactory:
         VisualizationType.PIE_CHART: ChartMapping,
         VisualizationType.DONUT_CHART: ChartMapping,
         VisualizationType.SCATTER_PLOT: ChartMapping,
+        VisualizationType.BOX_PLOT: BoxPlotMapping,
         VisualizationType.TABLE: TableMapping,
         VisualizationType.GAUGE: GaugeMapping,
     }

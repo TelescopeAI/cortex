@@ -5,6 +5,23 @@ from cortex.core.semantics.output_formats import OutputFormat
 from cortex.core.types.telescope import TSModel
 
 
+class CombineColumnSpec(TSModel):
+    """
+    Specification for an additional column to combine with the dimension.
+    Used to concatenate multiple columns into a single dimension value.
+    
+    Example: Combining first_name and last_name columns into a full_name dimension.
+    
+    Attributes:
+        query: Column name or expression to combine
+        table: Source table for the column (if different from dimension's table)
+        delimiter: Separator to use before this column (default: space)
+    """
+    query: str
+    table: Optional[str] = None
+    delimiter: Optional[str] = " "
+
+
 class SemanticDimension(TSModel):
     """
     Represents a categorical or descriptive attribute used in semantic metrics for analytics.
@@ -25,6 +42,9 @@ class SemanticDimension(TSModel):
     query: str
     table: Optional[str] = None
     formatting: Optional[List[OutputFormat]] = None
+    
+    # Column combination
+    combine: Optional[List[CombineColumnSpec]] = None
     
     # Auto-inferred source column information
     source_type: Optional[ColumnSourceType] = None

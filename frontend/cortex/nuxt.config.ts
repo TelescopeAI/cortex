@@ -47,7 +47,7 @@ export default defineNuxtConfig({
     /**
      * Chart types used in the application
      */
-    charts: ['BarChart', 'LineChart', 'PieChart', 'GaugeChart', 'ScatterChart'],
+    charts: ['BarChart', 'LineChart', 'PieChart', 'GaugeChart', 'ScatterChart', 'BoxplotChart'],
     /**
      * Components used by charts
      */

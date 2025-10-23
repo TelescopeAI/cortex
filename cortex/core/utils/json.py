@@ -11,7 +11,8 @@ def json_default_encoder(value: Any) -> Any:
     if isinstance(value, (datetime, date)):
         return value.isoformat()
     if isinstance(value, TSModel):
-        return value.model_dump()
+        # Use mode='json' to ensure UUIDs, datetimes, etc. are properly serialized
+        return value.model_dump(mode='json')
     if isinstance(value, UUID):
         return str(value)
     if isinstance(value, Decimal):

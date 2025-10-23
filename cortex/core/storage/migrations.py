@@ -52,10 +52,13 @@ class MigrationManager:
     def get_current_revision(self) -> Optional[str]:
         """Get the current database revision."""
         try:
-            engine = self.storage._sqlalchemy_engine
+            # Always create a fresh connection to avoid caching issues
+            engine = create_engine(self.storage.db_url)
             with engine.connect() as connection:
                 context = MigrationContext.configure(connection)
-                return context.get_current_revision()
+                current_rev = context.get_current_revision()
+            engine.dispose()  # Clean up the engine
+            return current_rev
         except Exception as e:
             logger.warning(f"Could not get current revision: {e}")
             return None

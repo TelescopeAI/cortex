@@ -7,6 +7,7 @@ export { default as SingleValue } from './SingleValue.vue'
 export { default as Gauge } from './Gauge.vue'
 export { default as Table } from './Table.vue'
 export { default as Scatter } from './Scatter.vue'
+export { default as BoxPlot } from './BoxPlot.vue'
 
 // Stacked chart components
 export { default as StackedBarChart } from './StackedBarChart.vue'

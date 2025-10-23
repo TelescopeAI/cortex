@@ -1,196 +1,100 @@
 <template>
-  <div class="space-y-4">
-    <div class="flex justify-between items-center">
-      <h4 class="text-sm font-medium">Joins</h4>
-      <Button variant="outline" size="sm" @click="addJoin">
-        <Plus class="h-4 w-4 mr-2" />
-        Add Join
-      </Button>
-    </div>
-
-    <div v-if="localJoins.length === 0" class="text-center py-8 border-2 border-dashed rounded-lg">
-      <Link class="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-      <p class="text-sm text-muted-foreground">No joins defined</p>
-      <p class="text-xs text-muted-foreground">Joins will be auto-generated from relationships</p>
-    </div>
-
-    <div v-else class="space-y-3">
-      <Card 
-        v-for="(join, joinIndex) in localJoins"
-        :key="joinIndex"
-        class="p-4 bg-muted/50"
-      >
-        <div class="space-y-4">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-2">
-              <Link class="h-4 w-4 text-purple-500" />
-              <Input 
-                v-model="join.name"
-                placeholder="join_name"
-                class="text-base font-medium bg-transparent border-none focus-visible:ring-0 p-0 h-auto"
-                @update:model-value="updateJoins"
-              />
-            </div>
-            <Button variant="ghost" size="sm" @click="removeJoin(joinIndex)">
-              <X class="h-4 w-4" />
-            </Button>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="space-y-2">
-              <Label>Left Table</Label>
-              <Select v-model="join.left_table" @update:model-value="updateJoins">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select left table" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="table in availableTables" :key="table.name" :value="table.name">{{ table.name }}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div class="space-y-2">
-              <Label>Right Table</Label>
-              <Select v-model="join.right_table" @update:model-value="updateJoins">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select right table" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="table in availableTables" :key="table.name" :value="table.name">{{ table.name }}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="space-y-2">
-              <Label>Join Type</Label>
-              <Select v-model="join.join_type" @update:model-value="updateJoins">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select join type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="inner">Inner Join</SelectItem>
-                  <SelectItem value="left">Left Join</SelectItem>
-                  <SelectItem value="right">Right Join</SelectItem>
-                  <SelectItem value="full">Full Join</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div class="space-y-2">
-              <Label>Description</Label>
-              <Input v-model="join.description" placeholder="Optional description" @update:model-value="updateJoins" />
-            </div>
-          </div>
-
-          <!-- Join Conditions -->
-          <div class="space-y-3 pt-2">
-            <div class="flex items-center justify-between">
-              <Label class="text-xs uppercase text-muted-foreground">Join Conditions</Label>
-              <Button v-if="!join.on" variant="outline" size="sm" @click="addCondition(joinIndex)">
-                <Plus class="h-3 w-3 mr-1" />
-                Add Condition
-              </Button>
-            </div>
-            
-            <div v-if="!join.on && (join.conditions || []).length === 0" class="text-center text-xs text-muted-foreground py-2">
-              No conditions defined. Add a condition to link the tables.
-            </div>
-
-            <!-- SQL ON Clause -->
-            <div v-if="join.on !== undefined" class="space-y-2">
-              <Label>SQL ON Clause</Label>
-              <Textarea 
-                v-model="join.on"
-                placeholder="e.g., table1.id = table2.table1_id"
-                class="font-mono text-xs"
-                rows="2"
-                @update:model-value="updateJoins"
-              />
-            </div>
-
-            <!-- Condition Builder -->
-            <div v-else class="space-y-2">
-              <div 
-                v-for="(condition, condIndex) in join.conditions"
-                :key="condIndex"
-                class="flex items-center space-x-2 bg-background p-2 rounded-md"
-              >
-                <Select v-model="condition.left_table" @update:model-value="updateJoins">
-                  <SelectTrigger class="flex-1">
-                    <SelectValue placeholder="Left Table" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="table in availableTables" :key="table.name" :value="table.name">{{ table.name }}</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select v-model="condition.left_column" @update:model-value="updateJoins">
-                  <SelectTrigger class="flex-1">
-                    <SelectValue placeholder="Left Column" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem 
-                      v-for="col in getColumnsForTable(condition.left_table)"
-                      :key="col.name"
-                      :value="col.name"
-                    >{{ col.name }}</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <span class="text-muted-foreground font-bold">=</span>
-
-                <Select v-model="condition.right_table" @update:model-value="updateJoins">
-                  <SelectTrigger class="flex-1">
-                    <SelectValue placeholder="Right Table" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="table in availableTables" :key="table.name" :value="table.name">{{ table.name }}</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select v-model="condition.right_column" @update:model-value="updateJoins">
-                  <SelectTrigger class="flex-1">
-                    <SelectValue placeholder="Right Column" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem 
-                      v-for="col in getColumnsForTable(condition.right_table)"
-                      :key="col.name"
-                      :value="col.name"
-                    >{{ col.name }}</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Button variant="ghost" size="icon" class="w-7 h-7" @click="removeCondition(joinIndex, condIndex)">
-                  <X class="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-
-            <div class="flex items-center justify-end">
-              <Button 
-                variant="link" 
-                size="sm" 
-                class="text-xs"
-                @click="toggleSqlMode(join)"
-              >
-                {{ join.on !== undefined ? 'Switch to Builder' : 'Switch to SQL Mode' }}
-              </Button>
-            </div>
-          </div>
+  <div class="space-y-6">
+    <!-- Auto-generated Joins Section -->
+    <div v-if="autoGeneratedJoins.length > 0" class="space-y-3">
+      <div class="flex items-center gap-2">
+        <div class="p-1.5 rounded-md bg-purple-50 dark:bg-purple-950">
+          <Sparkles class="h-4 w-4 text-purple-600 dark:text-purple-400" />
         </div>
-      </Card>
+        <h4 class="text-sm font-medium">Auto-generated Joins</h4>
+        <Badge variant="secondary" class="text-[10px]">{{ autoGeneratedJoins.length }}</Badge>
+      </div>
+      <p class="text-xs text-muted-foreground">These joins were automatically created based on table relationships. You can modify them as needed.</p>
+      
+      <div class="space-y-3">
+        <Card 
+          v-for="(join, joinIndex) in autoGeneratedJoins"
+          :key="'auto-' + joinIndex"
+          class="p-5 hover:shadow-md transition-shadow border-purple-100 dark:border-purple-900"
+        >
+          <JoinEditor
+            :join="join"
+            :join-index="getActualIndex(join)"
+            :available-tables="availableTables"
+            :is-auto-generated="true"
+            :is-modified="isModified(getActualIndex(join))"
+            @update="updateJoins"
+            @remove="removeJoin(getActualIndex(join))"
+            @mark-modified="markAsUserModified(getActualIndex(join))"
+          />
+        </Card>
+      </div>
+    </div>
+
+    <!-- Custom Joins Section -->
+    <div class="space-y-3">
+      <div class="flex justify-between items-center">
+        <div class="flex items-center gap-2">
+          <div class="p-1.5 rounded-md bg-blue-50 dark:bg-blue-950">
+            <Link class="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          </div>
+          <h4 class="text-sm font-medium">Custom Joins</h4>
+          <Badge v-if="customJoins.length > 0" variant="secondary" class="text-[10px]">{{ customJoins.length }}</Badge>
+        </div>
+        <div class="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            @click="emit('generate-joins')"
+            title="Auto-generate missing joins based on table relationships"
+          >
+            <Sparkles class="h-4 w-4 mr-2" />
+            Generate Joins
+          </Button>
+          <ColumnSelector
+            :available-tables="availableTables"
+            button-text="Add Join"
+            @select="addJoinFromColumn"
+          />
+        </div>
+      </div>
+
+      <div v-if="customJoins.length === 0" class="text-center py-8 border-2 border-dashed rounded-lg">
+        <Link class="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+        <p class="text-sm text-muted-foreground">No custom joins defined</p>
+        <p class="text-xs text-muted-foreground">Add custom joins for complex relationships</p>
+      </div>
+
+      <div v-else class="space-y-3">
+        <Card 
+          v-for="(join, joinIndex) in customJoins"
+          :key="'custom-' + joinIndex"
+          class="p-5 hover:shadow-md transition-shadow"
+        >
+          <JoinEditor
+            :join="join"
+            :join-index="getActualIndex(join)"
+            :available-tables="availableTables"
+            :is-auto-generated="false"
+            :is-modified="false"
+            @update="updateJoins"
+            @remove="removeJoin(getActualIndex(join))"
+            @mark-modified="() => {}"
+          />
+        </Card>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { Card } from '~/components/ui/card'
 import { Button } from '~/components/ui/button'
-import { Input } from '~/components/ui/input'
-import { Label } from '~/components/ui/label'
-import { Textarea } from '~/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
-import { Plus, X, Link } from 'lucide-vue-next'
+import { Badge } from '~/components/ui/badge'
+import { Plus, Link, Sparkles } from 'lucide-vue-next'
+import JoinEditor from './JoinEditor.vue'
+import ColumnSelector from '~/components/ColumnSelector.vue'
 
 // --- Types ---
 interface JoinCondition {
@@ -229,23 +133,69 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   'update:modelValue': [value: Join[]]
+  'generate-joins': []
 }>()
 
 // --- State ---
 const localJoins = ref<Join[]>([])
+const autoGeneratedFlags = ref<Record<number, boolean>>({})
+const modifiedFlags = ref<Record<number, boolean>>({})
+const isLocalUpdate = ref(false)
+
+// Separate auto-generated and custom joins
+const autoGeneratedJoins = computed(() => {
+  return localJoins.value.filter((_, index) => autoGeneratedFlags.value[index] === true)
+})
+
+const customJoins = computed(() => {
+  return localJoins.value.filter((_, index) => autoGeneratedFlags.value[index] !== true)
+})
 
 watch(() => props.modelValue, (newValue) => {
-  localJoins.value = JSON.parse(JSON.stringify(newValue || []))
+  // Skip if this was triggered by our own local update
+  if (isLocalUpdate.value) {
+    isLocalUpdate.value = false
+    return
+  }
+  
+  const joins = JSON.parse(JSON.stringify(newValue || []))
+  
+  // Extract and store autogenerated flags
+  joins.forEach((join: any, index: number) => {
+    if (join._autogenerated !== undefined) {
+      autoGeneratedFlags.value[index] = join._autogenerated
+      // Remove the flag from the join object (it's internal state only)
+      delete join._autogenerated
+    }
+  })
+  
+  localJoins.value = joins
 }, { immediate: true, deep: true })
 
 // --- Methods ---
+const getActualIndex = (join: Join) => {
+  return localJoins.value.indexOf(join)
+}
+
+const isModified = (index: number) => {
+  return modifiedFlags.value[index] === true
+}
+
+const markAsUserModified = (index: number) => {
+  if (autoGeneratedFlags.value[index]) {
+    modifiedFlags.value[index] = true
+  }
+}
+
 const updateJoins = () => {
+  isLocalUpdate.value = true
   emit('update:modelValue', localJoins.value)
 }
 
 const addJoin = () => {
+  const joinNumber = localJoins.value.length + 1
   localJoins.value.push({
-    name: `new_join_${localJoins.value.length + 1}`,
+    name: `Join ${joinNumber}`,
     join_type: 'left',
     left_table: '',
     right_table: '',
@@ -259,55 +209,45 @@ const addJoin = () => {
   updateJoins()
 }
 
-const removeJoin = (index: number) => {
-  localJoins.value.splice(index, 1)
-  updateJoins()
-}
-
-const addCondition = (joinIndex: number) => {
-  const join = localJoins.value[joinIndex]
-  if (!join) return
-
-  if (join.on !== undefined) return // Don't add conditions in SQL mode
-
-  if (!join.conditions) {
-    join.conditions = []
-  }
-  join.conditions.push({
-    left_table: '',
-    left_column: '',
-    right_table: '',
-    right_column: '',
+const addJoinFromColumn = (tableName: string, column: any) => {
+  // Create a join pre-filled with the selected table and column
+  const joinNumber = localJoins.value.length + 1
+  localJoins.value.push({
+    name: `${tableName} Join`,
+    join_type: 'left',
+    left_table: '', // Base table - user will select
+    right_table: tableName,
+    conditions: [{
+      left_table: '',
+      left_column: '',
+      right_table: tableName,
+      right_column: column.name,
+    }],
   })
   updateJoins()
 }
 
-const removeCondition = (joinIndex: number, condIndex: number) => {
-  const join = localJoins.value[joinIndex]
-  if (join && join.conditions) {
-    join.conditions.splice(condIndex, 1)
-    updateJoins()
-  }
-}
-
-const getColumnsForTable = (tableName: string) => {
-  const table = props.availableTables.find(t => t.name === tableName)
-  return table ? table.columns : []
-}
-
-const toggleSqlMode = (join: Join) => {
-  if (join.on === undefined) {
-    // Switching from Builder to SQL
-    join.on = (join.conditions || []).map(c => `${c.left_table}.${c.left_column} = ${c.right_table}.${c.right_column}`).join(' AND ')
-    join.conditions = undefined
-  } else {
-    // Switching from SQL to Builder
-    join.on = undefined
-    if (!join.conditions || join.conditions.length === 0) {
-      join.conditions = [{ left_table: '', left_column: '', right_table: '', right_column: '' }]
+const removeJoin = (index: number) => {
+  localJoins.value.splice(index, 1)
+  // Also remove the flags for this index
+  delete autoGeneratedFlags.value[index]
+  delete modifiedFlags.value[index]
+  
+  // Reindex flags for subsequent joins
+  const newAutoFlags: Record<number, boolean> = {}
+  const newModifiedFlags: Record<number, boolean> = {}
+  localJoins.value.forEach((_, newIndex) => {
+    const oldIndex = newIndex >= index ? newIndex + 1 : newIndex
+    if (autoGeneratedFlags.value[oldIndex] !== undefined) {
+      newAutoFlags[newIndex] = autoGeneratedFlags.value[oldIndex]
     }
-  }
+    if (modifiedFlags.value[oldIndex] !== undefined) {
+      newModifiedFlags[newIndex] = modifiedFlags.value[oldIndex]
+    }
+  })
+  autoGeneratedFlags.value = newAutoFlags
+  modifiedFlags.value = newModifiedFlags
+  
   updateJoins()
 }
-
 </script>

@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 from cortex.core.query.engine.modules.sql.base_sql import SQLQueryGenerator
 from cortex.core.types.time import TimeGrain
@@ -9,6 +9,56 @@ from cortex.core.semantics.output_formats import OutputFormat, OutputFormatType,
 
 class PostgresQueryGenerator(SQLQueryGenerator):
     """PostgreSQL-specific query generator"""
+
+    def _get_qualified_column_name(self, column_query: str, table_name: Optional[str] = None) -> str:
+        """
+        Get a fully qualified column name with proper PostgreSQL quoting.
+        Automatically uses the aliased table name if the table has been aliased in a JOIN.
+        
+        PostgreSQL requires column names to be quoted to preserve case and handle special characters.
+        This ensures all column references are properly quoted.
+        """
+        def _quote_column(column: str) -> str:
+            """Always quote column names for PostgreSQL unless already quoted"""
+            column = column.strip()
+            if column.startswith('"') and column.endswith('"'):
+                return column
+            return f'"{column}"'
+        
+        # Determine if joins are present
+        has_joins = bool(self.metric.joins)
+        
+        # Check if this table has been aliased in a JOIN
+        effective_table_name = table_name
+        if table_name and self._table_alias_map and table_name in self._table_alias_map:
+            effective_table_name = self._table_alias_map[table_name]
+        
+        # Get the table prefix to use
+        table_prefix = effective_table_name or self.metric.table_name
+        
+        # If column already contains a table prefix (has a dot), handle it
+        if '.' in column_query:
+            parts = column_query.split('.', 1)
+            table_part = parts[0].strip()
+            column_part = parts[1].strip()
+            
+            # Always quote the column part, keep or replace the table prefix as needed
+            if table_prefix and has_joins:
+                # Use the provided table prefix (which may be an alias)
+                return f"{table_prefix}.{_quote_column(column_part)}"
+            else:
+                # Keep existing table prefix but quote the column
+                return f"{table_part}.{_quote_column(column_part)}"
+        else:
+            # Column doesn't have a table prefix - add one if there are joins
+            if has_joins and table_prefix:
+                return f"{table_prefix}.{_quote_column(column_query)}"
+            elif table_prefix:
+                # Even without joins, if we have a table name, qualify the column
+                return f"{table_prefix}.{_quote_column(column_query)}"
+            else:
+                # No table information, just quote the column
+                return _quote_column(column_query)
 
     def _format_measure(self, measure: SemanticMeasure, formatting_map: dict) -> str:
         """Format a measure with PostgreSQL-specific functions if needed"""
@@ -191,4 +241,31 @@ class PostgresQueryGenerator(SQLQueryGenerator):
             concat_parts.append(f"'{delimiter}'")
             concat_parts.append(col)
             
+        return f"CONCAT({', '.join(concat_parts)})"
+    
+    def _build_combine_expression(self, parts: List[Tuple[str, Optional[str]]]) -> str:
+        """
+        Build PostgreSQL CONCAT expression for combining multiple columns.
+        
+        Args:
+            parts: List of (column_expression, delimiter_before_column) tuples
+                   First tuple has None as delimiter
+                   
+        Returns:
+            PostgreSQL CONCAT expression
+            
+        Example:
+            parts = [("first_name", None), ("last_name", " ")]
+            returns: CONCAT(first_name, ' ', last_name)
+        """
+        if len(parts) == 1:
+            return parts[0][0]
+        
+        concat_parts = []
+        for col, delimiter in parts:
+            if delimiter is not None:
+                # Add delimiter literal before the column
+                concat_parts.append(f"'{delimiter}'")
+            concat_parts.append(col)
+        
         return f"CONCAT({', '.join(concat_parts)})"

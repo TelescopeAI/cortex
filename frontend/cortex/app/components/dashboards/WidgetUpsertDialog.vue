@@ -175,6 +175,7 @@ function updateDataMapping(mapping: any) {
                 <UiSelectItem value="pie_chart">Pie</UiSelectItem>
                 <UiSelectItem value="donut_chart">Donut</UiSelectItem>
                 <UiSelectItem value="scatter_plot">Scatter</UiSelectItem>
+                <UiSelectItem value="box_plot">Box Plot</UiSelectItem>
                 <UiSelectItem value="table">Table</UiSelectItem>
               </UiSelectContent>
             </UiSelect>

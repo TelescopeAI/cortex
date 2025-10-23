@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 from pydantic import Field
 
@@ -53,6 +53,20 @@ class BaseQueryGenerator(TSModel, ABC):
     @abstractmethod
     def _build_order_by_clause(self) -> Optional[str]:
         """Build the ORDER BY clause for the query if applicable"""
+        pass
+    
+    @abstractmethod
+    def _build_combine_expression(self, parts: List[Tuple[str, Optional[str]]]) -> str:
+        """
+        Build database-specific column concatenation expression.
+        
+        Args:
+            parts: List of (column_expression, delimiter_before_column) tuples
+                   First tuple has None as delimiter
+                   
+        Returns:
+            SQL expression that concatenates the columns with delimiters
+        """
         pass
 
     @abstractmethod

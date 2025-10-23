@@ -364,17 +364,12 @@ onMounted(() => {
       </div>
       
       <div class="flex items-center space-x-2">
-        <Button variant="outline" size="sm">
-          <Filter class="h-4 w-4 mr-2" />
-          Export
-        </Button>
-        
         <!-- Create New Dropdown -->
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
             <Button size="sm">
               <Plus class="h-4 w-4 mr-2" />
-              Create New
+              Create
               <ChevronDown class="h-4 w-4 ml-2" />
             </Button>
           </DropdownMenuTrigger>

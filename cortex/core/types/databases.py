@@ -1,8 +1,11 @@
 from enum import Enum
+import json
 
 from sqlalchemy import JSON, Text
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.types import TypeDecorator
+
+from cortex.core.utils.json import json_default_encoder
 
 
 class DataSourceTypes(str, Enum):
@@ -33,6 +36,19 @@ class JSONType(TypeDecorator):
         if dialect.name == "postgresql":
             return dialect.type_descriptor(JSONB())
         return dialect.type_descriptor(JSON())
+    
+    def process_bind_param(self, value, dialect):
+        """Serialize Pydantic models and other custom types to JSON-compatible dicts."""
+        if value is None:
+            return None
+        # Convert value to JSON string using our custom encoder, then parse back to dict
+        # This ensures Pydantic models are properly serialized
+        try:
+            json_str = json.dumps(value, default=json_default_encoder)
+            return json.loads(json_str)
+        except (TypeError, ValueError):
+            # If serialization fails, return value as-is and let SQLAlchemy handle it
+            return value
 
 
 class ArrayType(TypeDecorator):

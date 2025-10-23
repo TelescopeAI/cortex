@@ -175,10 +175,6 @@ watch([selectedWorkspaceId, selectedEnvironmentId], ([workspaceId, environmentId
 
       <!-- Navigation -->
       <SidebarMenu>
-        <SidebarMenuButton @click="router.push('/data/sources')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
-          <Database class="w-4 h-4 mr-2" />
-          Data Sources
-        </SidebarMenuButton>
         <SidebarMenuButton @click="router.push('/metrics')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
           <Target class="w-4 h-4 mr-2" />
           Metrics
@@ -186,6 +182,10 @@ watch([selectedWorkspaceId, selectedEnvironmentId], ([workspaceId, environmentId
         <SidebarMenuButton @click="router.push('/dashboards')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
           <BarChart3 class="w-4 h-4 mr-2" />
           Dashboards
+        </SidebarMenuButton>
+        <SidebarMenuButton @click="router.push('/data/sources')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
+          <Database class="w-4 h-4 mr-2" />
+          Data Sources
         </SidebarMenuButton>
         <!-- <SidebarMenuButton @click="router.push('/pre-aggregations')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
           <Zap class="w-4 h-4 mr-2" />

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { DashboardWidget as DashboardWidgetType, StandardChartData, VisualizationType } from '~/types/dashboards'
+import type { DashboardWidget as DashboardWidgetType, StandardChartData } from '~/types/dashboards'
+import { VisualizationType } from '~/types/dashboards'
 import {
   BarChart,
   LineChart,
@@ -10,6 +11,7 @@ import {
   Gauge,
   Table,
   Scatter,
+  BoxPlot,
   StackedBarChart,
   StackedLineChart,
   NormalStackedArea,
@@ -33,11 +35,11 @@ const chartComponent = computed(() => {
   // For chart types that support stacking, check if stacking is enabled
   if (stackBars) {
     switch (vizType) {
-      case 'bar_chart':
+      case VisualizationType.BAR_CHART:
         return StackedBarChart
-      case 'line_chart':
+      case VisualizationType.LINE_CHART:
         return StackedLineChart
-      case 'area_chart':
+      case VisualizationType.AREA_CHART:
         // For area charts, check the stacking type preference
         const areaStackingType = chartConfig?.area_stacking_type || 'normal'
         return areaStackingType === 'gradient' ? GradientStackedArea : NormalStackedArea
@@ -48,22 +50,24 @@ const chartComponent = computed(() => {
   
   // Default chart components (non-stacked)
   switch (vizType) {
-    case 'bar_chart':
+    case VisualizationType.BAR_CHART:
       return BarChart
-    case 'line_chart':
+    case VisualizationType.LINE_CHART:
       return LineChart
-    case 'area_chart':
+    case VisualizationType.AREA_CHART:
       return AreaChart
-    case 'pie_chart':
-    case 'donut_chart':
+    case VisualizationType.PIE_CHART:
+    case VisualizationType.DONUT_CHART:
       return DonutChart
-    case 'scatter_plot':
+    case VisualizationType.SCATTER_PLOT:
       return Scatter
-    case 'single_value':
+    case VisualizationType.BOX_PLOT:
+      return BoxPlot
+    case VisualizationType.SINGLE_VALUE:
       return SingleValue
-    case 'gauge':
+    case VisualizationType.GAUGE:
       return Gauge
-    case 'table':
+    case VisualizationType.TABLE:
       return Table
     default:
       return null
@@ -93,8 +97,8 @@ const chartData = computed(() => {
     
     // Add y values for each series
     processed.series?.forEach(series => {
-      if (series.data[index]) {
-        dataPoint[series.name] = series.data[index].y
+      if (series.data[index] && 'y' in series.data[index]) {
+        dataPoint[series.name] = (series.data[index] as any).y
       }
     })
     
@@ -115,9 +119,9 @@ const chartCategories = computed(() => {
   processed.series.forEach((series, index) => {
     const colors = ['#3b82f6', '#ef4444', '#22c55e', '#f97316', '#8b5cf6', '#d946ef']
     if (series.name) {
-      categories[series.name as string] = {
+      categories[series.name] = {
         name: series.name,
-        color: series.color || colors[index % colors.length]
+        color: series.color || colors[index % colors.length] as string
       }
     }
   })
@@ -152,7 +156,7 @@ const chartProps = computed(() => {
   }
   
   switch (vizType) {
-    case 'bar_chart':
+    case VisualizationType.BAR_CHART:
       return {
         ...baseProps,
         yAxis: yAxisKeys.value,
@@ -161,7 +165,7 @@ const chartProps = computed(() => {
         legendPosition: 'top'
       }
     
-    case 'line_chart':
+    case VisualizationType.LINE_CHART:
       return {
         ...baseProps,
         yLabel: metadata.y_axes_title,
@@ -171,7 +175,7 @@ const chartProps = computed(() => {
         legendPosition: 'top'
       }
     
-    case 'area_chart':
+    case VisualizationType.AREA_CHART:
       return {
         ...baseProps,
         xLabel: metadata.x_axis_title,
@@ -181,27 +185,34 @@ const chartProps = computed(() => {
         legendPosition: 'top'
       }
     
-    case 'pie_chart':
-    case 'donut_chart':
+    case VisualizationType.PIE_CHART:
+    case VisualizationType.DONUT_CHART:
       return {
         data: props.data.processed.categories?.map(cat => cat.value) || [],
         labels: props.data.processed.categories?.map(cat => ({
           name: cat.name,
           color: cat.color || '#3b82f6'
         })) || [],
-        radius: vizType === 'donut_chart' ? 70 : 0,
+        radius: vizType === VisualizationType.DONUT_CHART ? 70 : 0,
         hideLegend: props.widget.visualization.show_legend === false
       }
     
-    case 'scatter_plot':
+    case VisualizationType.SCATTER_PLOT:
       return {
         series: props.data.processed.series?.map(series => ({
           name: series.name,
-          data: series.data.map(point => ({ x: point.x, y: point.y }))
+          data: series.data.map(point => ({ x: point.x, y: 'y' in point ? point.y : 0 }))
         })) || []
       }
     
-    case 'single_value':
+    case VisualizationType.BOX_PLOT:
+      return {
+        series: props.data.processed.series || [],
+        xLabel: metadata.x_axis_title,
+        yLabel: metadata.y_axes_title
+      }
+    
+    case VisualizationType.SINGLE_VALUE:
       return {
         title: metadata.title || props.widget.title,
         description: metadata.description,
@@ -209,7 +220,7 @@ const chartProps = computed(() => {
         config: props.widget.visualization.single_value_config
       }
     
-    case 'gauge':
+    case VisualizationType.GAUGE:
       return {
         value: props.data.processed.value || 0,
         min: props.widget.visualization.gauge_config?.min_value || 0,
@@ -226,7 +237,7 @@ const chartProps = computed(() => {
         showAxesLabels: props.widget.visualization.show_axes_labels !== false
       }
     
-    case 'table':
+    case VisualizationType.TABLE:
       return {
         columns: props.data.processed.table?.columns || [],
         rows: props.data.processed.table?.rows || []

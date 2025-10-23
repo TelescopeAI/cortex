@@ -46,7 +46,7 @@ const emit = defineEmits<Emits>()
 
 // Visualization type requirements
 const requiresXY = computed(() => 
-  ['bar_chart', 'line_chart', 'area_chart', 'scatter_plot'].includes(props.visualizationType)
+  ['bar_chart', 'line_chart', 'area_chart', 'scatter_plot', 'box_plot'].includes(props.visualizationType)
 )
 
 const requiresValue = computed(() => 
@@ -61,7 +61,7 @@ const requiresColumns = computed(() =>
   props.visualizationType === 'table'
 )
 
-const supportsSeries = computed(() => ['bar_chart', 'line_chart', 'area_chart'].includes(props.visualizationType))
+const supportsSeries = computed(() => ['bar_chart', 'line_chart', 'area_chart', 'box_plot'].includes(props.visualizationType))
 
 // Work directly with props and emit changes
 const currentMapping = computed(() => props.mapping || {})

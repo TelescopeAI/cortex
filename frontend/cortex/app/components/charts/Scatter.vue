@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useChartTheme } from '~/composables/useChartTheme'
 
 const props = defineProps<{ series: { name: string; data: { x: number | string; y: number }[] }[]; height?: number; dataZoom?: boolean }>()
+
+const { chartTheme } = useChartTheme()
 
 const option = computed(() => ({
   tooltip: { trigger: 'item', formatter: (p:any) => `${p.seriesName}<br/>(${p.data[0]}, ${p.data[1]})` },
@@ -66,7 +69,7 @@ const option = computed(() => ({
 
 <template>
   <div class="h-full w-full">
-    <VChart :option="option" autoresize class="h-full w-full min-h-[24rem]" />
+    <VChart :option="option" :theme="chartTheme" autoresize class="h-full w-full min-h-[24rem]" />
   </div>
 </template>
 

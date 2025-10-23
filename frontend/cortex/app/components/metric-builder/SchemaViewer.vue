@@ -5,28 +5,37 @@
       <CardHeader>
         <CardTitle class="flex items-center space-x-2">
           <Database class="h-5 w-5" />
-          <span>Basic Information</span>
+          <span>General</span>
         </CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="space-y-2">
             <Label class="text-sm font-medium text-muted-foreground">Data Source</Label>
-            <p class="text-sm">{{ metric.data_source_id || 'Not specified' }}</p>
+            <Button 
+              v-if="dataSource"
+              variant="link" 
+              class="p-0 h-auto text-sm justify-start"
+              @click="onDataSourceClick"
+            >
+              <Database class="h-4 w-4 mr-2" />
+              {{ dataSource.name }}
+            </Button>
+            <p v-else class="text-sm text-muted-foreground">Not specified</p>
           </div>
           <div class="space-y-2">
-            <Label class="text-sm font-medium text-muted-foreground">Source Table</Label>
+            <Label class="text-sm font-medium text-muted-foreground">Primary Table</Label>
             <p class="text-sm">{{ metric.table_name || 'Not specified' }}</p>
           </div>
-          <div class="space-y-2">
+          <div class="space-y-2" v-if="metric.query">
             <Label class="text-sm font-medium text-muted-foreground">Custom Query</Label>
             <p class="text-sm font-mono text-xs bg-muted p-2 rounded">
-              {{ metric.query || 'Not specified' }}
+              {{ metric.query }}
             </p>
           </div>
           <div class="space-y-2">
             <Label class="text-sm font-medium text-muted-foreground">Default Limit</Label>
-            <p class="text-sm">{{ metric.limit || 'No limit' }}</p>
+            <p class="text-sm">{{ metric.limit || 'Unlimited' }}</p>
           </div>
         </div>
       </CardContent>
@@ -260,10 +269,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Badge } from '~/components/ui/badge'
 import { Label } from '~/components/ui/label'
+import { Button } from '~/components/ui/button'
 import { 
   Database, 
   Target, 
@@ -274,12 +284,40 @@ import {
   Settings, 
   Code 
 } from 'lucide-vue-next'
+import { useDataSources } from '~/composables/useDataSources'
 
 interface Props {
   metric: any
 }
 
 const props = defineProps<Props>()
+
+const { dataSources, getDataSource } = useDataSources()
+
+// Data source information
+const dataSource = ref<any>(null)
+
+// Load data source when metric changes
+watch(() => props.metric?.data_source_id, async (dataSourceId) => {
+  if (dataSourceId) {
+    try {
+      dataSource.value = await getDataSource(dataSourceId)
+    } catch (error) {
+      console.error('Failed to load data source:', error)
+      dataSource.value = null
+    }
+  } else {
+    dataSource.value = null
+  }
+}, { immediate: true })
+
+// Handle data source click
+const onDataSourceClick = () => {
+  if (dataSource.value?.id) {
+    // Navigate to data sources page or open data source details
+    navigateTo(`/data/sources/${dataSource.value.id}`)
+  }
+}
 
 // Check if there's any content to display
 const hasAnyContent = computed(() => {

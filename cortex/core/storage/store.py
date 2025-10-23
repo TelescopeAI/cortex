@@ -65,6 +65,7 @@ class CortexStorage:
         return create_engine(
             self._build_sqlalchemy_url(),
             poolclass=self._get_pool_class(),
+            json_serializer=json_dumps,
         )
 
     def _get_pool_class(self):

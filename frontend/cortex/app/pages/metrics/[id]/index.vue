@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
 import { Switch } from '~/components/ui/switch'
 import { Label } from '~/components/ui/label'
+import { Separator } from '~/components/ui/separator'
 import { ArrowLeft, Edit, PlayCircle, Settings, Copy, History, Code, Save, Loader2, CheckCircle, XCircle, Database, Plus, Trash2 } from 'lucide-vue-next'
 import type { SemanticOrderSequence } from '~/types/order'
 import ExecutionResultViewer from '@/components/ExecutionResultViewer.vue'
@@ -27,6 +28,7 @@ import OrderingBuilder from '~/components/metric-builder/OrderingBuilder.vue'
 import { useDataSources } from '~/composables/useDataSources'
 import type { MetricModifier, MetricModifiers } from '~/types/metric-modifiers'
 import { createMetricModifier } from '~/types/metric-modifiers'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '~/components/ui/alert-dialog'
 
 // Page metadata
 definePageMeta({
@@ -39,7 +41,7 @@ const route = useRoute()
 const metricId = route.params.id as string
 
 // Use composables
-const { getMetric, executeMetric, validateMetric, getMetricVersions, updateMetric } = useMetrics()
+const { getMetric, executeMetric, validateMetric, getMetricVersions, updateMetric, deleteMetric } = useMetrics()
 const { getModel } = useDataModels()
 
 // Component state
@@ -104,6 +106,10 @@ const reloadCurrentSchema = () => {
 // Schema sheet state
 const schemaSheetOpen = ref(false)
 const selectedDataSourceId = ref<string>('')
+
+// Delete dialog state
+const deleteDialogOpen = ref(false)
+const isDeleting = ref(false)
 
 // Execution parameters
 const executionParams = ref<Record<string, any>>({})
@@ -315,6 +321,27 @@ const onEdit = () => {
 const onModelClick = () => {
   if (metric.value?.data_model_id) {
     navigateTo(`/metrics/models/${metric.value.data_model_id}`)
+  }
+}
+
+const onDelete = async () => {
+  if (!metric.value) return
+  
+  isDeleting.value = true
+  try {
+    const success = await deleteMetric(metricId)
+    if (success) {
+      toast.success('Metric deleted successfully')
+      navigateTo('/metrics')
+    } else {
+      toast.error('Failed to delete metric')
+    }
+  } catch (error) {
+    console.error('Failed to delete metric:', error)
+    toast.error('Failed to delete metric')
+  } finally {
+    isDeleting.value = false
+    deleteDialogOpen.value = false
   }
 }
 
@@ -560,10 +587,38 @@ watch(currentDataSourceId, (newId, oldId) => {
             </p>
           </div>
           <div class="flex flex-col space-y-2">
-            <Button variant="outline" size="sm" @click="onOpenSchema">
-              <Edit class="h-4 w-4 mr-2" />
-              Edit Schema
-            </Button>
+            <div class="flex space-x-2">
+              <Button variant="outline" size="sm" @click="onOpenSchema">
+                <Edit class="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+              <AlertDialog v-model:open="deleteDialogOpen">
+                <AlertDialogTrigger as-child>
+                  <Button variant="outline" size="sm">
+                    <Trash2 class="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Metric</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to delete the metric "{{ metric.name }}"? This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction 
+                      @click="onDelete" 
+                      :disabled="isDeleting"
+                      class="bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                    >
+                      <Loader2 v-if="isDeleting" class="h-4 w-4 mr-2 animate-spin" />
+                      {{ isDeleting ? 'Deleting...' : 'Delete' }}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </div>
         </div>
       </div>
@@ -589,8 +644,8 @@ watch(currentDataSourceId, (newId, oldId) => {
               <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="space-y-2">
                   <div class="text-sm font-medium text-muted-foreground">Status</div>
-                  <Badge :variant="getStatusBadgeVariant(metricStatus)">
-                    {{ getStatusIcon(metricStatus) }} {{ metricStatus }}
+                  <Badge :variant="getStatusBadgeVariant(metricStatus)" class="capitalize">
+                    {{ metricStatus }} 
                   </Badge>
                 </div>
                 <div class="space-y-2">

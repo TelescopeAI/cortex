@@ -9,6 +9,7 @@ from cortex.core.query.engine.processors.filter_processor import FilterProcessor
 from cortex.core.query.engine.processors.output_processor import OutputProcessor
 from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.measures import SemanticMeasure
+from cortex.core.semantics.registry import SemanticRegistry
 from cortex.core.types.semantics.measure import SemanticMeasureType
 from cortex.core.semantics.output_formats import FormattingMap
 from cortex.core.types.time import TimeGrain
@@ -21,6 +22,9 @@ class SQLQueryGenerator(BaseQueryGenerator):
 
     # Optional binding that can redirect FROM and map logical names to physical columns
     binding: Optional[Any] = None
+    
+    # Internal state: table alias mapping from original table names to their aliases in JOINs
+    _table_alias_map: Optional[Dict[str, str]] = None
 
     def generate_query(self, parameters: Optional[Dict[str, Any]] = None, limit: Optional[int] = None, offset: Optional[int] = None, grouped: Optional[bool] = None) -> str:
         """Generate a complete SQL query based on the metric with optional parameters and limit/offset"""
@@ -45,9 +49,12 @@ class SQLQueryGenerator(BaseQueryGenerator):
             return query
 
         # Otherwise, build the query from scratch
+        # IMPORTANT: Build join clause first to populate table alias mappings
+        join_clause = self._build_join_clause()
+        
+        # Now build SELECT clause with knowledge of table aliases
         select_clause = self._build_select_clause()
         from_clause = self._build_from_clause()
-        join_clause = self._build_join_clause()
         where_clause = self._build_where_clause()
         group_by_clause = self._build_group_by_clause(effective_grouped)
         having_clause = self._build_having_clause()
@@ -127,9 +134,18 @@ class SQLQueryGenerator(BaseQueryGenerator):
             return f"SELECT {', '.join(select_parts)}"
 
     def _get_qualified_column_name(self, column_query: str, table_name: Optional[str] = None) -> str:
-        """Get a fully qualified column name with table prefix when joins are present"""
+        """
+        Get a fully qualified column name with table prefix when joins are present.
+        Automatically uses the aliased table name if the table has been aliased in a JOIN.
+        """
         has_joins = bool(self.metric.joins)
-        table_prefix = table_name or self.metric.table_name
+        
+        # Check if this table has been aliased in a JOIN
+        effective_table_name = table_name
+        if table_name and self._table_alias_map and table_name in self._table_alias_map:
+            effective_table_name = self._table_alias_map[table_name]
+        
+        table_prefix = effective_table_name or self.metric.table_name
         return get_qualified_column_name(
             column_query=column_query,
             table_name=table_name,
@@ -161,19 +177,40 @@ class SQLQueryGenerator(BaseQueryGenerator):
         return f'{formatted_query} AS "{measure.name}"'
 
     def _format_dimension(self, dimension: SemanticDimension, formatting_map: FormattingMap) -> str:
-        """Format a dimension for the SELECT clause with formatting"""
+        """Format a dimension for the SELECT clause with formatting and column combination"""
         # If a binding is present and it maps this logical dimension name,
         # project the bound column directly to ensure we read from rollup definitions.
         if self.binding and self.binding.column_mapping.get(dimension.name):
             bound_col = self.binding.column_mapping[dimension.name]
             return f"{bound_col} AS \"{dimension.name}\""
 
-        qualified_query = self._get_qualified_column_name(dimension.query, dimension.table)
+        # Check if we need to combine multiple columns
+        if dimension.combine and len(dimension.combine) > 0:
+            # Build list of (column_expression, delimiter_before_column) tuples
+            # First column has no delimiter (None)
+            parts = [(self._get_qualified_column_name(dimension.query, dimension.table), None)]
+            
+            # Add each combine column with its delimiter
+            for combine_spec in dimension.combine:
+                qualified_col = self._get_qualified_column_name(combine_spec.query, combine_spec.table)
+                delimiter = combine_spec.delimiter if combine_spec.delimiter is not None else " "
+                parts.append((qualified_col, delimiter))
+            
+            # Build the combined expression using database-specific implementation
+            combined_expr = self._build_combine_expression(parts)
+            
+            # Apply any formatting on top of the combined expression
+            formatted_expr = self._apply_database_formatting(combined_expr, dimension.name, formatting_map)
+            
+            return f"{formatted_expr} AS \"{dimension.name}\""
+        else:
+            # Standard single-column dimension
+            qualified_query = self._get_qualified_column_name(dimension.query, dimension.table)
 
-        # Apply any IN_QUERY formatting using database-specific implementation
-        formatted_query = self._apply_database_formatting(qualified_query, dimension.name, formatting_map)
+            # Apply any IN_QUERY formatting using database-specific implementation
+            formatted_query = self._apply_database_formatting(qualified_query, dimension.name, formatting_map)
 
-        return f"{formatted_query} AS \"{dimension.name}\""
+            return f"{formatted_query} AS \"{dimension.name}\""
 
     def _can_re_aggregate(self, measure: SemanticMeasure) -> bool:
         """Check if a measure is re-aggregatable (additive)."""
@@ -242,28 +279,43 @@ class SQLQueryGenerator(BaseQueryGenerator):
         return None
 
     def _build_group_by_clause(self, grouped: bool) -> Optional[str]:
-        """Build GROUP BY clause if dimensions are present and grouping is enabled"""
+        """
+        Build GROUP BY clause if dimensions are present and grouping is enabled.
+        Uses aliases from the SELECT clause to ensure consistency and avoid issues
+        with quoted identifiers and complex expressions.
+        """
         if not self.metric.dimensions or not grouped:
             return None
 
-        # Use qualified column names when joins are present
-        dimensions = [self._get_qualified_column_name(dim.query, dim.table) for dim in self.metric.dimensions]
+        # Use dimension aliases (e.g., "Date", "Customer Name") instead of fully qualified names
+        # This ensures consistency with the SELECT clause and works better with databases
+        dimension_aliases = SemanticRegistry.get_dimension_aliases(self.metric.dimensions)
         
         # Format GROUP BY with line breaks for multiple columns
-        if len(dimensions) > 1:
-            formatted_dimensions = [dimensions[0]]  # First dimension
-            for dim in dimensions[1:]:
+        if len(dimension_aliases) > 1:
+            formatted_dimensions = [dimension_aliases[0]]  # First dimension
+            for dim in dimension_aliases[1:]:
                 formatted_dimensions.append(f"\n  {dim}")
             return f"GROUP BY {', '.join(formatted_dimensions)}"
         else:
-            return f"GROUP BY {', '.join(dimensions)}"
+            return f"GROUP BY {', '.join(dimension_aliases)}"
 
     def _build_join_clause(self) -> Optional[str]:
-        """Build JOIN clause using JoinProcessor"""
+        """
+        Build JOIN clause using JoinProcessor.
+        Also builds and stores table alias mappings for use in SELECT and other clauses.
+        """
         if not self.metric.joins:
+            self._table_alias_map = {}
             return None
         
-        return JoinProcessor.process_joins(self.metric.joins)
+        # Pass the base table name to detect collisions with the FROM clause
+        base_table = self.metric.table_name
+        
+        # Build the table alias mapping before generating the join clause
+        self._table_alias_map = JoinProcessor.build_table_alias_map(self.metric.joins, base_table)
+        
+        return JoinProcessor.process_joins(self.metric.joins, base_table)
 
     def _build_having_clause(self) -> Optional[str]:
         """Build HAVING clause for aggregated conditions using FilterProcessor"""

@@ -3,7 +3,7 @@
     <!-- Metric Basic Information -->
     <div class="space-y-4">
       <div class="space-y-2">
-        <Label for="metric-name">Metric Name</Label>
+        <Label for="metric-name">Name</Label>
         <Input
           id="metric-name"
           :model-value="name"

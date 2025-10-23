@@ -9,23 +9,33 @@ from cortex.core.semantics.filters import SemanticFilter
 def get_qualified_column_name(column_query: str, 
                             table_name: Optional[str] = None,
                             table_prefix: Optional[str] = None,
-                            has_joins: bool = False) -> str:
+                            has_joins: bool = False,
+                            quote_identifiers: bool = False) -> str:
     """
     Get a fully qualified column name with table prefix when joins are present.
-    Automatically wraps column names containing spaces in quotes.
+    Automatically wraps column names containing spaces or special characters in quotes.
     
     Args:
         column_query: The column name or expression
         table_name: The table name for the column
         table_prefix: Optional table prefix to use instead of table_name
         has_joins: Whether joins are present (affects qualification logic)
+        quote_identifiers: If True, always quote column identifiers (PostgreSQL style)
         
     Returns:
         Qualified column name with proper quoting
     """
-    # Helper function to wrap column names with spaces in quotes
+    # Helper function to wrap column names in quotes when needed
     def _quote_if_needed(column: str) -> str:
-        if ' ' in column and not (column.startswith('"') and column.endswith('"')):
+        column = column.strip()
+        # Already quoted, return as-is
+        if column.startswith('"') and column.endswith('"'):
+            return column
+        # Always quote if quote_identifiers is True (PostgreSQL style)
+        if quote_identifiers:
+            return f'"{column}"'
+        # Otherwise, only quote if column contains spaces or special characters
+        if ' ' in column:
             return f'"{column}"'
         return column
     
@@ -44,8 +54,12 @@ def get_qualified_column_name(column_query: str,
             quoted_column = _quote_if_needed(column_part)
             return f"{prefix}.{quoted_column}"
         else:
-            # No new prefix provided, return as-is (but quote if needed)
-            return _quote_if_needed(column_query)
+            # No new prefix provided, but still quote the column part
+            parts = column_query.split('.', 1)
+            table_part = parts[0]
+            column_part = parts[1]
+            quoted_column = _quote_if_needed(column_part)
+            return f"{table_part}.{quoted_column}"
     else:
         # Column doesn't have a table prefix
         if prefix:

@@ -27,108 +27,165 @@
       <Card 
         v-for="(measure, index) in measures"
         :key="index"
-        class="p-4"
+        class="p-5 hover:shadow-md transition-shadow"
       >
-        <div class="space-y-4">
+        <div class="space-y-5">
           <!-- Header -->
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-2">
-              <Target class="h-4 w-4 text-blue-500" />
-              <span class="font-medium">{{ measure.name || 'Unnamed Measure' }}</span>
+              <div class="p-1.5 rounded-md bg-blue-50 dark:bg-blue-950">
+                <Target class="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              </div>
+              <span class="font-medium text-base">{{ measure.name || 'Unnamed Measure' }}</span>
             </div>
             <Button
               variant="ghost"
               size="sm"
               @click="removeMeasure(index)"
+              class="hover:bg-red-50 hover:text-red-600"
             >
               <X class="h-4 w-4" />
             </Button>
           </div>
 
-          <!-- Form Fields -->
-          <div class="grid grid-cols-2 gap-4">
-            <!-- Name -->
-            <div class="space-y-2">
-              <Label>Name *</Label>
-              <Input
-                v-model="measure.name"
-                placeholder="measure_name"
-                @update:model-value="(value) => handleNameChange(measure, value)"
-              />
-            </div>
-
-            <!-- Type -->
-            <div class="space-y-2">
-              <Label>Type *</Label>
+          <!-- Sentence-Completion Interface -->
+          <div class="space-y-3">
+            <!-- Row 1: Calculate the [type] of [column] -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-sm text-muted-foreground">Calculate the</span>
               <Select v-model="measure.type" @update:model-value="updateMeasures">
-                <SelectTrigger>
+                <SelectTrigger class="w-auto min-w-[130px] h-9">
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="count">Count</SelectItem>
-                  <SelectItem value="sum">Sum</SelectItem>
-                  <SelectItem value="avg">Average</SelectItem>
-                  <SelectItem value="min">Minimum</SelectItem>
-                  <SelectItem value="max">Maximum</SelectItem>
-                  <SelectItem value="distinct_count">Distinct Count</SelectItem>
-                  <SelectItem value="custom">Custom</SelectItem>
+                  <SelectItem value="count">count</SelectItem>
+                  <SelectItem value="sum">sum</SelectItem>
+                  <SelectItem value="avg">average</SelectItem>
+                  <SelectItem value="min">minimum</SelectItem>
+                  <SelectItem value="max">maximum</SelectItem>
+                  <SelectItem value="distinct_count">distinct count</SelectItem>
+                  <SelectItem value="custom">custom</SelectItem>
+                </SelectContent>
+              </Select>
+              <span class="text-sm text-muted-foreground">of</span>
+              
+              <!-- Column Selection (dropdown based on selected table) -->
+              <Select 
+                v-model="measure.query" 
+                @update:model-value="updateMeasures"
+                :disabled="!measure.table"
+              >
+                <SelectTrigger class="w-auto min-w-[200px] h-9 justify-between">
+                  <SelectValue placeholder="Select column" as-child>
+                    <div class="flex items-center justify-between w-full gap-3">
+                      <span>{{ measure.query || 'Select column' }}</span>
+                      <Badge 
+                        v-if="measure.query && getSelectedColumnType(measure.table, measure.query)"
+                        :class="getColumnTypeBadgeClass(getSelectedColumnType(measure.table, measure.query) || '')"
+                      >
+                        {{ getSelectedColumnType(measure.table, measure.query) }}
+                      </Badge>
+                    </div>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem 
+                    v-for="column in getColumnsForTable(measure.table)"
+                    :key="column.name"
+                    :value="column.name"
+                  >
+                    <div class="flex items-center justify-between w-full gap-3">
+                      <span>{{ column.name }}</span>
+                      <Badge :class="getColumnTypeBadgeClass(column.type)">
+                        {{ column.type }}
+                      </Badge>
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <!-- Alias -->
-            <div class="space-y-2">
-              <Label>Alias</Label>
-              <Input
-                v-model="measure.alias"
-                placeholder="Optional alias"
-                @update:model-value="updateMeasures"
-              />
-            </div>
-
-            <!-- Query -->
-            <div class="space-y-2">
-              <Label>Query</Label>
-              <Input
-                v-model="measure.query"
-                placeholder="column_name or expression"
-                @update:model-value="updateMeasures"
-              />
-            </div>
-
-            <!-- Table -->
-            <div class="space-y-2">
-              <Label>Table</Label>
-              <Select v-model="measure.table" @update:model-value="updateMeasures">
-                <SelectTrigger>
+            <!-- Row 2: from the table [table] -->
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-muted-foreground">from the table</span>
+              
+              <!-- Table Selection -->
+              <Select v-model="measure.table" @update:model-value="onTableChange(measure)">
+                <SelectTrigger class="w-auto min-w-[180px] h-9">
                   <SelectValue placeholder="Select table" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem v-for="table in availableTables" :key="table.name" :value="table.name">{{ table.name }}</SelectItem>
+                  <SelectItem v-for="table in availableTables" :key="table.name" :value="table.name">
+                    {{ table.name }}
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            <!-- Row 3: Name it as [name] -->
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-muted-foreground">Name it as</span>
+              <Input
+                v-model="measure.name"
+                placeholder="Measure name"
+                class="flex-1 h-9"
+                @update:model-value="(value) => handleNameChange(measure, value)"
+              />
+            </div>
           </div>
 
-          <!-- Description -->
-          <div class="space-y-2">
-            <Label>Description</Label>
-            <Textarea
-              v-model="measure.description"
-              placeholder="Describe what this measure represents..."
-              rows="2"
-              @update:model-value="updateMeasures"
-            />
+          <!-- Advanced Section -->
+          <div class="pt-3">
+            <button 
+              type="button"
+              class="flex items-center justify-between w-full text-xs text-muted-foreground hover:text-foreground transition-colors group"
+              @click="toggleAdvanced(index)"
+            >
+              <span class="flex items-center gap-1.5">
+                <Settings class="h-3.5 w-3.5" />
+                Advanced
+              </span>
+              <ChevronDown :class="['h-3.5 w-3.5 transition-transform duration-200', showAdvanced[index] && 'rotate-180']" />
+            </button>
+
+            <div 
+              v-if="showAdvanced[index]" 
+              class="mt-4 space-y-4 pt-4 border-t"
+            >
+              <!-- Alias -->
+              <div class="space-y-1.5">
+                <Label class="text-xs font-medium text-muted-foreground">Alias</Label>
+                <Input
+                  v-model="measure.alias"
+                  placeholder="Optional alias for this measure"
+                  class="h-9"
+                  @update:model-value="updateMeasures"
+                />
+              </div>
+
+              <!-- Description -->
+              <div class="space-y-1.5">
+                <Label class="text-xs font-medium text-muted-foreground">Description</Label>
+                <Textarea
+                  v-model="measure.description"
+                  placeholder="Describe what this measure represents..."
+                  rows="2"
+                  class="resize-none"
+                  @update:model-value="updateMeasures"
+                />
+              </div>
+
+              <!-- Output Formatting -->
+              <div class="space-y-1.5">
+                <Label class="text-xs font-medium text-muted-foreground">Output Formatting</Label>
+                <OutputFormatEditor
+                  v-model="measure.formatting"
+                  object-type="measure"
+                  @update:model-value="updateMeasures"
+                />
+              </div>
+            </div>
           </div>
-
-          
-
-          <!-- Output Formatting -->
-          <OutputFormatEditor
-            v-model="measure.formatting"
-            object-type="measure"
-            @update:model-value="updateMeasures"
-          />
         </div>
       </Card>
     </div>
@@ -142,20 +199,12 @@ import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
 import { Textarea } from '~/components/ui/textarea'
+import { Badge } from '~/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger
-} from '~/components/ui/dropdown-menu'
-import { Target, X, Code } from 'lucide-vue-next'
+import { Target, X, Code, Settings, ChevronDown } from 'lucide-vue-next'
 import ColumnSelector from '~/components/ColumnSelector.vue'
 import OutputFormatEditor from './OutputFormatEditor.vue'
+import { toSnakeCase, humanize } from '~/utils/stringCase'
 
 interface Measure {
   name: string
@@ -188,28 +237,89 @@ const availableTables = computed(() => {
 })
 
 const measures = ref<Measure[]>([...props.measures])
+const showAdvanced = ref<Record<number, boolean>>({})
+const isLocalUpdate = ref(false)
 
-// Watch for changes from parent
+// Watch for changes from parent (but not from our own updates)
 watch(() => props.measures, (newMeasures) => {
+  // Skip if this was triggered by our own local update
+  if (isLocalUpdate.value) {
+    isLocalUpdate.value = false
+    return
+  }
   measures.value = [...newMeasures]
 })
 
 const updateMeasures = () => {
+  isLocalUpdate.value = true
   emit('update:measures', measures.value)
 }
 
-const toSnakeCase = (str: string) => {
-  if (!str) return '';
-  return String(str)
-    .replace(/^[^A-Za-z0-9]*|[^A-Za-z0-9]*$/g, '')
-    .replace(/([a-z])([A-Z])/g, (m, a, b) => `${a}_${b.toLowerCase()}`)
-    .replace(/[^A-Za-z0-9]+|_+/g, '_')
-    .toLowerCase();
-};
+const toggleAdvanced = (index: number) => {
+  showAdvanced.value[index] = !showAdvanced.value[index]
+}
+
+const getColumnsForTable = (tableName?: string) => {
+  if (!tableName) return []
+  const table = availableTables.value.find((t: any) => t.name === tableName)
+  return table?.columns || []
+}
+
+const getSelectedColumnType = (tableName?: string, columnName?: string) => {
+  if (!tableName || !columnName) return null
+  const columns = getColumnsForTable(tableName)
+  const column = columns.find((col: any) => col.name === columnName)
+  return column?.type || null
+}
+
+const getColumnTypeBadgeClass = (type: string) => {
+  const typeUpper = type.toUpperCase()
+  
+  // Numeric types - blue
+  if (typeUpper.includes('INT') || typeUpper.includes('DECIMAL') || 
+      typeUpper.includes('NUMERIC') || typeUpper.includes('FLOAT') || 
+      typeUpper.includes('DOUBLE') || typeUpper.includes('REAL') ||
+      typeUpper.includes('MONEY')) {
+    return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 text-[10px] px-1.5 py-0.5'
+  }
+  
+  // Text types - purple
+  if (typeUpper.includes('CHAR') || typeUpper.includes('TEXT') || 
+      typeUpper.includes('VARCHAR') || typeUpper.includes('STRING') ||
+      typeUpper.includes('CLOB')) {
+    return 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 text-[10px] px-1.5 py-0.5'
+  }
+  
+  // Date/Time types - green
+  if (typeUpper.includes('DATE') || typeUpper.includes('TIME') || 
+      typeUpper.includes('TIMESTAMP')) {
+    return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 text-[10px] px-1.5 py-0.5'
+  }
+  
+  // Boolean types - amber
+  if (typeUpper.includes('BOOL') || typeUpper.includes('BIT')) {
+    return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[10px] px-1.5 py-0.5'
+  }
+  
+  // Default - gray
+  return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 text-[10px] px-1.5 py-0.5'
+}
+
+const onTableChange = (measure: Measure) => {
+  // Reset query if the selected column doesn't exist in new table
+  if (measure.query) {
+    const columns = getColumnsForTable(measure.table)
+    const columnExists = columns.some((col: any) => col.name === measure.query)
+    if (!columnExists) {
+      measure.query = undefined
+    }
+  }
+  updateMeasures()
+}
 
 const handleNameChange = (measure: Measure, newName: string | number) => {
   const newNameStr = String(newName);
-    const snakeCaseName = toSnakeCase(newNameStr);
+  const snakeCaseName = toSnakeCase(newNameStr);
   // Auto-fill alias and query only if they are empty or were auto-filled before
   if (!measure.alias || measure.alias === toSnakeCase(measure.name)) {
     measure.alias = snakeCaseName;
@@ -217,13 +327,16 @@ const handleNameChange = (measure: Measure, newName: string | number) => {
   if (!measure.query || measure.query === toSnakeCase(measure.name)) {
     measure.query = snakeCaseName;
   }
-    measure.name = newNameStr;
+  measure.name = newNameStr;
   updateMeasures();
 };
 
 const addMeasure = (tableName: string, column: any) => {
+  const humanizedName = humanize(column.name)
+  const snakeCaseName = toSnakeCase(humanizedName)
+  
   const newMeasure: Measure = {
-    name: `${column.name}_measure`,
+    name: humanizedName,
     description: `Measure based on ${tableName}.${column.name}`,
     type: getDefaultType(column.type),
     table: tableName,
@@ -238,7 +351,7 @@ const addMeasure = (tableName: string, column: any) => {
 
 const addCustomMeasure = () => {
   const newMeasure: Measure = {
-    name: 'custom_measure',
+    name: 'Custom Measure',
     description: 'Custom measure',
     type: 'custom',
     query: 'custom_measure',
@@ -267,4 +380,4 @@ const getDefaultType = (columnType: string): string => {
     return 'count'
   }
 }
-</script> 
+</script>

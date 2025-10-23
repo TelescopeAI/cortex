@@ -21,6 +21,7 @@ class VisualizationType(str, Enum):
     PIE_CHART = "pie_chart"
     DONUT_CHART = "donut_chart"
     SCATTER_PLOT = "scatter_plot"
+    BOX_PLOT = "box_plot"
     HEATMAP = "heatmap"
     TABLE = "table"
 

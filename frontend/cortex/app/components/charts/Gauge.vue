@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useWindowSize } from '@vueuse/core'
+import { useChartTheme } from '~/composables/useChartTheme'
 
 const props = defineProps<{
   value: number
@@ -20,6 +21,7 @@ const props = defineProps<{
 }>()
 
 const { width } = useWindowSize()
+const { chartTheme } = useChartTheme()
 
 const resolvedHeight = computed(() => {
   if (typeof props.height === 'number') return props.height
@@ -123,7 +125,7 @@ const option = computed(() => {
 </script>
 
 <template>
-  <VChart :option="option" :style="{ height: `${resolvedHeight}px` }" autoresize class="w-full min-h-[24rem]" />
+  <VChart :option="option" :theme="chartTheme" :style="{ height: `${resolvedHeight}px` }" autoresize class="w-full min-h-[24rem]" />
   
 </template>
 

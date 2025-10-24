@@ -5,6 +5,7 @@ from cortex.core.types.semantics.filter import FilterOperator, FilterType, Filte
 from cortex.core.types.semantics.column_source import ColumnSourceType, ColumnSourceMeta
 from cortex.core.semantics.output_formats import OutputFormat
 from cortex.core.types.telescope import TSModel
+from cortex.core.semantics.conditions import Condition
 
 
 class SemanticFilter(TSModel):
@@ -25,6 +26,8 @@ class SemanticFilter(TSModel):
         filter_type: Whether this filter should be applied in WHERE or HAVING clause
         is_active: Whether this filter is currently active
         custom_expression: Optional custom SQL expression that overrides the standard filter logic
+        conditional: Boolean flag to use conditional logic instead of query
+        conditions: Condition object for CASE WHEN logic
     """
     name: str
     description: Optional[str] = None
@@ -47,6 +50,10 @@ class SemanticFilter(TSModel):
     # For dynamic filters that can be parameterized using $CORTEX_ prefix
     # Any field starting with $CORTEX_ will be treated as a parameter
     formatting: Optional[List[OutputFormat]] = None
+    
+    # Conditional logic support
+    conditional: bool = False
+    conditions: Optional[Condition] = None
     
     # Auto-inferred source column information
     source_type: Optional[ColumnSourceType] = None

@@ -185,8 +185,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 
 // Import builder components
 import BasicInfoBuilder from './BasicInfoBuilder.vue'
-import MeasuresBuilder from './MeasuresBuilder.vue'
-import DimensionsBuilder from './DimensionsBuilder.vue'
+import MeasuresBuilder from './measures/Builder.vue'
+import DimensionsBuilder from './dimensions/Builder.vue'
 import JoinsBuilder from './JoinsBuilder.vue'
 import AggregationsBuilder from './AggregationsBuilder.vue'
 import FiltersBuilder from './FiltersBuilder.vue'

@@ -53,14 +53,18 @@ const option = computed(() => {
       formatter: (params: any) => {
         if (params.componentSubType === 'boxplot') {
           const data = params.data
-          return `${params.seriesName}<br/>
+          // Get the category name from the x-axis data
+          const categoryName = echartsData.value.categories[params.dataIndex] || 'Unknown'
+          return `${categoryName}<br/>
             Max: ${data[4]}<br/>
             Q3: ${data[3]}<br/>
             Median: ${data[2]}<br/>
             Q1: ${data[1]}<br/>
             Min: ${data[0]}`
         } else {
-          return `${params.seriesName}<br/>Outlier: ${params.data[1]}`
+          // For outliers, also use the category name
+          const categoryName = echartsData.value.categories[params.dataIndex] || 'Unknown'
+          return `${categoryName}<br/>Outlier: ${params.data[1]}`
         }
       }
     },

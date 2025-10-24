@@ -111,35 +111,24 @@ class BoxPlotMapping(VisualizationMapping):
         x_field = self.data_mapping.x_axis.field
         y_field = self.data_mapping.y_axes[0].field  # Use first y-axis for box plot
         
-        print(f"Box plot mapping - x_field: {x_field}, y_field: {y_field}")
-        print(f"Sample metric_result rows: {metric_result[:3] if metric_result else 'No data'}")
-        
         # Group values by category
         grouped_data: Dict[Any, List[float]] = {}
         for row in metric_result:
             category = row.get(x_field)
             value = row.get(y_field)
             
-            print(f"Processing row: category={category}, value={value}")
-            
             if category is None or value is None:
-                print(f"Skipping row - category or value is None")
                 continue
             
             # Convert value to float
             try:
                 value = float(value)
             except (ValueError, TypeError):
-                print(f"Skipping row - value {value} cannot be converted to float")
                 continue
             
             if category not in grouped_data:
                 grouped_data[category] = []
             grouped_data[category].append(value)
-        
-        print(f"Grouped data summary: {len(grouped_data)} categories")
-        for cat, vals in list(grouped_data.items())[:5]:  # Show first 5 categories
-            print(f"  {cat}: {len(vals)} values - {vals[:10]}...")
         
         # Calculate box plot statistics for each category
         box_plot_data = []
@@ -148,14 +137,9 @@ class BoxPlotMapping(VisualizationMapping):
             if not values:
                 continue
             
-            # Debug: Check the raw values before calculation
-            print(f"Processing category {category} with {len(values)} values")
-            print(f"Raw values: {values[:20]}...")  # Show first 20 values
-            print(f"Min value: {min(values)}, Max value: {max(values)}")
             
             # Handle single-value categories by creating a simple box
             if len(values) < 2:
-                print(f"Single value category {category} - creating simple box with value {values[0]}")
                 # For single values, create a box with the value as center and some width
                 single_value = values[0]
                 # Create a small box around the single value
@@ -179,18 +163,6 @@ class BoxPlotMapping(VisualizationMapping):
             
             # Detect outliers
             outliers = self._detect_outliers(values, stats['q1'], stats['q3'])
-            
-            # Debug logging (can be removed in production)
-            print(f"Box plot data for category {category}: {stats}")
-            print(f"Values: {values[:10]}...")  # Show first 10 values
-            print(f"Stats validation: min={stats['min']}, q1={stats['q1']}, median={stats['median']}, q3={stats['q3']}, max={stats['max']}")
-            
-            # Validate the result
-            if stats['min'] > stats['max'] or stats['q1'] > stats['median'] or stats['median'] > stats['q3']:
-                print(f"ERROR: Invalid stats detected for category {category}!")
-                print(f"Original values: {values}")
-                print(f"Sorted values: {sorted(values)}")
-                print(f"Invalid stats: {stats}")
             
             # Create standardized box plot data point with corrected stats
             data_point = {

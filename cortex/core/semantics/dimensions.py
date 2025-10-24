@@ -3,6 +3,7 @@ from typing import Optional, List
 from cortex.core.types.semantics.column_source import ColumnSourceType, ColumnSourceMeta
 from cortex.core.semantics.output_formats import OutputFormat
 from cortex.core.types.telescope import TSModel
+from cortex.core.semantics.conditions import Condition
 
 
 class CombineColumnSpec(TSModel):
@@ -34,6 +35,8 @@ class SemanticDimension(TSModel):
         description: A human-readable explanation of what this dimension represents
         query: The column name or expression that defines this dimension
         table: The source table or view where this dimension's data resides
+        conditional: Boolean flag to use conditional logic instead of query
+        conditions: Condition object for CASE WHEN logic
         source_type: Auto-inferred database column type for intelligent processing
         source_meta: Auto-inferred metadata about the source column
     """
@@ -45,6 +48,10 @@ class SemanticDimension(TSModel):
     
     # Column combination
     combine: Optional[List[CombineColumnSpec]] = None
+    
+    # Conditional logic support
+    conditional: bool = False
+    conditions: Optional[Condition] = None
     
     # Auto-inferred source column information
     source_type: Optional[ColumnSourceType] = None

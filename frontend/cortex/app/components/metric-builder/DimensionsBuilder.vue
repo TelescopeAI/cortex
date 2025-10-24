@@ -98,6 +98,41 @@
               </Select>
             </div>
 
+            <!-- Conditional Logic Mode Selector -->
+            <div v-if="dimension.table" class="pt-4 border-t">
+              <div class="flex items-center gap-2 mb-3">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  :class="{ 'bg-accent': !dimension.conditional }"
+                  @click="toggleConditionalMode(dimension, false)"
+                >
+                  <Grid class="h-4 w-4 mr-2" />
+                  Simple Column
+                </Button>
+                
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  :class="{ 'bg-accent': dimension.conditional }"
+                  @click="toggleConditionalMode(dimension, true)"
+                >
+                  <GitBranch class="h-4 w-4 mr-2" />
+                  Conditional Logic
+                </Button>
+              </div>
+
+              <!-- Conditional Builder -->
+              <div v-if="dimension.conditional" class="mt-4">
+                <ConditionalBuilder
+                  :model-value="dimension.conditions || null"
+                  @update:model-value="updateConditions(dimension, $event)"
+                  :available-tables="availableTables.map((t: any) => t.name)"
+                  :available-columns="getAvailableColumnsMap()"
+                />
+              </div>
+            </div>
+
             <!-- Row 2: Name it as [name] -->
             <div class="flex items-center gap-2">
               <span class="text-sm text-muted-foreground">Name it as</span>
@@ -261,10 +296,12 @@ import { Label } from '~/components/ui/label'
 import { Textarea } from '~/components/ui/textarea'
 import { Badge } from '~/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
-import { Grid, X, Settings, ChevronDown, Plus } from 'lucide-vue-next'
+import { Grid, X, Settings, ChevronDown, Plus, GitBranch } from 'lucide-vue-next'
 import ColumnSelector from '~/components/ColumnSelector.vue'
 import OutputFormatEditor from './OutputFormatEditor.vue'
+import ConditionalBuilder from './ConditionalBuilder.vue'
 import { humanize } from '~/utils/stringCase'
+import type { Condition } from '~/types/conditionals'
 
 interface CombineColumnSpec {
   query: string
@@ -279,6 +316,8 @@ interface Dimension {
   table?: string
   formatting?: any[]
   combine?: CombineColumnSpec[]
+  conditional?: boolean
+  conditions?: Condition | null
 }
 
 interface Props {
@@ -435,5 +474,34 @@ const onCombineTableChange = (dimension: Dimension, combineIndex: number) => {
     }
   }
   updateDimensions()
+}
+
+const toggleConditionalMode = (dimension: Dimension, isConditional: boolean) => {
+  dimension.conditional = isConditional
+  
+  // Initialize conditions if switching to conditional mode
+  if (isConditional && !dimension.conditions) {
+    dimension.conditions = {
+      when_clauses: [],
+      else_return: ''
+    }
+  }
+  
+  updateDimensions()
+}
+
+const updateConditions = (dimension: Dimension, conditions: Condition | null) => {
+  dimension.conditions = conditions
+  updateDimensions()
+}
+
+const getAvailableColumnsMap = (): Record<string, string[]> => {
+  const columnsMap: Record<string, string[]> = {}
+  
+  availableTables.value.forEach((table: any) => {
+    columnsMap[table.name] = table.columns.map((col: any) => col.name)
+  })
+  
+  return columnsMap
 }
 </script>

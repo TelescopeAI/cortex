@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 import re
 from abc import abstractmethod
 
@@ -7,6 +7,7 @@ from cortex.core.query.engine.processors.join_processor import JoinProcessor
 from cortex.core.query.engine.processors.aggregation_processor import AggregationProcessor
 from cortex.core.query.engine.processors.filter_processor import FilterProcessor
 from cortex.core.query.engine.processors.output_processor import OutputProcessor
+from cortex.core.query.engine.processors.condition_processor import ConditionProcessor
 from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.measures import SemanticMeasure
 from cortex.core.semantics.registry import SemanticRegistry
@@ -161,6 +162,37 @@ class SQLQueryGenerator(BaseQueryGenerator):
             bound_col = self.binding.column_mapping[measure.name]
             return f'{bound_col} AS "{measure.name}"'
 
+        # Check if using conditional logic
+        if measure.conditional and measure.conditions:
+            # Use condition processor to generate CASE WHEN SQL
+            condition_sql = ConditionProcessor.process_condition(
+                measure.conditions,
+                self._table_alias_map,
+                self.source_type.value
+            )
+            
+            # Wrap in aggregation function
+            if measure.type == SemanticMeasureType.COUNT:
+                agg_sql = f'COUNT({condition_sql})'
+            elif measure.type == SemanticMeasureType.SUM:
+                agg_sql = f'SUM({condition_sql})'
+            elif measure.type == SemanticMeasureType.AVG:
+                agg_sql = f'AVG({condition_sql})'
+            elif measure.type == SemanticMeasureType.MIN:
+                agg_sql = f'MIN({condition_sql})'
+            elif measure.type == SemanticMeasureType.MAX:
+                agg_sql = f'MAX({condition_sql})'
+            elif measure.type == SemanticMeasureType.COUNT_DISTINCT:
+                agg_sql = f'COUNT(DISTINCT {condition_sql})'
+            else:
+                agg_sql = condition_sql
+            
+            # Apply formatting if specified
+            formatted_sql = self._apply_database_formatting(agg_sql, measure.name, formatting_map)
+            
+            return f'{formatted_sql} AS "{measure.name}"'
+        
+        # Standard simple query mode
         # Get the qualified column name (with table prefix if joins are present)
         qualified_query = self._get_qualified_column_name(measure.query, measure.table)
 
@@ -183,6 +215,20 @@ class SQLQueryGenerator(BaseQueryGenerator):
         if self.binding and self.binding.column_mapping.get(dimension.name):
             bound_col = self.binding.column_mapping[dimension.name]
             return f"{bound_col} AS \"{dimension.name}\""
+
+        # Check if using conditional logic
+        if dimension.conditional and dimension.conditions:
+            # Use condition processor to generate CASE WHEN SQL
+            condition_sql = ConditionProcessor.process_condition(
+                dimension.conditions,
+                self._table_alias_map,
+                self.source_type.value
+            )
+            
+            # Apply formatting if specified
+            formatted_sql = self._apply_database_formatting(condition_sql, dimension.name, formatting_map)
+            
+            return f'{formatted_sql} AS "{dimension.name}"'
 
         # Check if we need to combine multiple columns
         if dimension.combine and len(dimension.combine) > 0:
@@ -470,4 +516,18 @@ class SQLQueryGenerator(BaseQueryGenerator):
     @abstractmethod
     def _apply_database_formatting(self, column_expression: str, object_name: str, formatting_map: FormattingMap) -> str:
         """Apply database-specific formatting to a column expression"""
+        pass
+    
+    @abstractmethod
+    def _build_combine_expression(self, parts: List[Tuple[str, Optional[str]]]) -> str:
+        """
+        Build a database-specific expression for combining multiple columns.
+        
+        Args:
+            parts: List of (column_expression, delimiter_before_column) tuples
+                   First column has delimiter=None, subsequent columns have their delimiter
+        
+        Returns:
+            SQL expression that concatenates the columns with delimiters
+        """
         pass

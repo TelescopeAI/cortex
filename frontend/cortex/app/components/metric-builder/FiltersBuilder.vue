@@ -19,7 +19,7 @@
     </div>
 
     <!-- Filters List -->
-    <div v-if="filters.length === 0" class="text-center py-8 border-2 border-dashed rounded-lg">
+    <div v-if="props.filters.length === 0" class="text-center py-8 border-2 border-dashed rounded-lg">
       <Filter class="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
       <p class="text-sm text-muted-foreground">No filters defined</p>
       <p class="text-xs text-muted-foreground">Add filters to restrict your data</p>
@@ -27,7 +27,7 @@
 
     <div v-else class="space-y-4">
       <Card
-        v-for="(filter, index) in filters"
+        v-for="(filter, index) in props.filters"
         :key="index"
         class="p-5 hover:shadow-md transition-shadow"
       >
@@ -356,12 +356,14 @@ interface Props {
   tableSchema?: any
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  filters: () => []
+})
+
 const emit = defineEmits<{
   'update:filters': [value: Filter[]]
 }>()
 
-const filters = ref<Filter[]>(props.filters || [])
 const showAdvanced = ref<Record<number, boolean>>({})
 
 // Get available tables from tableSchema
@@ -370,17 +372,9 @@ const availableTables = computed(() => {
   return props.tableSchema.tables
 })
 
-// Watch for prop changes
-watch(() => props.filters, (newFilters) => {
-  if (newFilters && JSON.stringify(newFilters) !== JSON.stringify(filters.value)) {
-    filters.value = [...newFilters]
-  }
-}, { deep: true })
-
-// Watch for local changes and emit
-watch(filters, (newFilters) => {
+const updateFilters = (newFilters: Filter[]) => {
   emit('update:filters', newFilters)
-}, { deep: true })
+}
 
 const toggleAdvanced = (index: number) => {
   showAdvanced.value[index] = !showAdvanced.value[index]
@@ -433,21 +427,23 @@ const getColumnTypeBadgeClass = (type: string) => {
 }
 
 const onTableChange = (index: number, tableName: string) => {
-  if (filters.value[index]) {
+  const updated = [...props.filters]
+  if (updated[index]) {
     // Reset query if the selected column doesn't exist in new table
-    if (filters.value[index].query) {
+    if (updated[index].query) {
       const columns = getColumnsForTable(tableName)
-      const columnExists = columns.some((col: any) => col.name === filters.value[index]?.query)
+      const columnExists = columns.some((col: any) => col.name === updated[index]?.query)
       if (!columnExists) {
-        filters.value[index].query = ''
+        updated[index].query = ''
       }
     }
-    filters.value[index].table = tableName
+    updated[index].table = tableName
+    updateFilters(updated)
   }
 }
 
 const addFilter = () => {
-  const filterNumber = filters.value.length + 1
+  const filterNumber = props.filters.length + 1
   const newFilter: Filter = {
     name: `Filter ${filterNumber}`,
     description: '',
@@ -461,16 +457,20 @@ const addFilter = () => {
     use_custom_expression: false,
     formatting: []
   }
-  filters.value.push(newFilter)
+  updateFilters([...props.filters, newFilter])
 }
 
 const removeFilter = (index: number) => {
-  filters.value.splice(index, 1)
+  const updated = [...props.filters]
+  updated.splice(index, 1)
+  updateFilters(updated)
 }
 
 const updateFilter = (index: number, field: keyof Filter, value: any) => {
-  if (filters.value[index]) {
-    filters.value[index] = { ...filters.value[index], [field]: value }
+  const updated = [...props.filters]
+  if (updated[index]) {
+    updated[index] = { ...updated[index], [field]: value }
+    updateFilters(updated)
   }
 }
 </script>

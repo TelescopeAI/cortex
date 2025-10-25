@@ -31,6 +31,53 @@ from cortex.core.connectors.databases.clients.service import DBClientService
 from cortex.core.types.databases import DataSourceTypes
 from cortex.core.utils.schema_inference import auto_infer_semantic_types
 
+
+def build_metric_updates(metric_data_dict: dict, db_metric) -> dict:
+    """
+    Build updates dictionary by comparing incoming data with database values.
+    Properly handles empty arrays and None values.
+    """
+    updates = {}
+    
+    for key, new_value in metric_data_dict.items():
+        # Skip fields that shouldn't be updated
+        if key in ['id', 'data_model_id', 'created_at', 'updated_at', 'version']:
+            continue
+            
+        # Get current database value
+        current_value = getattr(db_metric, key, None)
+        
+        # Handle different field types
+        if key in ['measures', 'dimensions', 'filters', 'joins', 'order', 'aggregations']:
+            # For arrays, always update if the key is present in the request
+            # This handles empty arrays correctly ([] is a valid update)
+            if key in metric_data_dict:
+                updates[key] = new_value
+                
+        elif key in ['limit', 'filters']:
+            # These fields can be explicitly set to None/empty
+            if new_value is not None or key in ['limit', 'filters']:
+                updates[key] = new_value
+                
+        elif key in ['name', 'alias', 'title', 'description', 'query', 'table_name', 
+                     'data_source_id', 'parameters', 'refresh', 'cache', 'meta', 'extends']:
+            # For other fields, only update if value is different
+            if new_value != current_value:
+                updates[key] = new_value
+                
+        elif key in ['grouped', 'ordered', 'public']:
+            # For boolean fields, only update if value is different and not None
+            if new_value is not None and new_value != current_value:
+                updates[key] = new_value
+                
+        else:
+            # For any other fields, update if value is not None
+            if new_value is not None:
+                updates[key] = new_value
+    
+    return updates
+
+
 # Create router instance
 MetricsRouter = APIRouter()
 
@@ -281,9 +328,10 @@ async def update_metric(metric_id: UUID, metric_data: MetricUpdateRequest):
                         schema = client.get_schema()
                         
                         # Get current or updated values
-                        measures_data = metric_data_dict.get('measures') or db_metric.measures
-                        dimensions_data = metric_data_dict.get('dimensions') or db_metric.dimensions
-                        filters_data = metric_data_dict.get('filters') or db_metric.filters
+                        # Use 'in' check to properly handle empty arrays (which are falsy but valid)
+                        measures_data = metric_data_dict['measures'] if 'measures' in metric_data_dict else db_metric.measures
+                        dimensions_data = metric_data_dict['dimensions'] if 'dimensions' in metric_data_dict else db_metric.dimensions
+                        filters_data = metric_data_dict['filters'] if 'filters' in metric_data_dict else db_metric.filters
                         
                         # Convert dicts to Pydantic models for inference
                         measures = None
@@ -315,11 +363,8 @@ async def update_metric(metric_id: UUID, metric_data: MetricUpdateRequest):
                         print(f"Warning: Schema inference failed for metric update {metric_id}: {str(e)}")
             
             # Update metric
-            # Handle explicit None values for fields that can be cleared (like limit)
-            updates = {}
-            for k, v in metric_data_dict.items():
-                if v is not None or k in ['limit', 'filters']:  # Allow None for limit and filters
-                    updates[k] = v
+            # Build updates by comparing with database values
+            updates = build_metric_updates(metric_data_dict, db_metric)
             updated_metric = metric_service.update_metric(metric_id, updates)
             
             if not updated_metric:

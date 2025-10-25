@@ -24,33 +24,33 @@
           </CardHeader>
           <CardContent class="space-y-4">            
             <BasicInfoBuilder
-              v-model:name="schema.name"
-              v-model:alias="schema.alias"
-              v-model:title="schema.title"
-              v-model:description="schema.description"
-              v-model:table-name="schema.table_name"
-              v-model:query="schema.query"
-              v-model:data-source-id="schema.data_source_id"
-              v-model:limit="schema.limit"
-              v-model:grouped="schema.grouped"
-              v-model:ordered="schema.ordered"
-              v-model:refresh="schema.refresh"
-              v-model:cache="schema.cache"
+              v-model:name="schemaBuilder.schema.value.name"
+              v-model:alias="schemaBuilder.schema.value.alias"
+              v-model:title="schemaBuilder.schema.value.title"
+              v-model:description="schemaBuilder.schema.value.description"
+              v-model:table-name="schemaBuilder.schema.value.table_name"
+              v-model:query="schemaBuilder.schema.value.query"
+              v-model:data-source-id="schemaBuilder.schema.value.data_source_id"
+              v-model:limit="schemaBuilder.schema.value.limit"
+              v-model:grouped="schemaBuilder.schema.value.grouped"
+              v-model:ordered="schemaBuilder.schema.value.ordered"
+              v-model:refresh="schemaBuilder.schema.value.refresh"
+              v-model:cache="schemaBuilder.schema.value.cache"
               :available-tables="availableTables"
               :table-schema="props.tableSchema"
               :available-data-sources="dataSources"
-              @update:name="updateSchema"
-              @update:alias="updateSchema"
-              @update:title="updateSchema"
-              @update:description="updateSchema"
-              @update:table-name="updateSchema"
-              @update:query="updateSchema"
-              @update:data-source-id="updateSchema"
-              @update:limit="updateSchema"
-              @update:grouped="updateSchema"
-              @update:ordered="updateSchema"
-              @update:refresh="updateSchema"
-              @update:cache="updateSchema"
+              @update:name="(val) => schemaBuilder.updateField('name', val)"
+              @update:alias="(val) => schemaBuilder.updateField('alias', val)"
+              @update:title="(val) => schemaBuilder.updateField('title', val)"
+              @update:description="(val) => schemaBuilder.updateField('description', val)"
+              @update:table-name="(val) => schemaBuilder.updateField('table_name', val)"
+              @update:query="(val) => schemaBuilder.updateField('query', val)"
+              @update:data-source-id="(val) => schemaBuilder.updateField('data_source_id', val)"
+              @update:limit="(val) => schemaBuilder.updateField('limit', val)"
+              @update:grouped="(val) => schemaBuilder.updateField('grouped', val)"
+              @update:ordered="(val) => schemaBuilder.updateField('ordered', val)"
+              @update:refresh="(val) => schemaBuilder.updateField('refresh', val)"
+              @update:cache="(val) => schemaBuilder.updateField('cache', val)"
             />
           </CardContent>
         </Card>
@@ -67,9 +67,9 @@
           </CardHeader>
           <CardContent>
             <MeasuresBuilder
-              v-model:measures="schema.measures"
+              :measures="schemaBuilder.schema.value.measures"
               :table-schema="tableSchema"
-              @update:measures="updateSchema"
+              @update:measures="schemaBuilder.updateMeasures"
             />
           </CardContent>
         </Card>
@@ -86,9 +86,9 @@
           </CardHeader>
           <CardContent>
             <DimensionsBuilder
-              v-model:dimensions="schema.dimensions"
+              :dimensions="schemaBuilder.schema.value.dimensions"
               :table-schema="tableSchema"
-              @update:dimensions="updateSchema"
+              @update:dimensions="schemaBuilder.updateDimensions"
             />
           </CardContent>
         </Card>
@@ -105,9 +105,9 @@
           </CardHeader>
           <CardContent>
             <JoinsBuilder
-              v-model="schema.joins"
+              :model-value="schemaBuilder.schema.value.joins"
               :available-tables="availableTables"
-              @update:model-value="updateSchema"
+              @update:model-value="schemaBuilder.updateJoins"
               @generate-joins="manuallyGenerateJoins"
             />
           </CardContent>
@@ -125,9 +125,9 @@
           </CardHeader>
           <CardContent>
             <FiltersBuilder
-              v-model:filters="schema.filters"
+              :filters="schemaBuilder.schema.value.filters"
               :table-schema="tableSchema"
-              @update:filters="updateSchema"
+              @update:filters="schemaBuilder.updateFilters"
             />
           </CardContent>
         </Card>
@@ -144,14 +144,14 @@
           </CardHeader>
           <CardContent>
             <OrderingBuilder
-              v-model:order="schema.order"
-              v-model:ordered="schema.ordered"
+              :order="schemaBuilder.schema.value.order"
+              :ordered="schemaBuilder.schema.value.ordered"
               :available-columns="availableColumns"
               :available-tables="availableTables"
-              :measures="schema.measures"
-              :dimensions="schema.dimensions"
-              @update:order="updateSchema"
-              @update:ordered="updateSchema"
+              :measures="schemaBuilder.schema.value.measures"
+              :dimensions="schemaBuilder.schema.value.dimensions"
+              @update:order="schemaBuilder.updateOrder"
+              @update:ordered="(val) => schemaBuilder.updateField('ordered', val)"
             />
           </CardContent>
         </Card>
@@ -179,7 +179,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, inject, watch } from 'vue'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '~/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 
@@ -195,44 +195,25 @@ import ParametersBuilder from './ParametersBuilder.vue'
 
 interface Props {
   selectedDataSourceId?: string
-  modelValue?: any
   tableSchema?: any
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
-  'update:modelValue': [value: any]
   'update:selectedDataSourceId': [value: string | undefined]
 }>()
 
-const { getDataSourceSchema, dataSources, refresh: refreshDataSources } = useDataSources()
+// Inject schema builder from parent
+const schemaBuilder = inject<any>('schemaBuilder')
+
+if (!schemaBuilder) {
+  throw new Error('schemaBuilder not provided')
+}
+
+const { dataSources, refresh: refreshDataSources } = useDataSources()
 
 // Component state
 const activeTab = ref('basic')
-
-// Schema data structure
-const schema = ref({
-  name: '',
-  alias: '',
-  title: '',
-  description: '',
-  table_name: '',
-  query: '',
-  data_source_id: undefined as string | undefined,
-  limit: undefined as number | undefined,
-  grouped: true,
-  ordered: true,
-  measures: [] as any[],
-  dimensions: [] as any[],
-  joins: [] as any[],
-  aggregations: [] as any[],
-  filters: [] as any[],
-  order: [] as any[],
-  parameters: {},
-  refresh: undefined as any,
-  cache: undefined as any,
-  tableSchema: undefined as any
-})
 
 // Available data computed from schema
 const availableTables = computed(() => {
@@ -264,22 +245,22 @@ const usedTables = computed(() => {
   const tables = new Set<string>()
   
   // Add base table
-  if (schema.value.table_name) {
-    tables.add(schema.value.table_name)
+  if (schemaBuilder.schema.value.table_name) {
+    tables.add(schemaBuilder.schema.value.table_name)
   }
   
   // Add tables from measures
-  schema.value.measures?.forEach((measure: any) => {
+  schemaBuilder.schema.value.measures?.forEach((measure: any) => {
     if (measure.table) tables.add(measure.table)
   })
   
   // Add tables from dimensions
-  schema.value.dimensions?.forEach((dimension: any) => {
+  schemaBuilder.schema.value.dimensions?.forEach((dimension: any) => {
     if (dimension.table) tables.add(dimension.table)
   })
   
   // Add tables from filters
-  schema.value.filters?.forEach((filter: any) => {
+  schemaBuilder.schema.value.filters?.forEach((filter: any) => {
     if (filter.table) tables.add(filter.table)
   })
   
@@ -333,11 +314,11 @@ const autoGenerateJoins = () => {
     return
   }
   
-  const baseTable = schema.value.table_name
+  const baseTable = schemaBuilder.schema.value.table_name
   if (!baseTable) return
   
   // Get existing joins (both user-created and auto-generated)
-  const existingJoins = schema.value.joins || []
+  const existingJoins = schemaBuilder.schema.value.joins || []
   
   // Track which table pairs already have joins
   const existingPairs = new Set(
@@ -424,7 +405,7 @@ const autoGenerateJoins = () => {
   
   // Add new joins to schema
   if (newJoins.length > 0) {
-    schema.value.joins = [...(existingJoins as any[]), ...newJoins] as any[]
+    schemaBuilder.updateJoins([...(existingJoins as any[]), ...newJoins] as any[])
   }
 }
 
@@ -436,136 +417,5 @@ watch(usedTables, () => {
 // Manual join generation triggered by user
 const manuallyGenerateJoins = () => {
   autoGenerateJoins()
-  updateSchema()
 }
-
-// Manual update function (following MeasuresBuilder pattern)
-const updateSchema = () => {
-  // Remove _autogenerated flag before emitting (internal UI state only)
-  const cleanedSchema = {
-    ...schema.value,
-    joins: schema.value.joins?.map((join: any) => {
-      const { _autogenerated, ...cleanJoin } = join
-      return cleanJoin
-    })
-  }
-  emit('update:modelValue', cleanedSchema)
-}
-
-// When a new table schema arrives, only set table_name if not already set
-watch(
-  () => props.tableSchema,
-  (newSchema) => {
-    console.log('MetricSchemaBuilder: tableSchema changed', {
-      newSchema,
-      currentTableName: schema.value.table_name,
-      hasTables: newSchema?.tables?.length > 0
-    })
-    
-    if (newSchema?.tables && newSchema.tables.length > 0) {
-      const first = newSchema.tables[0]?.name
-      const existsInNew = newSchema.tables.some((t: any) => t.name === schema.value.table_name)
-      const currentTableName = schema.value.table_name
-      
-      console.log('MetricSchemaBuilder: table selection logic', {
-        first,
-        currentTable: currentTableName,
-        existsInNew,
-        willUpdate: !currentTableName || !existsInNew
-      })
-      
-      // Only set to first table if no table is currently selected OR current table doesn't exist in new schema
-      // Also check if we have a meaningful table name (not just empty string)
-      const hasValidTableName = currentTableName && currentTableName.trim() !== ''
-      
-      // Check if we should preserve the original table name from the parent
-      // This prevents overriding during initial load when the schema might not be fully initialized yet
-      const shouldPreserveOriginal = props.modelValue?.table_name && 
-        props.modelValue.table_name.trim() !== '' && 
-        newSchema.tables.some((t: any) => t.name === props.modelValue.table_name)
-      
-      let newTableName = currentTableName
-      
-      if (shouldPreserveOriginal) {
-        newTableName = props.modelValue.table_name
-        console.log('MetricSchemaBuilder: Preserving original table_name from modelValue:', props.modelValue.table_name)
-      } else if (!hasValidTableName || !existsInNew) {
-        newTableName = first || ''
-        console.log('MetricSchemaBuilder: Updated table_name to:', first)
-      } else {
-        console.log('MetricSchemaBuilder: Keeping existing table_name:', currentTableName)
-      }
-      
-      // Only emit update if table_name actually changed
-      if (newTableName !== currentTableName) {
-        schema.value.table_name = newTableName
-        updateSchema() // Emit the update to parent
-      }
-    }
-  },
-  { immediate: true }
-)
-
-// Watch for modelValue changes from parent
-watch(() => props.modelValue, (newValue) => {
-  if (newValue && JSON.stringify(newValue) !== JSON.stringify(schema.value)) {
-    console.log('MetricSchemaBuilder: modelValue updated, newValue:', newValue)
-    // Ensure arrays are properly copied (not referenced)
-    schema.value = {
-      ...schema.value,
-      ...newValue,
-      // Explicitly handle arrays to ensure they're properly copied
-      measures: newValue.measures ? [...newValue.measures] : schema.value.measures,
-      dimensions: newValue.dimensions ? [...newValue.dimensions] : schema.value.dimensions,
-      joins: newValue.joins ? [...newValue.joins] : schema.value.joins,
-      filters: newValue.filters ? [...newValue.filters] : schema.value.filters,
-      order: newValue.order ? [...newValue.order] : schema.value.order,
-    }
-    console.log('MetricSchemaBuilder: schema after update:', schema.value)
-  }
-}, { immediate: true })
-
-// Load data sources when component mounts
-onMounted(async () => {
-  console.log('MetricSchemaBuilder: Mounting, refreshing data sources...')
-  await refreshDataSources()
-  console.log('MetricSchemaBuilder: Data sources after refresh:', dataSources.value)
-})
-
-// Load schema from data source
-const loadSchemaFromDataSource = async (dataSourceId: string) => {
-  try {
-    const loadedSchema = await getDataSourceSchema(dataSourceId)
-    schema.value = { ...schema.value, tableSchema: loadedSchema }
-    updateSchema()
-  } catch (error) {
-    console.error('Failed to load schema:', error)
-  }
-}
-
-// Sync selectedDataSourceId prop with schema.data_source_id (only when prop changes)
-watch(() => props.selectedDataSourceId, (newId) => {
-  if (newId !== schema.value.data_source_id) {
-    schema.value.data_source_id = newId || undefined
-  }
-}, { immediate: true })
-
-// Emit data source changes back to parent (id only)
-watch(
-  () => schema.value.data_source_id,
-  (newId: any, oldId: any) => {
-    if (newId !== oldId) {
-      schema.value.table_name = ''
-    }
-    emit('update:selectedDataSourceId', typeof newId === 'object' ? (newId?.id ?? undefined) : newId)
-  },
-  { immediate: false }
-)
-
-// Auto-load schema when selectedDataSourceId changes
-watch(() => props.selectedDataSourceId, (newDataSourceId, oldDataSourceId) => {
-  if (newDataSourceId && newDataSourceId !== oldDataSourceId) {
-    loadSchemaFromDataSource(newDataSourceId)
-  }
-}, { immediate: true })
 </script> 

@@ -15,6 +15,8 @@ import { toast } from 'vue-sonner'
 
 import MetricSelector from '~/components/MetricSelector.vue'
 import DataMappingEditor from './DataMappingEditor.vue'
+import VisualizationTypeSelector from './VisualizationTypeSelector.vue'
+import GridSizeSelector from './GridSizeSelector.vue'
 import type { DashboardWidget } from '~/types/dashboards'
 import { useMetrics, type SemanticMetric } from '~/composables/useMetrics'
 import { useDashboards } from '~/composables/useDashboards'
@@ -443,46 +445,19 @@ onMounted(() => {
                 <MetricSelector :button-text="selectedMetricLabel || 'Select Metric'" @select="onMetricSelect" />
               </div>
               
-              <div class="grid grid-cols-3 gap-3">
+              <div class="space-y-4">
                 <div class="space-y-2">
                   <Label>Visualization</Label>
-                  <UiSelect v-model="form.type">
-                    <UiSelectTrigger>
-                      <UiSelectValue placeholder="Type" />
-                    </UiSelectTrigger>
-                    <UiSelectContent class="z-[100001]">
-                      <UiSelectItem value="single_value">Single Value</UiSelectItem>
-                      <UiSelectItem value="gauge">Gauge</UiSelectItem>
-                      <UiSelectItem value="bar_chart">Bar</UiSelectItem>
-                      <UiSelectItem value="line_chart">Line</UiSelectItem>
-                      <UiSelectItem value="area_chart">Area</UiSelectItem>
-                      <UiSelectItem value="pie_chart">Pie</UiSelectItem>
-                      <UiSelectItem value="donut_chart">Donut</UiSelectItem>
-                      <UiSelectItem value="scatter_plot">Scatter</UiSelectItem>
-                      <UiSelectItem value="box_plot">Box Plot</UiSelectItem>
-                      <UiSelectItem value="table">Table</UiSelectItem>
-                    </UiSelectContent>
-                  </UiSelect>
+                  <VisualizationTypeSelector v-model="form.type" />
                 </div>
+                
                 <div class="space-y-2">
-                  <Label>Columns</Label>
-                  <NumberField v-model="form.columns" :min="1" :max="12" :step="1">
-                    <NumberFieldContent>
-                      <NumberFieldDecrement />
-                      <NumberFieldInput />
-                      <NumberFieldIncrement />
-                    </NumberFieldContent>
-                  </NumberField>
-                </div>
-                <div class="space-y-2">
-                  <Label>Rows</Label>
-                  <NumberField v-model="form.rows" :min="1" :step="1">
-                    <NumberFieldContent>
-                      <NumberFieldDecrement />
-                      <NumberFieldInput />
-                      <NumberFieldIncrement />
-                    </NumberFieldContent>
-                  </NumberField>
+                  <GridSizeSelector 
+                    :columns="form.columns" 
+                    :rows="form.rows"
+                    @update:columns="(value) => form.columns = value"
+                    @update:rows="(value) => form.rows = value"
+                  />
                 </div>
               </div>
               

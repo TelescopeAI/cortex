@@ -1,5 +1,5 @@
 import { useEnvironments } from '~/composables/useEnvironments';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { DataSource } from '~/types';
 
 export function useDataSources() {
@@ -66,7 +66,12 @@ export function useDataSources() {
     return data.value || [];
   });
 
-  // Remove the deep watcher as it might cause infinite loops
+  // Watch for environment changes and refresh data sources
+  watch(selectedEnvironmentId, (newEnvId) => {
+    if (newEnvId) {
+      refresh();
+    }
+  }, { immediate: true });
 
   // Get a specific data source by ID
   const getDataSource = async (dataSourceId: string): Promise<DataSource | null> => {

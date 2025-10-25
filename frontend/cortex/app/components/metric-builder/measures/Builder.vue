@@ -45,23 +45,10 @@ const availableTables = computed(() => {
   return props.tableSchema.tables
 })
 
-const measures = ref<Measure[]>([...props.measures])
 const showAdvanced = ref<Record<number, boolean>>({})
-const isLocalUpdate = ref(false)
 
-// Watch for changes from parent (but not from our own updates)
-watch(() => props.measures, (newMeasures) => {
-  // Skip if this was triggered by our own local update
-  if (isLocalUpdate.value) {
-    isLocalUpdate.value = false
-    return
-  }
-  measures.value = [...newMeasures]
-})
-
-const updateMeasures = () => {
-  isLocalUpdate.value = true
-  emit('update:measures', measures.value)
+const updateMeasures = (newMeasures: Measure[]) => {
+  emit('update:measures', newMeasures)
 }
 
 const toggleAdvanced = (index: number) => {
@@ -79,7 +66,8 @@ const handleNameChange = (measure: Measure, newName: string | number) => {
     measure.query = snakeCaseName;
   }
   measure.name = newNameStr;
-  updateMeasures();
+  // Emit the updated array
+  updateMeasures([...props.measures]);
 };
 
 const addMeasure = (tableName: string, column: any) => {
@@ -97,8 +85,7 @@ const addMeasure = (tableName: string, column: any) => {
     conditional: false
   }
   
-  measures.value.push(newMeasure)
-  updateMeasures()
+  updateMeasures([...props.measures, newMeasure])
 }
 
 const addConditionalMeasure = () => {
@@ -117,8 +104,7 @@ const addConditionalMeasure = () => {
     }
   }
   
-  measures.value.push(newMeasure)
-  updateMeasures()
+  updateMeasures([...props.measures, newMeasure])
 }
 
 const addCustomMeasure = () => {
@@ -133,13 +119,13 @@ const addCustomMeasure = () => {
     conditional: false
   }
   
-  measures.value.push(newMeasure)
-  updateMeasures()
+  updateMeasures([...props.measures, newMeasure])
 }
 
 const removeMeasure = (index: number) => {
-  measures.value.splice(index, 1)
-  updateMeasures()
+  const updated = [...props.measures]
+  updated.splice(index, 1)
+  updateMeasures(updated)
 }
 
 const getDefaultType = (columnType: string): string => {
@@ -155,8 +141,9 @@ const getDefaultType = (columnType: string): string => {
 }
 
 const updateMeasure = (index: number, updates: Measure) => {
-  measures.value[index] = updates
-  updateMeasures()
+  const updated = [...props.measures]
+  updated[index] = updates
+  updateMeasures(updated)
 }
 </script>
 
@@ -183,7 +170,7 @@ const updateMeasure = (index: number, updates: Measure) => {
     </div>
 
     <!-- Empty State -->
-    <div v-if="measures.length === 0" class="text-center py-8 border-2 border-dashed rounded-lg">
+    <div v-if="props.measures.length === 0" class="text-center py-8 border-2 border-dashed rounded-lg">
       <Target class="h-8 w-8 mx-auto text-muted-foreground mb-2" />
       <p class="text-sm text-muted-foreground">No measures defined</p>
       <p class="text-xs text-muted-foreground">Add a measure to get started</p>
@@ -192,7 +179,7 @@ const updateMeasure = (index: number, updates: Measure) => {
     <!-- Measures List -->
     <div v-else class="space-y-3">
       <Card 
-        v-for="(measure, index) in measures"
+        v-for="(measure, index) in props.measures"
         :key="index"
         class="p-5 hover:shadow-md transition-shadow"
       >
@@ -276,7 +263,11 @@ const updateMeasure = (index: number, updates: Measure) => {
                 <Label class="text-xs font-medium text-muted-foreground">Alias</Label>
                 <Input
                   :model-value="measure.alias"
-                  @update:model-value="(val) => { measure.alias = val; updateMeasures(); }"
+                  @update:model-value="(val) => { 
+                    const updated = [...props.measures];
+                    updated[index] = { ...measure, alias: String(val) };
+                    updateMeasures(updated);
+                  }"
                   placeholder="Optional alias for this measure"
                   class="h-9"
                 />
@@ -287,7 +278,11 @@ const updateMeasure = (index: number, updates: Measure) => {
                 <Label class="text-xs font-medium text-muted-foreground">Description</Label>
                 <Textarea
                   :model-value="measure.description"
-                  @update:model-value="(val) => { measure.description = val; updateMeasures(); }"
+                  @update:model-value="(val) => { 
+                    const updated = [...props.measures];
+                    updated[index] = { ...measure, description: String(val) };
+                    updateMeasures(updated);
+                  }"
                   placeholder="Describe what this measure represents..."
                   rows="2"
                   class="resize-none"
@@ -299,7 +294,11 @@ const updateMeasure = (index: number, updates: Measure) => {
                 <Label class="text-xs font-medium text-muted-foreground">Output Formatting</Label>
                 <OutputFormatEditor
                   :model-value="measure.formatting"
-                  @update:model-value="(val) => { measure.formatting = val; updateMeasures(); }"
+                  @update:model-value="(val) => { 
+                    const updated = [...props.measures];
+                    updated[index] = { ...measure, formatting: val };
+                    updateMeasures(updated);
+                  }"
                   object-type="measure"
                 />
               </div>

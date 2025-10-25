@@ -17,7 +17,7 @@
     </div>
 
     <!-- Measures List -->
-    <div v-if="measures.length === 0" class="text-center py-8 border-2 border-dashed rounded-lg">
+    <div v-if="props.measures.length === 0" class="text-center py-8 border-2 border-dashed rounded-lg">
       <Target class="h-8 w-8 mx-auto text-muted-foreground mb-2" />
       <p class="text-sm text-muted-foreground">No measures defined</p>
       <p class="text-xs text-muted-foreground">Add a measure to get started</p>
@@ -25,7 +25,7 @@
 
     <div v-else class="space-y-3">
       <Card 
-        v-for="(measure, index) in measures"
+        v-for="(measure, index) in props.measures"
         :key="index"
         class="p-5 hover:shadow-md transition-shadow"
       >
@@ -53,7 +53,7 @@
             <!-- Row 1: Calculate the [type] of [column] -->
             <div class="flex items-center gap-2 flex-wrap">
               <span class="text-sm text-muted-foreground">Calculate the</span>
-              <Select v-model="measure.type" @update:model-value="updateMeasures">
+              <Select :model-value="measure.type" @update:model-value="(value) => updateMeasure(index, 'type', value)">
                 <SelectTrigger class="w-auto min-w-[130px] h-9">
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
@@ -71,8 +71,8 @@
               
               <!-- Column Selection (dropdown based on selected table) -->
               <Select 
-                v-model="measure.query" 
-                @update:model-value="updateMeasures"
+                :model-value="measure.query" 
+                @update:model-value="(value) => updateMeasure(index, 'query', value)"
                 :disabled="!measure.table"
               >
                 <SelectTrigger class="w-auto min-w-[200px] h-9 justify-between">
@@ -110,7 +110,7 @@
               <span class="text-sm text-muted-foreground">from the table</span>
               
               <!-- Table Selection -->
-              <Select v-model="measure.table" @update:model-value="onTableChange(measure)">
+              <Select :model-value="measure.table" @update:model-value="(value) => updateMeasure(index, 'table', value)">
                 <SelectTrigger class="w-auto min-w-[180px] h-9">
                   <SelectValue placeholder="Select table" />
                 </SelectTrigger>
@@ -161,10 +161,10 @@
             <div class="flex items-center gap-2">
               <span class="text-sm text-muted-foreground">Name it as</span>
               <Input
-                v-model="measure.name"
+                :model-value="measure.name"
                 placeholder="Measure name"
                 class="flex-1 h-9"
-                @update:model-value="(value) => handleNameChange(measure, value)"
+                @update:model-value="(value) => updateMeasure(index, 'name', value)"
               />
             </div>
           </div>
@@ -191,10 +191,10 @@
               <div class="space-y-1.5">
                 <Label class="text-xs font-medium text-muted-foreground">Alias</Label>
                 <Input
-                  v-model="measure.alias"
+                  :model-value="measure.alias"
                   placeholder="Optional alias for this measure"
                   class="h-9"
-                  @update:model-value="updateMeasures"
+                  @update:model-value="(value) => updateMeasure(index, 'alias', value)"
                 />
               </div>
 
@@ -202,11 +202,11 @@
               <div class="space-y-1.5">
                 <Label class="text-xs font-medium text-muted-foreground">Description</Label>
                 <Textarea
-                  v-model="measure.description"
+                  :model-value="measure.description"
                   placeholder="Describe what this measure represents..."
                   rows="2"
                   class="resize-none"
-                  @update:model-value="updateMeasures"
+                  @update:model-value="(value) => updateMeasure(index, 'description', value)"
                 />
               </div>
 
@@ -214,9 +214,9 @@
               <div class="space-y-1.5">
                 <Label class="text-xs font-medium text-muted-foreground">Output Formatting</Label>
                 <OutputFormatEditor
-                  v-model="measure.formatting"
+                  :model-value="measure.formatting"
                   object-type="measure"
-                  @update:model-value="updateMeasures"
+                  @update:model-value="(value) => updateMeasure(index, 'formatting', value)"
                 />
               </div>
             </div>
@@ -228,7 +228,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { Card } from '~/components/ui/card'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
@@ -275,23 +275,47 @@ const availableTables = computed(() => {
   return props.tableSchema.tables
 })
 
-const measures = ref<Measure[]>([...props.measures])
 const showAdvanced = ref<Record<number, boolean>>({})
-const isLocalUpdate = ref(false)
 
-// Watch for changes from parent (but not from our own updates)
-watch(() => props.measures, (newMeasures) => {
-  // Skip if this was triggered by our own local update
-  if (isLocalUpdate.value) {
-    isLocalUpdate.value = false
-    return
+const updateMeasures = (newMeasures: Measure[]) => {
+  console.log('[MeasuresBuilder] updateMeasures called with:', newMeasures)
+  emit('update:measures', newMeasures)
+}
+
+const updateMeasure = (index: number, field: keyof Measure, value: any) => {
+  console.log('[MeasuresBuilder] updateMeasure called:', { index, field, value })
+  
+  const updated = [...props.measures]
+  if (updated[index]) {
+    const currentMeasure = updated[index]
+    console.log('[MeasuresBuilder] Current measure before update:', currentMeasure)
+    
+    // Handle name change - auto-fill alias only (not query)
+    if (field === 'name') {
+      const newNameStr = String(value)
+      const snakeCaseName = toSnakeCase(newNameStr)
+      
+      console.log('[MeasuresBuilder] Name change - newNameStr:', newNameStr, 'snakeCaseName:', snakeCaseName)
+      console.log('[MeasuresBuilder] Current alias:', currentMeasure.alias, 'Current query:', currentMeasure.query)
+      
+      updated[index] = { 
+        ...currentMeasure, 
+        name: newNameStr,
+        // Auto-fill alias only if it's empty or was auto-filled before
+        alias: (!currentMeasure.alias || currentMeasure.alias === toSnakeCase(currentMeasure.name)) ? snakeCaseName : currentMeasure.alias,
+        // DO NOT update query - it should remain as the original column name
+      }
+      
+      console.log('[MeasuresBuilder] Updated measure after name change:', updated[index])
+    }
+    // Default update for other fields
+    else {
+      updated[index] = { ...currentMeasure, [field]: value }
+      console.log('[MeasuresBuilder] Updated measure after field change:', updated[index])
+    }
+    
+    updateMeasures(updated)
   }
-  measures.value = [...newMeasures]
-})
-
-const updateMeasures = () => {
-  isLocalUpdate.value = true
-  emit('update:measures', measures.value)
 }
 
 const toggleAdvanced = (index: number) => {
@@ -344,31 +368,7 @@ const getColumnTypeBadgeClass = (type: string) => {
   return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 text-[10px] px-1.5 py-0.5'
 }
 
-const onTableChange = (measure: Measure) => {
-  // Reset query if the selected column doesn't exist in new table
-  if (measure.query) {
-    const columns = getColumnsForTable(measure.table)
-    const columnExists = columns.some((col: any) => col.name === measure.query)
-    if (!columnExists) {
-      measure.query = undefined
-    }
-  }
-  updateMeasures()
-}
-
-const handleNameChange = (measure: Measure, newName: string | number) => {
-  const newNameStr = String(newName);
-  const snakeCaseName = toSnakeCase(newNameStr);
-  // Auto-fill alias and query only if they are empty or were auto-filled before
-  if (!measure.alias || measure.alias === toSnakeCase(measure.name)) {
-    measure.alias = snakeCaseName;
-  }
-  if (!measure.query || measure.query === toSnakeCase(measure.name)) {
-    measure.query = snakeCaseName;
-  }
-  measure.name = newNameStr;
-  updateMeasures();
-};
+// onTableChange and handleNameChange are now handled in updateMeasure function
 
 const addMeasure = (tableName: string, column: any) => {
   const humanizedName = humanize(column.name)
@@ -376,36 +376,39 @@ const addMeasure = (tableName: string, column: any) => {
   
   const newMeasure: Measure = {
     name: humanizedName,
+    alias: snakeCaseName,
+    query: column.name,
+    table: tableName,
     description: `Measure based on ${tableName}.${column.name}`,
     type: getDefaultType(column.type),
-    table: tableName,
-    alias: column.name,
-    query: column.name,
-    formatting: []
+    formatting: [],
+    conditional: false,
+    conditions: null
   }
   
-  measures.value.push(newMeasure)
-  updateMeasures()
+  updateMeasures([...props.measures, newMeasure])
 }
 
 const addCustomMeasure = () => {
   const newMeasure: Measure = {
     name: 'Custom Measure',
+    alias: 'custom_measure',
+    query: 'custom_measure',
+    table: undefined, // User will select table manually
     description: 'Custom measure',
     type: 'custom',
-    query: 'custom_measure',
-    alias: 'custom_measure',
-    table: undefined, // User will select table manually
-    formatting: []
+    formatting: [],
+    conditional: false,
+    conditions: null
   }
   
-  measures.value.push(newMeasure)
-  updateMeasures()
+  updateMeasures([...props.measures, newMeasure])
 }
 
 const removeMeasure = (index: number) => {
-  measures.value.splice(index, 1)
-  updateMeasures()
+  const updated = [...props.measures]
+  updated.splice(index, 1)
+  updateMeasures(updated)
 }
 
 const getDefaultType = (columnType: string): string => {
@@ -421,22 +424,39 @@ const getDefaultType = (columnType: string): string => {
 }
 
 const toggleConditionalMode = (measure: Measure, isConditional: boolean) => {
-  measure.conditional = isConditional
+  const measureIndex = props.measures.findIndex(m => m === measure);
+  if (measureIndex === -1) return;
   
-  // Initialize conditions if switching to conditional mode
-  if (isConditional && !measure.conditions) {
-    measure.conditions = {
+  const updated = [...props.measures];
+  const currentMeasure = updated[measureIndex];
+  if (!currentMeasure) return;
+  
+  updated[measureIndex] = {
+    ...currentMeasure,
+    conditional: isConditional,
+    conditions: (isConditional && !currentMeasure.conditions) ? {
       when_clauses: [],
       else_return: 0
-    }
-  }
+    } : currentMeasure.conditions
+  };
   
-  updateMeasures()
+  updateMeasures(updated);
 }
 
 const updateConditions = (measure: Measure, conditions: Condition | null) => {
-  measure.conditions = conditions
-  updateMeasures()
+  const measureIndex = props.measures.findIndex(m => m === measure);
+  if (measureIndex === -1) return;
+  
+  const updated = [...props.measures];
+  const currentMeasure = updated[measureIndex];
+  if (!currentMeasure) return;
+  
+  updated[measureIndex] = {
+    ...currentMeasure,
+    conditions: conditions
+  };
+  
+  updateMeasures(updated);
 }
 
 const getAvailableColumnsMap = (): Record<string, string[]> => {

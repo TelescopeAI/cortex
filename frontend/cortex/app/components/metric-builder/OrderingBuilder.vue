@@ -5,7 +5,7 @@
       <input
         id="ordered-toggle"
         type="checkbox"
-        :checked="ordered"
+        :checked="props.ordered"
         @change="updateOrdered(($event.target as HTMLInputElement).checked)"
         class="h-4 w-4 rounded border-gray-300"
       />
@@ -15,7 +15,7 @@
     </div>
 
     <!-- Order Sequences Configuration -->
-    <div v-if="ordered" class="space-y-4">
+    <div v-if="props.ordered" class="space-y-4">
       <div class="flex items-center justify-between">
         <div>
           <h4 class="text-sm font-medium">Order Sequences</h4>
@@ -31,7 +31,7 @@
       </div>
 
       <!-- Empty State -->
-      <div v-if="orderSequences.length === 0" class="text-center py-8 border-2 border-dashed rounded-lg">
+      <div v-if="props.order.length === 0" class="text-center py-8 border-2 border-dashed rounded-lg">
         <ArrowUpDown class="h-8 w-8 mx-auto text-muted-foreground mb-2" />
         <p class="text-sm text-muted-foreground">No ordering defined</p>
         <p class="text-xs text-muted-foreground">Default ordering will be applied</p>
@@ -40,7 +40,7 @@
       <!-- Existing Order Sequences -->
       <div v-else class="space-y-3">
         <Card
-          v-for="(sequence, index) in orderSequences"
+          v-for="(sequence, index) in props.order"
           :key="index"
           class="p-5 hover:shadow-md transition-shadow"
         >
@@ -70,7 +70,7 @@
                 <span class="text-sm text-muted-foreground">Sort by</span>
                 
                 <!-- Semantic Type Selection -->
-                <Select v-model="sequence.semantic_type" @update:model-value="(value) => onOrderTypeChange(index, value)">
+                <Select :model-value="sequence.semantic_type" @update:model-value="(value) => onOrderTypeChange(index, value)">
                   <SelectTrigger class="w-auto min-w-[110px] h-9">
                     <SelectValue placeholder="type" />
                   </SelectTrigger>
@@ -84,7 +84,7 @@
 
                 <!-- Reference Selection (dynamic based on type) -->
                 <template v-if="sequence.semantic_type === 'measure'">
-                  <Select v-model="sequence.semantic_name" @update:model-value="updateOrder">
+                  <Select :model-value="sequence.semantic_name" @update:model-value="(val) => updateSequenceField(index, 'semantic_name', val)">
                     <SelectTrigger class="w-auto min-w-[180px] h-9">
                       <SelectValue placeholder="Select measure" />
                     </SelectTrigger>
@@ -97,7 +97,7 @@
                 </template>
 
                 <template v-else-if="sequence.semantic_type === 'dimension'">
-                  <Select v-model="sequence.semantic_name" @update:model-value="updateOrder">
+                  <Select :model-value="sequence.semantic_name" @update:model-value="(val) => updateSequenceField(index, 'semantic_name', val)">
                     <SelectTrigger class="w-auto min-w-[180px] h-9">
                       <SelectValue placeholder="Select dimension" />
                     </SelectTrigger>
@@ -111,27 +111,27 @@
 
                 <template v-else-if="sequence.semantic_type === 'column'">
                   <Input
-                    v-model="sequence.query"
+                    :model-value="sequence.query"
                     placeholder="column_name"
                     class="w-auto min-w-[180px] h-9"
-                    @update:model-value="updateOrder"
+                    @update:model-value="(val) => updateSequenceField(index, 'query', val)"
                   />
                 </template>
 
                 <template v-else-if="sequence.semantic_type === 'position'">
                   <Input
-                    v-model.number="sequence.position"
+                    :model-value="sequence.position"
                     type="number"
                     placeholder="1"
                     class="w-[100px] h-9"
-                    @update:model-value="updateOrder"
+                    @update:model-value="(val) => updateSequenceField(index, 'position', Number(val))"
                   />
                 </template>
 
                 <span class="text-sm text-muted-foreground">in</span>
 
                 <!-- Order Type Selection -->
-                <Select v-model="sequence.order_type" @update:model-value="updateOrder">
+                <Select :model-value="sequence.order_type" @update:model-value="(val) => updateSequenceField(index, 'order_type', val)">
                   <SelectTrigger class="w-auto min-w-[120px] h-9">
                     <SelectValue placeholder="order" />
                   </SelectTrigger>
@@ -148,10 +148,10 @@
               <div class="flex items-center gap-2">
                 <span class="text-sm text-muted-foreground">Name it as</span>
                 <Input
-                  v-model="sequence.name"
+                  :model-value="sequence.name"
                   placeholder="Order name"
                   class="flex-1 h-9"
-                  @update:model-value="updateOrder"
+                  @update:model-value="(val) => updateSequenceField(index, 'name', val)"
                 />
               </div>
             </div>
@@ -177,7 +177,7 @@
                 <!-- Table (for column type) -->
                 <div v-if="sequence.semantic_type === 'column'" class="space-y-1.5">
                   <Label class="text-xs font-medium text-muted-foreground">Table</Label>
-                  <Select v-model="sequence.table" @update:model-value="updateOrder">
+                  <Select :model-value="sequence.table" @update:model-value="(val) => updateSequenceField(index, 'table', val)">
                     <SelectTrigger class="h-9">
                       <SelectValue placeholder="Select table" />
                     </SelectTrigger>
@@ -192,7 +192,7 @@
                 <!-- Nulls Handling -->
                 <div class="space-y-1.5">
                   <Label class="text-xs font-medium text-muted-foreground">Null Values Handling</Label>
-                  <Select v-model="sequence.nulls" @update:model-value="updateOrder">
+                  <Select :model-value="sequence.nulls" @update:model-value="(val) => updateSequenceField(index, 'nulls', val)">
                     <SelectTrigger class="h-9">
                       <SelectValue placeholder="Default" />
                     </SelectTrigger>
@@ -208,11 +208,11 @@
                 <div class="space-y-1.5">
                   <Label class="text-xs font-medium text-muted-foreground">Description</Label>
                   <Textarea
-                    v-model="sequence.description"
+                    :model-value="sequence.description"
                     placeholder="Describe this sort order..."
                     rows="2"
                     class="resize-none"
-                    @update:model-value="updateOrder"
+                    @update:model-value="(val) => updateSequenceField(index, 'description', val)"
                   />
                 </div>
               </div>
@@ -262,36 +262,27 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<Emits>()
 
-// Simple reactive state with prop watchers
-const orderSequences = ref<SemanticOrderSequence[]>([...props.order])
-const ordered = ref(props.ordered ?? true)
 const showAdvanced = ref<Record<number, boolean>>({})
 
-// Watch for prop changes (needed for edit mode)
-watch(() => props.order, (newOrder) => {
-  if (newOrder && JSON.stringify(newOrder) !== JSON.stringify(orderSequences.value)) {
-    orderSequences.value = [...newOrder]
-  }
-}, { deep: true })
-
-watch(() => props.ordered, (newOrdered) => {
-  if (newOrdered !== undefined && newOrdered !== ordered.value) {
-    ordered.value = newOrdered
-  }
-})
-
 // Simple update functions
-const updateOrder = () => {
-  emit('update:order', orderSequences.value)
+const updateOrder = (newOrder: SemanticOrderSequence[]) => {
+  emit('update:order', newOrder)
 }
 
 const updateOrdered = (value: boolean) => {
-  ordered.value = value
   emit('update:ordered', value)
 }
 
 const toggleAdvanced = (index: number) => {
   showAdvanced.value[index] = !showAdvanced.value[index]
+}
+
+const updateSequenceField = (index: number, field: string, value: any) => {
+  const updated = [...props.order]
+  if (updated[index]) {
+    (updated[index] as any)[field] = value
+    updateOrder(updated)
+  }
 }
 
 // Computed properties
@@ -323,15 +314,16 @@ const availableTablesFormatted = computed(() => {
 })
 
 const onOrderTypeChange = (index: number, semanticType: any) => {
-  if (!orderSequences.value[index]) return
+  const updated = [...props.order]
+  if (!updated[index]) return
   
   // Clear existing reference data when type changes
-  orderSequences.value[index].semantic_name = undefined
-  orderSequences.value[index].position = undefined
-  orderSequences.value[index].query = undefined
-  orderSequences.value[index].table = undefined
+  updated[index].semantic_name = undefined
+  updated[index].position = undefined
+  updated[index].query = undefined
+  updated[index].table = undefined
   
-  updateOrder()
+  updateOrder(updated)
 }
 
 const addOrderFromColumn = (tableName: string, column: { name: string; type: string }) => {
@@ -375,12 +367,12 @@ const addOrderFromColumn = (tableName: string, column: { name: string; type: str
     }
   }
 
-  orderSequences.value.push(newSequence)
-  updateOrder()
+  updateOrder([...props.order, newSequence])
 }
 
 const removeOrderSequence = (index: number) => {
-  orderSequences.value.splice(index, 1)
-  updateOrder()
+  const updated = [...props.order]
+  updated.splice(index, 1)
+  updateOrder(updated)
 }
 </script>

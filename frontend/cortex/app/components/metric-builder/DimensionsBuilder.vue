@@ -11,7 +11,7 @@
     </div>
 
     <!-- Dimensions List -->
-    <div v-if="dimensions.length === 0" class="text-center py-8 border-2 border-dashed rounded-lg">
+    <div v-if="props.dimensions.length === 0" class="text-center py-8 border-2 border-dashed rounded-lg">
       <Grid class="h-8 w-8 mx-auto text-muted-foreground mb-2" />
       <p class="text-sm text-muted-foreground">No dimensions defined</p>
       <p class="text-xs text-muted-foreground">Add a dimension to enable grouping</p>
@@ -19,7 +19,7 @@
 
     <div v-else class="space-y-3">
       <Card 
-        v-for="(dimension, index) in dimensions"
+        v-for="(dimension, index) in props.dimensions"
         :key="index"
         class="p-5 hover:shadow-md transition-shadow"
       >
@@ -50,8 +50,8 @@
               
               <!-- Column Selection (dropdown based on selected table) -->
               <Select 
-                v-model="dimension.query" 
-                @update:model-value="updateDimensions"
+                :model-value="dimension.query" 
+                @update:model-value="(value) => updateDimension(index, 'query', value)"
                 :disabled="!dimension.table"
               >
                 <SelectTrigger class="w-auto min-w-[200px] h-9 justify-between">
@@ -86,7 +86,7 @@
               <span class="text-sm text-muted-foreground">from the table</span>
               
               <!-- Table Selection -->
-              <Select v-model="dimension.table" @update:model-value="onTableChange(dimension)">
+              <Select :model-value="dimension.table" @update:model-value="(value) => updateDimension(index, 'table', value)">
                 <SelectTrigger class="w-auto min-w-[180px] h-9">
                   <SelectValue placeholder="Select table" />
                 </SelectTrigger>
@@ -137,10 +137,10 @@
             <div class="flex items-center gap-2">
               <span class="text-sm text-muted-foreground">Name it as</span>
               <Input
-                v-model="dimension.name"
+                :model-value="dimension.name"
                 placeholder="Dimension name"
                 class="flex-1 h-9"
-                @update:model-value="updateDimensions"
+                @update:model-value="(value) => updateDimension(index, 'name', value)"
               />
             </div>
           </div>
@@ -194,8 +194,8 @@
                       <!-- Column and table selection -->
                       <div class="flex items-center gap-2">
                         <Select 
-                          v-model="combineSpec.table" 
-                          @update:model-value="onCombineTableChange(dimension, combineIndex)"
+                          :model-value="combineSpec.table" 
+                          @update:model-value="(value) => updateCombineSpec(dimension, combineIndex, 'table', value)"
                         >
                           <SelectTrigger class="w-auto min-w-[120px] h-8 text-xs">
                             <SelectValue placeholder="Table" />
@@ -208,8 +208,8 @@
                         </Select>
 
                         <Select 
-                          v-model="combineSpec.query" 
-                          @update:model-value="updateDimensions"
+                          :model-value="combineSpec.query" 
+                          @update:model-value="(value) => updateCombineSpec(dimension, combineIndex, 'query', value)"
                           :disabled="!combineSpec.table"
                         >
                           <SelectTrigger class="flex-1 h-8 text-xs">
@@ -240,10 +240,10 @@
                       <div class="flex items-center gap-2">
                         <Label class="text-xs text-muted-foreground whitespace-nowrap">Delimiter:</Label>
                         <Input
-                          v-model="combineSpec.delimiter"
+                          :model-value="combineSpec.delimiter"
                           placeholder="Space"
                           class="h-7 text-xs flex-1"
-                          @update:model-value="updateDimensions"
+                          @update:model-value="(value) => updateCombineSpec(dimension, combineIndex, 'delimiter', value)"
                         />
                         <span class="text-xs text-muted-foreground">(default: space)</span>
                       </div>
@@ -260,11 +260,11 @@
               <div class="space-y-1.5">
                 <Label class="text-xs font-medium text-muted-foreground">Description</Label>
                 <Textarea
-                  v-model="dimension.description"
+                  :model-value="dimension.description"
                   placeholder="Describe what this dimension represents..."
                   rows="2"
                   class="resize-none"
-                  @update:model-value="updateDimensions"
+                  @update:model-value="(value) => updateDimension(index, 'description', value)"
                 />
               </div>
 
@@ -272,9 +272,9 @@
               <div class="space-y-1.5">
                 <Label class="text-xs font-medium text-muted-foreground">Output Formatting</Label>
                 <OutputFormatEditor
-                  v-model="dimension.formatting"
+                  :model-value="dimension.formatting"
                   object-type="dimension"
-                  @update:model-value="updateDimensions"
+                  @update:model-value="(value) => updateDimension(index, 'formatting', value)"
                 />
               </div>
 
@@ -340,23 +340,51 @@ const availableTables = computed(() => {
   return props.tableSchema.tables
 })
 
-const dimensions = ref<Dimension[]>([...props.dimensions])
 const showAdvanced = ref<Record<number, boolean>>({})
-const isLocalUpdate = ref(false)
 
-// Watch for changes from parent (but not from our own updates)
-watch(() => props.dimensions, (newDimensions) => {
-  // Skip if this was triggered by our own local update
-  if (isLocalUpdate.value) {
-    isLocalUpdate.value = false
-    return
+const updateDimensions = (newDimensions: Dimension[]) => {
+  emit('update:dimensions', newDimensions)
+}
+
+const updateDimension = (index: number, field: keyof Dimension, value: any) => {
+  const updated = [...props.dimensions]
+  if (updated[index]) {
+    updated[index] = { ...updated[index], [field]: value }
+    
+    // Handle table change - reset query if column doesn't exist in new table
+    if (field === 'table' && value) {
+      const columns = getColumnsForTable(value)
+      const columnExists = columns.some((col: any) => col.name === updated[index]?.query)
+      if (!columnExists) {
+        updated[index].query = ''
+      }
+    }
+    
+    updateDimensions(updated)
   }
-  dimensions.value = [...newDimensions]
-})
+}
 
-const updateDimensions = () => {
-  isLocalUpdate.value = true
-  emit('update:dimensions', dimensions.value)
+const updateCombineSpec = (dimension: Dimension, combineIndex: number, field: string, value: any) => {
+  const dimensionIndex = props.dimensions.findIndex(d => d === dimension)
+  if (dimensionIndex === -1) return
+  
+  const updatedDimension = { ...dimension }
+  if (updatedDimension.combine && updatedDimension.combine[combineIndex]) {
+    updatedDimension.combine[combineIndex] = { ...updatedDimension.combine[combineIndex], [field]: value }
+    
+    // Handle table change for combine spec - reset query if column doesn't exist in new table
+    if (field === 'table' && value && updatedDimension.combine?.[combineIndex]) {
+      const columns = getColumnsForTable(value)
+      const columnExists = columns.some((col: any) => col.name === updatedDimension.combine?.[combineIndex]?.query)
+      if (!columnExists) {
+        updatedDimension.combine[combineIndex].query = ''
+      }
+    }
+  }
+  
+  const updated = [...props.dimensions]
+  updated[dimensionIndex] = updatedDimension
+  updateDimensions(updated)
 }
 
 const toggleAdvanced = (index: number) => {
@@ -409,17 +437,7 @@ const getColumnTypeBadgeClass = (type: string) => {
   return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 text-[10px] px-1.5 py-0.5'
 }
 
-const onTableChange = (dimension: Dimension) => {
-  // Reset query if the selected column doesn't exist in new table
-  if (dimension.query) {
-    const columns = getColumnsForTable(dimension.table)
-    const columnExists = columns.some((col: any) => col.name === dimension.query)
-    if (!columnExists) {
-      dimension.query = ''
-    }
-  }
-  updateDimensions()
-}
+// onTableChange is now handled in updateDimension function
 
 const addDimension = (tableName: string, column: any) => {
   const humanizedName = humanize(column.name)
@@ -433,38 +451,55 @@ const addDimension = (tableName: string, column: any) => {
     combine: []
   }
   
-  dimensions.value.push(newDimension)
-  updateDimensions()
+  updateDimensions([...props.dimensions, newDimension])
 }
 
 const removeDimension = (index: number) => {
-  dimensions.value.splice(index, 1)
-  updateDimensions()
+  const updated = [...props.dimensions]
+  updated.splice(index, 1)
+  updateDimensions(updated)
 }
 
 const addCombineColumn = (dimension: Dimension) => {
-  if (!dimension.combine) {
-    dimension.combine = []
+  const dimensionIndex = props.dimensions.findIndex(d => d === dimension)
+  if (dimensionIndex === -1) return
+  
+  const updatedDimension = { ...dimension }
+  if (!updatedDimension.combine) {
+    updatedDimension.combine = []
   }
-  dimension.combine.push({
+  updatedDimension.combine.push({
     query: '',
-    table: dimension.table,
+    table: updatedDimension.table,
     delimiter: ' '
   })
-  updateDimensions()
+  
+  const updated = [...props.dimensions]
+  updated[dimensionIndex] = updatedDimension
+  updateDimensions(updated)
 }
 
 const removeCombineColumn = (dimension: Dimension, combineIndex: number) => {
-  if (dimension.combine) {
-    dimension.combine.splice(combineIndex, 1)
-    updateDimensions()
+  const dimensionIndex = props.dimensions.findIndex(d => d === dimension)
+  if (dimensionIndex === -1) return
+  
+  const updatedDimension = { ...dimension }
+  if (updatedDimension.combine) {
+    updatedDimension.combine.splice(combineIndex, 1)
   }
+  
+  const updated = [...props.dimensions]
+  updated[dimensionIndex] = updatedDimension
+  updateDimensions(updated)
 }
 
 const onCombineTableChange = (dimension: Dimension, combineIndex: number) => {
-  // Reset query if the selected column doesn't exist in new table
-  if (dimension.combine && dimension.combine[combineIndex]) {
-    const combineSpec = dimension.combine[combineIndex]
+  const dimensionIndex = props.dimensions.findIndex(d => d === dimension)
+  if (dimensionIndex === -1) return
+  
+  const updatedDimension = { ...dimension }
+  if (updatedDimension.combine && updatedDimension.combine[combineIndex]) {
+    const combineSpec = updatedDimension.combine[combineIndex]
     if (combineSpec.query) {
       const columns = getColumnsForTable(combineSpec.table)
       const columnExists = columns.some((col: any) => col.name === combineSpec.query)
@@ -473,26 +508,42 @@ const onCombineTableChange = (dimension: Dimension, combineIndex: number) => {
       }
     }
   }
-  updateDimensions()
+  
+  const updated = [...props.dimensions]
+  updated[dimensionIndex] = updatedDimension
+  updateDimensions(updated)
 }
 
 const toggleConditionalMode = (dimension: Dimension, isConditional: boolean) => {
-  dimension.conditional = isConditional
+  const dimensionIndex = props.dimensions.findIndex(d => d === dimension)
+  if (dimensionIndex === -1) return
+  
+  const updatedDimension = { ...dimension }
+  updatedDimension.conditional = isConditional
   
   // Initialize conditions if switching to conditional mode
-  if (isConditional && !dimension.conditions) {
-    dimension.conditions = {
+  if (isConditional && !updatedDimension.conditions) {
+    updatedDimension.conditions = {
       when_clauses: [],
       else_return: ''
     }
   }
   
-  updateDimensions()
+  const updated = [...props.dimensions]
+  updated[dimensionIndex] = updatedDimension
+  updateDimensions(updated)
 }
 
 const updateConditions = (dimension: Dimension, conditions: Condition | null) => {
-  dimension.conditions = conditions
-  updateDimensions()
+  const dimensionIndex = props.dimensions.findIndex(d => d === dimension)
+  if (dimensionIndex === -1) return
+  
+  const updatedDimension = { ...dimension }
+  updatedDimension.conditions = conditions
+  
+  const updated = [...props.dimensions]
+  updated[dimensionIndex] = updatedDimension
+  updateDimensions(updated)
 }
 
 const getAvailableColumnsMap = (): Record<string, string[]> => {

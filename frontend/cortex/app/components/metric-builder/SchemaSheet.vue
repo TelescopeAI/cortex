@@ -78,9 +78,7 @@
         <div v-if="isEditing">
           <MetricSchemaBuilder
             :selected-data-source-id="selectedDataSourceIdLocal"
-            :model-value="schema"
             :table-schema="tableSchema"
-            @update:model-value="handleSchemaUpdate"
             @update:selected-data-source-id="handleDataSourceUpdate"
           />
         </div>
@@ -104,7 +102,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, provide } from 'vue'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '~/components/ui/sheet'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
@@ -112,6 +110,7 @@ import { Textarea } from '~/components/ui/textarea'
 
 import { Code, Database, Edit, Eye } from 'lucide-vue-next'
 import { useDataSources } from '~/composables/useDataSources'
+import { useSchemaBuilder } from '~/composables/useSchemaBuilder'
 import { toast } from 'vue-sonner'
 
 // Import builder components
@@ -152,58 +151,39 @@ onMounted(() => {
   }
 })
 
-
-
 // Local reactive copy of selected data source id (do not mutate prop directly)
 const selectedDataSourceIdLocal = ref<string | undefined>(undefined)
 
-// Schema data structure
-const schema = ref({
-  name: '',
-  alias: '',
-  title: '',
-  description: '',
-  table_name: '',
-  query: '',
-  data_source_id: undefined as string | undefined,
-  limit: undefined as number | undefined,
-  grouped: true,
-  ordered: true,
-  order: [],
-  measures: [],
-  dimensions: [],
-  joins: [],
-  aggregations: [],
-  filters: [],
-  parameters: {},
-  refresh: undefined as any,
-  cache: undefined as any
-})
+// Initialize schema builder composable with metric data
+const schemaBuilder = useSchemaBuilder(props.metric || {})
+
+// Provide schema builder to all children
+provide('schemaBuilder', schemaBuilder)
 
 // Initialize schema from metric
 watch(() => props.metric, async (newMetric) => {
   if (newMetric) {
-    schema.value = {
-      name: newMetric.name || '',
-      alias: newMetric.alias || '',
-      title: newMetric.title || '',
-      description: newMetric.description || '',
-      table_name: newMetric.table_name || '',
-      query: newMetric.query || '',
-      data_source_id: newMetric.data_source_id || undefined,
-      limit: newMetric.limit || undefined,
-      grouped: newMetric.grouped !== undefined ? newMetric.grouped : true,
-      ordered: newMetric.ordered !== undefined ? newMetric.ordered : true,
-      order: newMetric.order || [],
-      measures: newMetric.measures || [],
-      dimensions: newMetric.dimensions || [],
-      joins: newMetric.joins || [],
-      aggregations: newMetric.aggregations || [],
-      filters: newMetric.filters || [],
-      parameters: newMetric.parameters || {},
-      refresh: newMetric.refresh || undefined,
-      cache: newMetric.cache || undefined
-    }
+    // Update all fields through the composable
+    schemaBuilder.updateField('name', newMetric.name || '')
+    schemaBuilder.updateField('alias', newMetric.alias || '')
+    schemaBuilder.updateField('title', newMetric.title || '')
+    schemaBuilder.updateField('description', newMetric.description || '')
+    schemaBuilder.updateField('table_name', newMetric.table_name || '')
+    schemaBuilder.updateField('query', newMetric.query || '')
+    schemaBuilder.updateField('data_source_id', newMetric.data_source_id || undefined)
+    schemaBuilder.updateField('limit', newMetric.limit || undefined)
+    schemaBuilder.updateField('grouped', newMetric.grouped !== undefined ? newMetric.grouped : true)
+    schemaBuilder.updateField('ordered', newMetric.ordered !== undefined ? newMetric.ordered : true)
+    schemaBuilder.updateField('parameters', newMetric.parameters || {})
+    schemaBuilder.updateField('refresh', newMetric.refresh || undefined)
+    schemaBuilder.updateField('cache', newMetric.cache || undefined)
+    
+    // Update arrays
+    schemaBuilder.updateOrder(newMetric.order || [])
+    schemaBuilder.updateMeasures(newMetric.measures || [])
+    schemaBuilder.updateDimensions(newMetric.dimensions || [])
+    schemaBuilder.updateJoins(newMetric.joins || [])
+    schemaBuilder.updateFilters(newMetric.filters || [])
     
     // Initialize local data source id from metric
     selectedDataSourceIdLocal.value = newMetric.data_source_id || props.selectedDataSourceId
@@ -236,7 +216,7 @@ watch(() => props.selectedDataSourceId, (newId) => {
 
 // Generated JSON
 const generatedJson = computed(() => {
-  const cleanSchema = JSON.parse(JSON.stringify(schema.value))
+  const cleanSchema = JSON.parse(JSON.stringify(schemaBuilder.schema.value))
   
   // Remove empty arrays and null values, but preserve data_source_id and refresh
   Object.keys(cleanSchema).forEach(key => {
@@ -266,7 +246,7 @@ async function loadSchemaFromDataSource(dataSourceId?: string) {
     // Update the schema with the loaded table schema
     if (schemaData?.tables && schemaData.tables.length > 0) {
       const firstTable = schemaData.tables[0]?.name
-      const currentTable = schema.value.table_name
+      const currentTable = schemaBuilder.schema.value.table_name
       const tableExists = schemaData.tables.some((t: any) => t.name === currentTable)
       
       console.log('Schema loaded:', {
@@ -282,16 +262,16 @@ async function loadSchemaFromDataSource(dataSourceId?: string) {
       const originalTable = props.metric?.table_name
       if (originalTable && schemaData.tables.some((t: any) => t.name === originalTable)) {
         // Use the original table name from the metric if it exists in the new schema
-        schema.value.table_name = originalTable
+        schemaBuilder.updateField('table_name', originalTable)
         console.log('Using original table_name from metric:', originalTable)
       } else if (!currentTable || currentTable === '' || !tableExists) {
-        schema.value.table_name = firstTable || ''
+        schemaBuilder.updateField('table_name', firstTable || '')
         console.log('Updated table_name to:', firstTable)
       } else {
         console.log('Keeping existing table_name:', currentTable)
       }
     } else {
-      schema.value.table_name = ''
+      schemaBuilder.updateField('table_name', '')
     }
     toast.success('Schema loaded successfully')
   } catch (error) {
@@ -310,34 +290,6 @@ const handleEditToggle = (pressed: boolean) => {
   }
 }
 
-// Handle schema updates
-const handleSchemaUpdate = (newSchema: any) => {
-  console.log('SchemaSheet: handleSchemaUpdate called with:', newSchema)
-  
-  // Only update fields that have actual values (not undefined, null, or empty string)
-  const filteredUpdate: any = {}
-  Object.keys(newSchema).forEach(key => {
-    const value = newSchema[key]
-    const existingValue = (schema.value as any)[key]
-    
-    // Don't overwrite existing arrays (measures, dimensions, joins, filters, etc.) with empty arrays
-    // This prevents data loss when the child component emits back during initialization
-    if (Array.isArray(value) && value.length === 0 && 
-        Array.isArray(existingValue) && existingValue.length > 0) {
-      console.log(`SchemaSheet: Skipping empty array for ${key}, preserving existing data`)
-      return
-    }
-    
-    if (value !== undefined && value !== null && value !== '') {
-      filteredUpdate[key] = value
-    }
-  })
-  
-  console.log('SchemaSheet: filtered update:', filteredUpdate)
-  schema.value = { ...schema.value, ...filteredUpdate }
-  console.log('SchemaSheet: schema after update:', schema.value)
-}
-
 // Handle data source updates from child. Do not save automatically; update local and load schema.
 const handleDataSourceUpdate = (newDataSourceId: string | undefined) => {
   selectedDataSourceIdLocal.value = newDataSourceId
@@ -348,7 +300,19 @@ const handleDataSourceUpdate = (newDataSourceId: string | undefined) => {
 
 // Handle save
 const handleSave = () => {
-  const payload = { ...schema.value, data_source_id: selectedDataSourceIdLocal.value }
+  const payload = { ...schemaBuilder.schema.value, data_source_id: selectedDataSourceIdLocal.value }
+  
+  // Remove fields that should be generated by backend, not sent from frontend
+  delete payload.compiled_query
+  delete payload.is_valid
+  delete payload.validation_errors
+  delete payload.created_at
+  delete payload.updated_at
+  delete payload.id
+  delete payload.data_model_id
+  delete payload.data_model_name
+  
+  console.log('[SchemaSheet] Final payload being sent:', JSON.stringify(payload, null, 2))
   emit('save', payload)
   emit('update:open', false)
   isEditing.value = false

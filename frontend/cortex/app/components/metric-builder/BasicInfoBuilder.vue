@@ -319,9 +319,9 @@ const emit = defineEmits<{
 // Alias generation
 const { aliasManuallyEdited, generateAlias, getAliasError, markAsManuallyEdited } = useAliasGenerator()
 
-// Reactive state for dropdowns
-const selectedDataSourceId = ref<string | undefined>(props.dataSourceId)
-const selectedTableName = ref<string | undefined>(props.tableName)
+// Use props directly instead of local refs
+const selectedDataSourceId = computed(() => props.dataSourceId)
+const selectedTableName = computed(() => props.tableName)
 
 // Computed alias error
 const aliasError = computed(() => {
@@ -442,28 +442,17 @@ watch(() => props.name, (newName) => {
   }
 })
 
-// Sync reactive refs with props
-watch(() => props.dataSourceId, (newId) => {
-  selectedDataSourceId.value = newId
-  console.log('BasicInfoBuilder - dataSourceId prop changed to:', newId)
-})
-
-watch(() => props.tableName, (newName) => {
-  selectedTableName.value = newName
-  console.log('BasicInfoBuilder - tableName prop changed to:', newName)
-})
+// No need for watchers since we're using computed properties
 
 // Handle data source change
 const handleDataSourceChange = (value: string) => {
   console.log('BasicInfoBuilder - Data source changed to:', value)
-  selectedDataSourceId.value = value
   emit('update:dataSourceId', value)
 }
 
 // Handle table name change
 const handleTableNameChange = (value: string) => {
   console.log('BasicInfoBuilder - Table name changed to:', value)
-  selectedTableName.value = value
   emit('update:tableName', value)
 }
 </script> 

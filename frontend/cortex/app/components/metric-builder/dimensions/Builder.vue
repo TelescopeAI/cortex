@@ -50,23 +50,26 @@ const availableTables = computed(() => {
   return props.tableSchema.tables
 })
 
-const dimensions = ref<Dimension[]>([...props.dimensions])
 const showAdvanced = ref<Record<number, boolean>>({})
-const isLocalUpdate = ref(false)
 
-// Watch for changes from parent (but not from our own updates)
-watch(() => props.dimensions, (newDimensions) => {
-  // Skip if this was triggered by our own local update
-  if (isLocalUpdate.value) {
-    isLocalUpdate.value = false
-    return
-  }
-  dimensions.value = [...newDimensions]
-})
+const updateDimensions = (newDimensions: Dimension[]) => {
+  emit('update:dimensions', newDimensions)
+}
 
-const updateDimensions = () => {
-  isLocalUpdate.value = true
-  emit('update:dimensions', dimensions.value)
+const handleNameChange = (dimension: Dimension, newName: string) => {
+  // Find the dimension index in the current dimensions array
+  const dimensionIndex = props.dimensions.findIndex(d => d === dimension);
+  if (dimensionIndex === -1) return;
+  
+  // Create updated dimension
+  const updatedDimension = { ...dimension };
+  updatedDimension.name = newName;
+  
+  // Create new dimensions array with updated dimension
+  const updatedDimensions = [...props.dimensions];
+  updatedDimensions[dimensionIndex] = updatedDimension;
+  
+  updateDimensions(updatedDimensions);
 }
 
 const toggleAdvanced = (index: number) => {
@@ -86,8 +89,7 @@ const addDimension = (tableName: string, column: any) => {
     conditional: false
   }
   
-  dimensions.value.push(newDimension)
-  updateDimensions()
+  updateDimensions([...props.dimensions, newDimension])
 }
 
 const addConditionalDimension = () => {
@@ -104,18 +106,19 @@ const addConditionalDimension = () => {
     }
   }
   
-  dimensions.value.push(newDimension)
-  updateDimensions()
+  updateDimensions([...props.dimensions, newDimension])
 }
 
 const removeDimension = (index: number) => {
-  dimensions.value.splice(index, 1)
-  updateDimensions()
+  const updated = [...props.dimensions]
+  updated.splice(index, 1)
+  updateDimensions(updated)
 }
 
 const updateDimension = (index: number, updates: Dimension) => {
-  dimensions.value[index] = updates
-  updateDimensions()
+  const updated = [...props.dimensions]
+  updated[index] = updates
+  updateDimensions(updated)
 }
 </script>
 
@@ -138,7 +141,7 @@ const updateDimension = (index: number, updates: Dimension) => {
     </div>
 
     <!-- Empty State -->
-    <div v-if="dimensions.length === 0" class="text-center py-8 border-2 border-dashed rounded-lg">
+    <div v-if="props.dimensions.length === 0" class="text-center py-8 border-2 border-dashed rounded-lg">
       <Grid class="h-8 w-8 mx-auto text-muted-foreground mb-2" />
       <p class="text-sm text-muted-foreground">No dimensions defined</p>
       <p class="text-xs text-muted-foreground">Add a dimension to enable grouping</p>
@@ -147,7 +150,7 @@ const updateDimension = (index: number, updates: Dimension) => {
     <!-- Dimensions List -->
     <div v-else class="space-y-3">
       <Card 
-        v-for="(dimension, index) in dimensions"
+        v-for="(dimension, index) in props.dimensions"
         :key="index"
         class="p-5 hover:shadow-md transition-shadow"
       >
@@ -202,7 +205,7 @@ const updateDimension = (index: number, updates: Dimension) => {
             <span class="text-sm text-muted-foreground">Name it as</span>
             <Input
               :model-value="dimension.name"
-              @update:model-value="(val) => { dimension.name = val; updateDimensions(); }"
+              @update:model-value="(val) => handleNameChange(dimension, String(val))"
               placeholder="Dimension name"
               class="flex-1 h-9"
             />
@@ -231,7 +234,11 @@ const updateDimension = (index: number, updates: Dimension) => {
                 <Label class="text-xs font-medium text-muted-foreground">Description</Label>
                 <Textarea
                   :model-value="dimension.description"
-                  @update:model-value="(val) => { dimension.description = val; updateDimensions(); }"
+                  @update:model-value="(val) => {
+                    const updated = [...props.dimensions];
+                    updated[index] = { ...dimension, description: String(val) };
+                    updateDimensions(updated);
+                  }"
                   placeholder="Describe what this dimension represents..."
                   rows="2"
                   class="resize-none"
@@ -243,7 +250,11 @@ const updateDimension = (index: number, updates: Dimension) => {
                 <Label class="text-xs font-medium text-muted-foreground">Output Formatting</Label>
                 <OutputFormatEditor
                   :model-value="dimension.formatting"
-                  @update:model-value="(val) => { dimension.formatting = val; updateDimensions(); }"
+                  @update:model-value="(val) => {
+                    const updated = [...props.dimensions];
+                    updated[index] = { ...dimension, formatting: val };
+                    updateDimensions(updated);
+                  }"
                   object-type="dimension"
                 />
               </div>

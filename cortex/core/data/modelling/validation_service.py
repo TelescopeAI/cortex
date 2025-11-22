@@ -26,36 +26,37 @@ class ValidationResult(TSModel):
 
 class ValidationService(TSModel):
     """
-    Service for validating DataModel semantic definitions and configurations.
+    Service for validating metric semantic definitions and configurations.
     Performs comprehensive validation including syntax, semantics, and dependencies.
     """
     
     @staticmethod
-    def validate_data_model(data_model: DataModel) -> ValidationResult:
+    def validate_metric_execution(metric: SemanticMetric, data_model: DataModel) -> ValidationResult:
         """
-        Perform comprehensive validation of a DataModel.
+        Validate that a specific metric can be executed.
         
         Args:
-            data_model: DataModel to validate
+            metric: SemanticMetric to validate
+            data_model: DataModel containing the metric
             
         Returns:
-            ValidationResult containing validation status and any errors/warnings
+            ValidationResult for the specific metric execution
         """
         errors = []
         warnings = []
         
-        # Basic model validation
-        basic_errors = ValidationService._validate_basic_model_structure(data_model)
-        errors.extend(basic_errors)
+        # Validate the specific metric
+        metric_errors, metric_warnings = ValidationService._check_metric(metric)
+        errors.extend(metric_errors)
+        warnings.extend(metric_warnings)
         
-        # NOTE: Semantic model validation is now handled at the metric level
-        # since semantic_model field was removed from DataModel
+        # Check if metric is public
+        if not metric.public:
+            warnings.append(f"Metric '{metric.alias or metric.name}' is not public")
         
-        # NOTE: Metric validation is now handled separately through the metrics API
-        # since metrics are no longer embedded in the data model
-        
-        # NOTE: Dependency validation is now handled at the metric level
-        # since metrics are stored separately
+        # Validate that the metric belongs to the data model
+        if metric.data_model_id != data_model.id:
+            errors.append(f"Metric data_model_id ({metric.data_model_id}) does not match data model id ({data_model.id})")
         
         return ValidationResult(
             is_valid=len(errors) == 0,
@@ -65,45 +66,8 @@ class ValidationService(TSModel):
         )
     
     @staticmethod
-    def _validate_basic_model_structure(data_model: DataModel) -> List[str]:
-        """Validate basic model structure and required fields."""
-        errors = []
-        
-        if not data_model.name:
-            errors.append("Model name is required")
-        
-        if data_model.version < 1:
-            errors.append("Model version must be >= 1")
-        
-        return errors
-    
-    @staticmethod
-    def _validate_semantic_model(data_model: DataModel) -> Tuple[List[str], List[str]]:
-        """
-        Validate semantic model JSON structure.
-        NOTE: This method is deprecated since semantic_model field was removed from DataModel.
-        Semantic validation is now handled at the metric level.
-        """
-        errors = []
-        warnings = []
-        warnings.append("Semantic model validation is now handled at the metric level")
-        return errors, warnings
-    
-    @staticmethod
-    def _validate_metrics(data_model: DataModel) -> Tuple[List[str], List[str]]:
-        """
-        Validate individual metrics within the semantic model.
-        NOTE: This method is deprecated since metrics are no longer embedded in DataModel.
-        Metric validation is now handled through the metrics API.
-        """
-        errors = []
-        warnings = []
-        warnings.append("Metric validation is now handled through the metrics API")
-        return errors, warnings
-    
-    @staticmethod
-    def _validate_single_metric(metric: SemanticMetric) -> Tuple[List[str], List[str]]:
-        """Validate a single metric definition."""
+    def _check_metric(metric: SemanticMetric) -> Tuple[List[str], List[str]]:
+        """Check a single metric definition."""
         errors = []
         warnings = []
         
@@ -126,19 +90,19 @@ class ValidationService(TSModel):
         
         # Parameters validation
         if metric.parameters:
-            param_errors = ValidationService._validate_parameters(metric.parameters)
+            param_errors = ValidationService._check_parameters(metric.parameters)
             errors.extend(param_errors)
         
         # Joins validation
         if metric.joins:
-            join_errors = ValidationService._validate_joins(metric.joins)
+            join_errors = ValidationService._check_joins(metric.joins)
             errors.extend(join_errors)
         
         return errors, warnings
     
     @staticmethod
-    def _validate_parameters(parameters: Dict[str, Any]) -> List[str]:
-        """Validate metric parameters."""
+    def _check_parameters(parameters: Dict[str, Any]) -> List[str]:
+        """Check metric parameters."""
         errors = []
         
         for param_name, param_def in parameters.items():
@@ -150,8 +114,8 @@ class ValidationService(TSModel):
         return errors
     
     @staticmethod
-    def _validate_joins(joins: List[Any]) -> List[str]:
-        """Validate metric joins."""
+    def _check_joins(joins: List[Any]) -> List[str]:
+        """Check metric joins."""
         errors = []
         
         for i, join in enumerate(joins):
@@ -162,45 +126,3 @@ class ValidationService(TSModel):
                 errors.append(f"Join {i}: missing join conditions")
         
         return errors
-    
-    @staticmethod
-    def _validate_dependencies(data_model: DataModel) -> List[str]:
-        """Validate metric dependencies and extensions."""
-        # Dependency validation is now handled at the metric level via the metrics API.
-        # The modelling MetricService has been removed.
-        return []
-    
-    @staticmethod
-    def validate_metric_execution(metric: SemanticMetric, data_model: DataModel) -> ValidationResult:
-        """
-        Validate that a specific metric can be executed.
-        
-        Args:
-            metric: SemanticMetric to validate
-            data_model: DataModel containing the metric
-            
-        Returns:
-            ValidationResult for the specific metric execution
-        """
-        errors = []
-        warnings = []
-        
-        # Validate the specific metric
-        metric_errors, metric_warnings = ValidationService._validate_single_metric(metric)
-        errors.extend(metric_errors)
-        warnings.extend(metric_warnings)
-        
-        # Check if metric is public
-        if not metric.public:
-            warnings.append(f"Metric '{metric.alias or metric.name}' is not public")
-        
-        # Validate that the metric belongs to the data model
-        if metric.data_model_id != data_model.id:
-            errors.append(f"Metric data_model_id ({metric.data_model_id}) does not match data model id ({data_model.id})")
-        
-        return ValidationResult(
-            is_valid=len(errors) == 0,
-            errors=errors,
-            warnings=warnings,
-            validated_at=datetime.now()
-        ) 

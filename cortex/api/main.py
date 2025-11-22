@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+from contextlib import asynccontextmanager
 
 import uvicorn
 from Secweb import SecWeb
@@ -13,11 +14,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from __version__ import version
+from cortex.__version__ import version
 from cortex.api.docs.meta import DocsMeta
 from cortex.api.routers import PUBLIC_ROUTES
 from cortex.core.config.execution_env import ExecutionEnv
-from cortex.core.storage.migrations import auto_apply_migrations
+from cortex.core.onboarding.onboard import OnboardingManager
 from fastapi.logger import logger as fastapi_logger
 
 API_PREFIX = "/api"
@@ -39,31 +40,44 @@ if ExecutionEnv.https_enabled():
 
 ORIGINS = os.getenv("ALLOWED_ORIGINS").split(",")
 
-app = FastAPI(title="Cortex Semantic API", version=version, description=DocsMeta.API_GLOBAL_DESCRIPTION,
-              docs_url=None, redoc_url=None, openapi_url=API_URL_PREFIX + "/openapi.json",
-              openapi_tags=DocsMeta.TAGS_META,
-              contact={"name": "Telescope Team", "url": "https://jointelescope.com",
-                       "email": "info@jointelescope.com"})
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-
-@app.on_event("startup")
-async def startup_event():
-    """Handle application startup, including database migrations."""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle application lifespan events, including database migrations on startup."""
+    # Startup: Execute before the application starts receiving requests
     logger = logging.getLogger(__name__)
     logger.info("Starting Cortex API server...")
     
-    # Apply database migrations if auto-migration is enabled
+    # Run onboarding operations
     try:
-        success = auto_apply_migrations()
-        if success:
-            logger.info("Database migration check completed successfully.")
-        else:
-            logger.error("Database migration failed. Please check your database configuration.")
+        onboarding_manager = OnboardingManager()
+        success = onboarding_manager.run()
+        if not success:
+            logger.error("Onboarding operations failed. Please check your configuration.")
             # Note: We don't exit here to allow the application to start for debugging
     except Exception as e:
-        logger.error(f"Error during database migration: {e}")
+        logger.error(f"Error during onboarding operations: {e}")
         # Note: We don't exit here to allow the application to start for debugging
+    
+    yield
+    
+    # Shutdown: Execute after the application finishes handling requests
+    logger.info("Shutting down Cortex API server...")
+
+
+app = FastAPI(
+    title="Cortex Semantic API",
+    version=version,
+    description=DocsMeta.API_GLOBAL_DESCRIPTION,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=API_URL_PREFIX + "/openapi.json",
+    openapi_tags=DocsMeta.TAGS_META,
+    contact={"name": "Telescope Team", "url": "https://jointelescope.com",
+             "email": "info@jointelescope.com"},
+    lifespan=lifespan
+)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 # FastAPIInstrumentor.instrument_app(app)

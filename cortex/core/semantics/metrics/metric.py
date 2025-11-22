@@ -41,6 +41,7 @@ class SemanticMetric(TSModel):
     
     # Core identification
     id: UUID = Field(default_factory=uuid4)
+    environment_id: UUID  # Foreign key to Environment
     data_model_id: UUID  # Foreign key to DataModel
     name: str
     alias: Optional[str] = None

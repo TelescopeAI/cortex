@@ -7,6 +7,7 @@ from cortex.core.types.telescope import TSModel
 
 class DataModelCreateRequest(TSModel):
     """Request schema for creating a new data model."""
+    environment_id: UUID = Field(..., description="Environment ID for the data model")
     name: str = Field(..., description="Name of the data model")
     alias: Optional[str] = Field(None, description="Alias for the data model")
     description: Optional[str] = Field(None, description="Description of the data model")
@@ -15,6 +16,7 @@ class DataModelCreateRequest(TSModel):
 
 class DataModelUpdateRequest(TSModel):
     """Request schema for updating an existing data model."""
+    environment_id: UUID = Field(..., description="Environment ID for the data model")
     name: Optional[str] = Field(None, description="Name of the data model")
     alias: Optional[str] = Field(None, description="Alias for the data model")
     description: Optional[str] = Field(None, description="Description of the data model")

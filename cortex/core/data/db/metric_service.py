@@ -26,6 +26,7 @@ class MetricService:
         """Create a new metric in the database"""
         try:
             db_metric = MetricORM(
+                environment_id=metric.environment_id,
                 data_model_id=metric.data_model_id,
                 name=metric.name,
                 alias=metric.alias,
@@ -76,9 +77,12 @@ class MetricService:
             self.session.rollback()
             raise ValueError(f"Failed to create metric: {str(e)}")
     
-    def get_metric_by_id(self, metric_id: UUID) -> Optional[MetricORM]:
-        """Get a metric by its ID"""
-        return self.session.query(MetricORM).filter(MetricORM.id == metric_id).first()
+    def get_metric_by_id(self, metric_id: UUID, environment_id: Optional[UUID] = None) -> Optional[MetricORM]:
+        """Get a metric by its ID, optionally validating it belongs to an environment"""
+        query = self.session.query(MetricORM).filter(MetricORM.id == metric_id)
+        if environment_id is not None:
+            query = query.filter(MetricORM.environment_id == environment_id)
+        return query.first()
     
     def get_metric_by_alias(self, data_model_id: UUID, alias: str) -> Optional[MetricORM]:
         """Get a metric by its alias within a specific data model"""
@@ -108,13 +112,14 @@ class MetricService:
         return query.order_by(desc(MetricORM.updated_at)).all()
     
     def get_all_metrics(self, 
+                       environment_id: UUID,
                        skip: int = 0, 
                        limit: int = 100,
                        data_model_id: Optional[UUID] = None,
                        public_only: Optional[bool] = None,
                        valid_only: Optional[bool] = None) -> List[MetricORM]:
-        """Get all metrics with optional filters"""
-        query = self.session.query(MetricORM)
+        """Get all metrics for a specific environment with optional filters"""
+        query = self.session.query(MetricORM).filter(MetricORM.environment_id == environment_id)
         
         # Apply filters
         if data_model_id:
@@ -127,6 +132,13 @@ class MetricService:
             query = query.filter(MetricORM.is_valid == valid_only)
         
         return query.order_by(desc(MetricORM.updated_at)).offset(skip).limit(limit).all()
+    
+    def get_metrics_by_environment(self, environment_id: UUID) -> List[MetricORM]:
+        """Get all metrics for a specific environment"""
+        return (self.session.query(MetricORM)
+                .filter(MetricORM.environment_id == environment_id)
+                .order_by(desc(MetricORM.updated_at))
+                .all())
     
     def update_metric(self, metric_id: UUID, updates: Dict[str, Any]) -> Optional[MetricORM]:
         """Update an existing metric"""
@@ -185,12 +197,17 @@ class MetricService:
             raise ValueError(f"Failed to update metric: {str(e)}")
     
     def delete_metric(self, metric_id: UUID) -> bool:
-        """Delete a metric (hard delete)"""
+        """Delete a metric (hard delete) - cascades to delete all related versions first"""
         try:
             db_metric = self.get_metric_by_id(metric_id)
             if not db_metric:
                 return False
             
+            # First, delete all metric versions associated with this metric
+            self.session.query(MetricVersionORM).filter(MetricVersionORM.metric_id == metric_id).delete()
+            self.session.commit()
+            
+            # Then delete the metric itself
             self.session.delete(db_metric)
             self.session.commit()
             return True

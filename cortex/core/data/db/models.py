@@ -14,6 +14,7 @@ class DataModelORM(BaseDBModel):
     __tablename__ = "data_models"
     
     id = mapped_column(UUID, primary_key=True, index=True)
+    environment_id = mapped_column(UUID, ForeignKey("environments.id"), nullable=False, index=True)
     name = mapped_column(String, nullable=False, index=True)
     alias = mapped_column(String, nullable=True, index=True)
     description = mapped_column(Text, nullable=True)
@@ -67,6 +68,7 @@ class MetricORM(BaseDBModel):
     
     # Generate UUID in application layer to satisfy NOT NULL without relying on DB defaults
     id = mapped_column(UUID, primary_key=True, index=True, default=uuid4)
+    environment_id = mapped_column(UUID, ForeignKey("environments.id"), nullable=False, index=True)
     data_model_id = mapped_column(UUID, ForeignKey("data_models.id"), nullable=False, index=True)
     name = mapped_column(String, nullable=False, index=True)
     alias = mapped_column(String, nullable=True, index=True)

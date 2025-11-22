@@ -28,6 +28,7 @@ class DataModelService:
         try:
             db_model = DataModelORM(
                 id=data_model.id,
+                environment_id=data_model.environment_id,
                 name=data_model.name,
                 alias=data_model.alias,
                 description=data_model.description,
@@ -51,18 +52,22 @@ class DataModelService:
             self.session.rollback()
             raise ValueError(f"Failed to create data model: {str(e)}")
     
-    def get_data_model_by_id(self, model_id: UUID) -> Optional[DataModelORM]:
-        """Get a data model by its ID"""
-        return self.session.query(DataModelORM).filter(DataModelORM.id == model_id).first()
+    def get_data_model_by_id(self, model_id: UUID, environment_id: Optional[UUID] = None) -> Optional[DataModelORM]:
+        """Get a data model by its ID, optionally validating it belongs to an environment"""
+        query = self.session.query(DataModelORM).filter(DataModelORM.id == model_id)
+        if environment_id is not None:
+            query = query.filter(DataModelORM.environment_id == environment_id)
+        return query.first()
     
     
     def get_all_data_models(self, 
+                           environment_id: UUID,
                            skip: int = 0, 
                            limit: int = 100,
                            active_only: Optional[bool] = None,
                            valid_only: Optional[bool] = None) -> List[DataModelORM]:
-        """Get all data models with optional filters"""
-        query = self.session.query(DataModelORM)
+        """Get all data models for a specific environment with optional filters"""
+        query = self.session.query(DataModelORM).filter(DataModelORM.environment_id == environment_id)
         
         # Apply filters
         if active_only is not None:

@@ -1,0 +1,92 @@
+services:
+  db:
+    image: postgres:17
+    container_name: cortex-db
+    env_file:
+      - ./local.docker.env
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: cortex
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - telescope
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d cortex"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  cache:
+    image: redis:7-alpine
+    container_name: cortex-cache
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    networks:
+      - telescope
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    platform: linux/arm64
+    container_name: cortex-server
+    ports:
+      - "9002:9002"
+    env_file:
+      - ./local.docker.env
+    environment:
+      - CORTEX_CACHE_REDIS_URL=redis://cache:6379
+      - CORTEX_DB_HOST=db
+      - CORTEX_DB_PORT=5432
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - telescope
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9002/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend/cortex
+      dockerfile: Dockerfile
+      args:
+        API_BASE_URL: ${API_BASE_URL}
+    container_name: cortex-studio
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./local.docker.env
+    depends_on:
+      server:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - telescope
+
+networks:
+  telescope:
+    driver: bridge
+
+volumes:
+  postgres_data:

@@ -1,0 +1,52 @@
+# Node modules (will be installed in container)
+node_modules/
+**/node_modules/
+
+# Build outputs
+.nuxt/
+.output/
+.nitro/
+dist/
+.data/
+.cache/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+!README.md
+
+# Test files
+test/
+tests/
+*.test.*
+*.spec.*
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+

@@ -2,6 +2,7 @@ import { ref, type Ref } from 'vue'
 
 export interface DataModel {
   id: string
+  environment_id: string
   name: string
   alias?: string
   description?: string
@@ -30,15 +31,15 @@ export const useDataModels = () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  const fetchModels = async (filters?: ModelFilters) => {
+  const fetchModels = async (environmentId: string, filters?: ModelFilters) => {
     loading.value = true
     error.value = null
     
     try {
       // Use the correct backend endpoint with proper URL construction
-      const response = await $fetch(apiUrl('/api/v1/data/models'), {
-        query: filters
-      }) as { models: DataModel[], total_count: number, page: number, page_size: number }
+      const response = await $fetch<{ models: DataModel[], total_count: number, page: number, page_size: number }>(apiUrl('/api/v1/data/models'), {
+        query: { environment_id: environmentId, ...filters }
+      })
       models.value = response.models || []
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch models'
@@ -48,9 +49,11 @@ export const useDataModels = () => {
     }
   }
 
-  const getModel = async (id: string): Promise<DataModel | null> => {
+  const getModel = async (id: string, environmentId: string): Promise<DataModel | null> => {
     try {
-      const response = await $fetch(apiUrl(`/api/v1/data/models/${id}`)) as DataModel
+      const response = await $fetch<DataModel>(apiUrl(`/api/v1/data/models/${id}`), {
+        query: { environment_id: environmentId }
+      })
       return response
     } catch (err) {
       console.error('Failed to fetch model:', err)
@@ -60,10 +63,10 @@ export const useDataModels = () => {
 
   const createModel = async (modelData: Partial<DataModel>): Promise<DataModel | null> => {
     try {
-      const response = await $fetch(apiUrl('/api/v1/data/models'), {
+      const response = await $fetch<DataModel>(apiUrl('/api/v1/data/models'), {
         method: 'POST',
         body: modelData
-      }) as DataModel
+      })
       // Add to local state
       models.value.push(response)
       return response
@@ -74,12 +77,12 @@ export const useDataModels = () => {
     }
   }
 
-  const updateModel = async (id: string, modelData: Partial<DataModel>): Promise<DataModel | null> => {
+  const updateModel = async (id: string, environmentId: string, modelData: Partial<DataModel>): Promise<DataModel | null> => {
     try {
-      const response = await $fetch(apiUrl(`/api/v1/data/models/${id}`), {
+      const response = await $fetch<DataModel>(apiUrl(`/api/v1/data/models/${id}`), {
         method: 'PUT',
-        body: modelData
-      }) as DataModel
+        body: { environment_id: environmentId, ...modelData }
+      })
       // Update local state
       const index = models.value.findIndex(m => m.id === id)
       if (index !== -1) {
@@ -92,10 +95,11 @@ export const useDataModels = () => {
     }
   }
 
-  const deleteModel = async (id: string): Promise<boolean> => {
+  const deleteModel = async (id: string, environmentId: string): Promise<boolean> => {
     try {
       await $fetch(apiUrl(`/api/v1/data/models/${id}`), {
-        method: 'DELETE'
+        method: 'DELETE',
+        query: { environment_id: environmentId }
       })
       // Remove from local state
       models.value = models.value.filter(m => m.id !== id)
@@ -108,7 +112,7 @@ export const useDataModels = () => {
 
   const executeModel = async (id: string, executionRequest: any) => {
     try {
-      const response = await $fetch(apiUrl(`/api/v1/data/models/${id}/execute`), {
+      const response = await $fetch<any>(apiUrl(`/api/v1/data/models/${id}/execute`), {
         method: 'POST',
         body: executionRequest
       })
@@ -121,7 +125,7 @@ export const useDataModels = () => {
 
   const validateModel = async (id: string) => {
     try {
-      const response = await $fetch(apiUrl(`/api/v1/data/models/${id}/validate`), {
+      const response = await $fetch<any>(apiUrl(`/api/v1/data/models/${id}/validate`), {
         method: 'POST',
         body: {
           validate_dependencies: true,

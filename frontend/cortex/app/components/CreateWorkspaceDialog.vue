@@ -1,10 +1,12 @@
 <template>
   <Dialog v-model:open="open">
     <DialogTrigger as-child>
+      <slot name="trigger">
       <Button variant="outline" size="sm">
         <Plus class="w-4 h-4 mr-2" />
         Create Workspace
       </Button>
+      </slot>
     </DialogTrigger>
     <DialogContent class="sm:max-w-[425px]">
       <DialogHeader>

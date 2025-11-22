@@ -11,12 +11,13 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '~/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Separator } from '~/components/ui/separator'
-import { Search, Filter, Plus, MoreHorizontal, PlayCircle, Edit, Settings, Target, FolderOpen, ChevronDown, Database, Loader2 } from 'lucide-vue-next'
+import { Search, Filter, Plus, MoreHorizontal, ChevronDown, Database, Loader2, Sparkles } from 'lucide-vue-next'
 import type { DataModel } from '~/composables/useDataModels'
 import type { SemanticMetric } from '~/composables/useMetrics'
 import CreateMetricDialog from '~/components/CreateMetricDialog.vue'
+import MetricListModelCard from '~/components/metric/list/ModelCard.vue'
+import MetricListMetricCard from '~/components/metric/list/MetricCard.vue'
 import { toast } from 'vue-sonner'
-import { useDateFormat, useTimeAgo, useNavigatorLanguage } from '@vueuse/core'
 
 // Page metadata
 definePageMeta({
@@ -26,8 +27,9 @@ definePageMeta({
 
 // Use composables for data management
 const { models, loading: modelsLoading, fetchModels, createModel } = useDataModels()
-const { metrics, loading: metricsLoading, fetchMetrics, executeMetric, validateMetric, createMetric } = useMetrics()
+const { metrics, loading: metricsLoading, fetchMetrics, executeMetric, createMetric } = useMetrics()
 const { currentView, modelFilters, metricFilters, switchView } = useMetricsView()
+const { selectedEnvironmentId } = useEnvironments()
 
 // Component state
 const searchQuery = ref('')
@@ -95,6 +97,21 @@ watch(() => modelForm.value.alias, (newAlias) => {
 })
 
 
+// Helper functions for time categorization
+const isRecentlyUpdated = (dateString: string) => {
+  const updated = new Date(dateString)
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  return updated > yesterday
+}
+
+const isUpdatedThisMonth = (dateString: string) => {
+  const updated = new Date(dateString)
+  const now = new Date()
+  return updated.getMonth() === now.getMonth() && 
+         updated.getFullYear() === now.getFullYear()
+}
+
 // Computed properties
 const filteredModels = computed(() => {
   if (!models.value || models.value.length === 0) return []
@@ -106,11 +123,35 @@ const filteredModels = computed(() => {
     
     const matchesDataSource = true // Data models no longer have data_source_id
     
+    const getStatus = (m: any) => {
+      if (m.is_valid === true) return 'valid'
+      if (m.is_valid === false) return 'invalid'
+      return 'pending'
+    }
+    
     const matchesStatus = !selectedStatus.value || 
-      getModelStatus(model) === selectedStatus.value
+      getStatus(model) === selectedStatus.value
     
     return matchesSearch && matchesDataSource && matchesStatus
   })
+})
+
+const categorizedModels = computed(() => {
+  const recent: any[] = []
+  const thisMonth: any[] = []
+  const older: any[] = []
+  
+  filteredModels.value.forEach(model => {
+    if (isRecentlyUpdated(model.updated_at)) {
+      recent.push(model)
+    } else if (isUpdatedThisMonth(model.updated_at)) {
+      thisMonth.push(model)
+    } else {
+      older.push(model)
+    }
+  })
+  
+  return { recent, thisMonth, older }
 })
 
 const filteredMetrics = computed(() => {
@@ -126,10 +167,28 @@ const filteredMetrics = computed(() => {
       metric.data_model_id === selectedModel.value
     
     const matchesStatus = !selectedStatus.value ||
-      getMetricStatus(metric) === selectedStatus.value
+      'valid' === selectedStatus.value // Metrics default to 'valid' status
     
     return matchesSearch && matchesModel && matchesStatus
   })
+})
+
+const categorizedMetrics = computed(() => {
+  const recent: any[] = []
+  const thisMonth: any[] = []
+  const older: any[] = []
+  
+  filteredMetrics.value.forEach(metric => {
+    if (isRecentlyUpdated(metric.updated_at)) {
+      recent.push(metric)
+    } else if (isUpdatedThisMonth(metric.updated_at)) {
+      thisMonth.push(metric)
+    } else {
+      older.push(metric)
+    }
+  })
+  
+  return { recent, thisMonth, older }
 })
 
 // Form validation computed
@@ -141,63 +200,7 @@ const isModelFormValid = computed(() => {
          !modelFormErrors.value.alias
 })
 
-// Utility functions
-const getModelStatus = (model: any) => {
-  if (model.is_valid === true) return 'valid'
-  if (model.is_valid === false) return 'invalid'
-  return 'pending'
-}
-
-const getMetricStatus = (metric: any) => {
-  // You'll need to implement this based on your metric validation logic
-  return 'valid' // placeholder
-}
-
-// Get user's locale from browser
-const { language } = useNavigatorLanguage()
-
-// Helper function to convert UTC date string to local timezone
-const convertUTCToLocal = (dateString: string): Date => {
-  // Parse the UTC date string and convert to local timezone
-  const utcDate = new Date(dateString)
-  return new Date(utcDate.getTime() - (utcDate.getTimezoneOffset() * 60000))
-}
-
-// Format relative time using VueUse
-const formatRelativeTime = (date: string | Date) => {
-  // Convert UTC to local timezone before passing to useTimeAgo
-  const localDate = typeof date === 'string' ? convertUTCToLocal(date) : date
-  return useTimeAgo(localDate, { 
-    updateInterval: 1000 // Update every second for real-time updates
-  })
-}
-
-// Format absolute date using VueUse
-const formatAbsoluteDate = (date: string | Date) => {
-  // Convert UTC to local timezone before passing to useDateFormat
-  const localDate = typeof date === 'string' ? convertUTCToLocal(date) : date
-  return useDateFormat(localDate, 'MMM D, YYYY', { 
-    locales: language.value || 'en-US' 
-  })
-}
-
-const getStatusBadgeVariant = (status: string) => {
-  switch (status) {
-    case 'valid': return 'default'
-    case 'invalid': return 'destructive'
-    case 'pending': return 'secondary'
-    default: return 'outline'
-  }
-}
-
-const getStatusIcon = (status: string) => {
-  switch (status) {
-    case 'valid': return '✅'
-    case 'invalid': return '⚠️'
-    case 'pending': return '🔄'
-    default: return '❓'
-  }
-}
+// Helper functions for time categorization are now in the components
 
 // Event handlers
 const onViewChange = (view: string) => {
@@ -230,14 +233,6 @@ const onExecuteMetric = async (metricId: string) => {
   }
 }
 
-const onValidateMetric = async (metricId: string) => {
-  try {
-    await validateMetric(metricId)
-  } catch (error) {
-    console.error('Failed to validate metric:', error)
-  }
-}
-
 // Create handlers
 const onCreateModel = () => {
   showCreateModelDialog.value = true
@@ -250,7 +245,9 @@ const onCreateMetric = () => {
 
 const onMetricCreated = async (metric: any) => {
   // Refresh the metrics list when a new metric is created
-  await fetchMetrics()
+  if (selectedEnvironmentId.value) {
+    await fetchMetrics(selectedEnvironmentId.value)
+  }
   toast.success('Metric created successfully')
 }
 
@@ -294,7 +291,10 @@ const handleCreateModel = async () => {
 
   isCreatingModel.value = true
   try {
+    if (!selectedEnvironmentId.value) return
+    
     const modelData = {
+      environment_id: selectedEnvironmentId.value,
       name: modelForm.value.name.trim(),
       alias: modelForm.value.alias,
       description: modelForm.value.description.trim() || undefined,
@@ -306,7 +306,7 @@ const handleCreateModel = async () => {
       showCreateModelDialog.value = false
       resetModelForm()
       // Refresh the models list
-      await fetchModels()
+      await fetchModels(selectedEnvironmentId.value)
     }
   } catch (error) {
     console.error('Failed to create model:', error)
@@ -322,7 +322,10 @@ const handleCreateMetric = async () => {
 
   isCreatingMetric.value = true
   try {
+    if (!selectedEnvironmentId.value) return
+    
     const metricData = {
+      environment_id: selectedEnvironmentId.value,
       data_model_id: metricForm.value.data_model_id,
       name: metricForm.value.name,
       alias: metricForm.value.alias || undefined,
@@ -336,7 +339,7 @@ const handleCreateMetric = async () => {
       showCreateMetricDialog.value = false
       resetMetricForm()
       // Refresh the metrics list
-      await fetchMetrics()
+      await fetchMetrics(selectedEnvironmentId.value)
     }
   } catch (error) {
     console.error('Failed to create metric:', error)
@@ -347,8 +350,10 @@ const handleCreateMetric = async () => {
 
 // Initialize data
 onMounted(() => {
-  fetchModels()
-  fetchMetrics()
+  if (selectedEnvironmentId.value) {
+    fetchModels(selectedEnvironmentId.value)
+    fetchMetrics(selectedEnvironmentId.value)
+  }
 })
 </script>
 
@@ -364,12 +369,18 @@ onMounted(() => {
       </div>
       
       <div class="flex items-center space-x-2">
+        <!-- Generate Recommendations Button -->
+        <Button variant="outline" size="sm" @click="navigateTo('/metrics/recommendations')">
+          <Sparkles class="h-4 w-4 mr-2" />
+          Recommendations
+        </Button>
+        
         <!-- Create New Dropdown -->
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
             <Button size="sm">
               <Plus class="h-4 w-4 mr-2" />
-              Create
+              Add
               <ChevronDown class="h-4 w-4 ml-2" />
             </Button>
           </DropdownMenuTrigger>
@@ -565,77 +576,54 @@ onMounted(() => {
           </Button>
         </div>
 
-        <div v-else class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <Card 
-            v-for="model in filteredModels" 
-            :key="model.id" 
-            class="hover:shadow-md transition-shadow cursor-pointer"
-            @click="onModelClick(model.id)"
-          >
-            <CardHeader class="pb-3">
-              <div class="flex items-start justify-between">
-                <div class="space-y-1 flex-1">
-                  <CardTitle class="text-base font-medium">{{ model.name }}</CardTitle>
-                  <p class="text-sm text-muted-foreground line-clamp-2">
-                    {{ model.description || 'No description available' }}
-                  </p>
-                </div>
-                <Badge :variant="getStatusBadgeVariant(getModelStatus(model))" class="ml-2">
-                  {{ getStatusIcon(getModelStatus(model)) }} {{ getModelStatus(model) }}
-                </Badge>
-              </div>
-            </CardHeader>
-            
-            <CardContent class="pt-0">
-              <div class="space-y-3">
-                <!-- Model Info -->
-                <div class="flex items-center justify-between text-sm">
-                  <div class="flex items-center space-x-2 text-muted-foreground">
-                    <span>📊</span>
-                    <span>Data Model</span>
-                  </div>
-                  <span class="text-muted-foreground">v{{ model.version }}</span>
-                </div>
-                
-                <!-- Metrics Count -->
-                <div class="flex items-center justify-between">
-                  <div class="flex items-center space-x-1 text-sm text-muted-foreground">
-                    <Target class="h-3 w-3" />
-                    <span>{{ model.metrics_count || 0 }} metrics</span>
-                  </div>
-                  <span class="text-xs text-muted-foreground">
-                    {{ formatRelativeTime(model.updated_at) }}
-                  </span>
-                </div>
-                
-                <Separator />
-                
-                <!-- Actions -->
-                <div class="flex items-center justify-between">
-                  <div class="flex space-x-1">
-                    <Button variant="ghost" size="sm" @click.stop="onExecuteModel(model.id)">
-                      <PlayCircle class="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="sm" @click.stop="onModelClick(model.id)">
-                      <Edit class="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="sm">
-                      <Settings class="h-3 w-3" />
-                    </Button>
-                  </div>
-                  
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    @click.stop="onModelMetricsClick(model.id)"
-                    v-if="model.metrics_count && model.metrics_count > 0"
-                  >
-                    View Metrics
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div v-else class="space-y-8">
+          <!-- Recently Updated -->
+          <div v-if="categorizedModels.recent.length > 0">
+            <div class="flex items-center gap-2 mb-4">
+              <h3 class="text-sm font-medium text-muted-foreground">Recently Updated</h3>
+              <Badge variant="secondary">{{ categorizedModels.recent.length }}</Badge>
+            </div>
+            <div class="space-y-4 px-6">
+              <MetricListModelCard
+                v-for="model in categorizedModels.recent"
+                :key="model.id"
+                :model="model"
+                @click="onModelClick(model.id)"
+              />
+            </div>
+          </div>
+
+          <!-- Updated This Month -->
+          <div v-if="categorizedModels.thisMonth.length > 0">
+            <div class="flex items-center gap-2 mb-4">
+              <h3 class="text-sm font-medium text-muted-foreground">Updated This Month</h3>
+              <Badge variant="secondary">{{ categorizedModels.thisMonth.length }}</Badge>
+            </div>
+            <div class="space-y-4 px-6">
+              <MetricListModelCard
+                v-for="model in categorizedModels.thisMonth"
+                :key="model.id"
+                :model="model"
+                @click="onModelClick(model.id)"
+              />
+            </div>
+          </div>
+
+          <!-- Older -->
+          <div v-if="categorizedModels.older.length > 0">
+            <div class="flex items-center gap-2 mb-4">
+              <h3 class="text-sm font-medium text-muted-foreground">Older</h3>
+              <Badge variant="secondary">{{ categorizedModels.older.length }}</Badge>
+            </div>
+            <div class="space-y-4 px-6">
+              <MetricListModelCard
+                v-for="model in categorizedModels.older"
+                :key="model.id"
+                :model="model"
+                @click="onModelClick(model.id)"
+              />
+            </div>
+          </div>
         </div>
       </TabsContent>
 
@@ -691,76 +679,54 @@ onMounted(() => {
           </Button>
         </div>
 
-        <div v-else class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <Card 
-            v-for="metric in filteredMetrics" 
-            :key="metric.id" 
-            class="hover:shadow-md transition-shadow cursor-pointer"
-            @click="onMetricClick(metric.id)"
-          >
-            <CardHeader class="pb-3">
-              <div class="flex items-start justify-between">
-                <div class="space-y-1 flex-1">
-                  <CardTitle class="text-base font-medium">{{ metric.title || metric.name }}</CardTitle>
-                  <p class="text-sm text-muted-foreground line-clamp-2">
-                    {{ metric.description || 'No description available' }}
-                  </p>
-                </div>
-                <div class="flex flex-col items-end space-y-1">
-                  <Badge :variant="getStatusBadgeVariant(getMetricStatus(metric))">
-                    {{ getStatusIcon(getMetricStatus(metric)) }} {{ getMetricStatus(metric) }}
-                  </Badge>
-                  <Badge v-if="metric.public" variant="secondary" class="text-xs">Public</Badge>
-                </div>
-              </div>
-            </CardHeader>
-            
-            <CardContent class="pt-0">
-              <div class="space-y-3">
-                <!-- Metric Info -->
-                <div class="flex items-center justify-between text-sm">
-                  <div class="flex items-center space-x-2 text-muted-foreground">
-                    <FolderOpen class="h-3 w-3" />
-                    <span>{{ metric.data_model_name || 'Unknown Model' }}</span>
-                  </div>
-                  <span class="text-muted-foreground">{{ metric.alias || metric.name }}</span>
-                </div>
-                
-                <!-- Parameters -->
-                <div v-if="metric.parameters && metric.parameters.length > 0" class="flex items-center space-x-1 text-sm text-muted-foreground">
-                  <Settings class="h-3 w-3" />
-                  <span>{{ metric.parameters.length }} parameters</span>
-                </div>
-                
-                <div class="flex items-center justify-between">
-                  <span class="text-xs text-muted-foreground">
-                    {{ formatRelativeTime(metric.updated_at) }}
-                  </span>
-                </div>
-                
-                <Separator />
-                
-                <!-- Actions -->
-                <div class="flex items-center justify-between">
-                  <div class="flex space-x-1">
-                    <Button variant="ghost" size="sm" @click.stop="onExecuteMetric(metric.id)">
-                      <PlayCircle class="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="sm" @click.stop="onMetricClick(metric.id)">
-                      <Edit class="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="sm" @click.stop="onValidateMetric(metric.id)">
-                      <Settings class="h-3 w-3" />
-                    </Button>
-                  </div>
-                  
-                  <Button variant="ghost" size="sm">
-                    <MoreHorizontal class="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div v-else class="space-y-8">
+          <!-- Recently Updated -->
+          <div v-if="categorizedMetrics.recent.length > 0">
+            <div class="flex items-center gap-2 mb-4">
+              <h3 class="text-sm font-medium text-muted-foreground">Recently Updated</h3>
+              <Badge variant="secondary">{{ categorizedMetrics.recent.length }}</Badge>
+            </div>
+            <div class="space-y-4 px-6">
+              <MetricListMetricCard
+                v-for="metric in categorizedMetrics.recent"
+                :key="metric.id"
+                :metric="metric"
+                @click="onMetricClick(metric.id)"
+              />
+            </div>
+          </div>
+
+          <!-- Updated This Month -->
+          <div v-if="categorizedMetrics.thisMonth.length > 0">
+            <div class="flex items-center gap-2 mb-4">
+              <h3 class="text-sm font-medium text-muted-foreground">Updated This Month</h3>
+              <Badge variant="secondary">{{ categorizedMetrics.thisMonth.length }}</Badge>
+            </div>
+            <div class="space-y-4 px-6">
+              <MetricListMetricCard
+                v-for="metric in categorizedMetrics.thisMonth"
+                :key="metric.id"
+                :metric="metric"
+                @click="onMetricClick(metric.id)"
+              />
+            </div>
+          </div>
+
+          <!-- Older -->
+          <div v-if="categorizedMetrics.older.length > 0">
+            <div class="flex items-center gap-2 mb-4">
+              <h3 class="text-sm font-medium text-muted-foreground">Older</h3>
+              <Badge variant="secondary">{{ categorizedMetrics.older.length }}</Badge>
+            </div>
+            <div class="space-y-4 px-6">
+              <MetricListMetricCard
+                v-for="metric in categorizedMetrics.older"
+                :key="metric.id"
+                :metric="metric"
+                @click="onMetricClick(metric.id)"
+              />
+            </div>
+          </div>
         </div>
       </TabsContent>
     </Tabs>

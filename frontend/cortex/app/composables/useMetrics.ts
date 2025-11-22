@@ -3,6 +3,7 @@ import type { SemanticOrderSequence } from '~/types/order'
 
 export interface SemanticMetric {
   id: string
+  environment_id: string
   name: string
   alias?: string
   title?: string
@@ -59,6 +60,9 @@ export interface ExecutionRequest {
   offset?: number
   grouped?: boolean
   ordered?: boolean
+  modifiers?: any
+  cache?: any
+  preview?: boolean
 }
 
 export const useMetrics = () => {
@@ -67,14 +71,14 @@ export const useMetrics = () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  const fetchMetrics = async (filters?: MetricFilters) => {
+  const fetchMetrics = async (environmentId: string, filters?: MetricFilters) => {
     loading.value = true
     error.value = null
     
     try {
       // Use the correct backend endpoint with proper URL construction
       const response = await $fetch<{ metrics: SemanticMetric[], total_count: number, page: number, page_size: number }>(apiUrl('/api/v1/metrics'), {
-        query: filters
+        query: { environment_id: environmentId, ...filters }
       })
       metrics.value = response.metrics || []
     } catch (err) {
@@ -85,9 +89,11 @@ export const useMetrics = () => {
     }
   }
 
-  const getMetric = async (id: string): Promise<SemanticMetric | null> => {
+  const getMetric = async (id: string, environmentId: string): Promise<SemanticMetric | null> => {
     try {
-      const response = await $fetch<SemanticMetric>(apiUrl(`/api/v1/metrics/${id}`))
+      const response = await $fetch<SemanticMetric>(apiUrl(`/api/v1/metrics/${id}`), {
+        query: { environment_id: environmentId }
+      })
       return response
     } catch (err) {
       console.error('Failed to fetch metric:', err)
@@ -110,11 +116,11 @@ export const useMetrics = () => {
     }
   }
 
-  const updateMetric = async (id: string, metricData: Partial<SemanticMetric>): Promise<SemanticMetric | null> => {
+  const updateMetric = async (id: string, environmentId: string, metricData: Partial<SemanticMetric>): Promise<SemanticMetric | null> => {
     try {
       const response = await $fetch<SemanticMetric>(apiUrl(`/api/v1/metrics/${id}`), {
         method: 'PUT',
-        body: metricData
+        body: { environment_id: environmentId, ...metricData }
       })
       // Update local state
       const index = metrics.value.findIndex(m => m.id === id)
@@ -128,10 +134,11 @@ export const useMetrics = () => {
     }
   }
 
-  const deleteMetric = async (id: string): Promise<boolean> => {
+  const deleteMetric = async (id: string, environmentId: string): Promise<boolean> => {
     try {
       await $fetch(apiUrl(`/api/v1/metrics/${id}`), {
-        method: 'DELETE'
+        method: 'DELETE',
+        query: { environment_id: environmentId }
       })
       // Remove from local state
       metrics.value = metrics.value.filter(m => m.id !== id)
@@ -142,27 +149,18 @@ export const useMetrics = () => {
     }
   }
 
-  const executeMetric = async (id: string, executionRequest: ExecutionRequest) => {
+  const executeMetric = async (id: string, executionRequest: ExecutionRequest, preview: boolean = false) => {
     try {
       const response = await $fetch(apiUrl(`/api/v1/metrics/${id}/execute`), {
         method: 'POST',
-        body: executionRequest
+        body: {
+          ...executionRequest,
+          preview
+        }
       })
       return response
     } catch (err) {
       console.error('Failed to execute metric:', err)
-      throw err
-    }
-  }
-
-  const validateMetric = async (id: string) => {
-    try {
-      const response = await $fetch(apiUrl(`/api/v1/metrics/${id}/validate`), {
-        method: 'POST'
-      })
-      return response
-    } catch (err) {
-      console.error('Failed to validate metric:', err)
       throw err
     }
   }
@@ -192,15 +190,39 @@ export const useMetrics = () => {
     }
   }
 
-  const getMetricsForModel = async (modelId: string) => {
+  const getMetricsForModel = async (modelId: string, environmentId: string) => {
     try {
       const response = await $fetch<{ metrics: SemanticMetric[], total_count: number, page: number, page_size: number }>(apiUrl('/api/v1/metrics'), {
-        query: { data_model_id: modelId }
+        query: { environment_id: environmentId, data_model_id: modelId }
       })
       return response.metrics || []
     } catch (err) {
       console.error('Failed to fetch metrics for model:', err)
       return []
+    }
+  }
+
+  const recommendMetrics = async (
+    environmentId: string,
+    dataSourceId: string,
+    dataModelId: string
+  ): Promise<SemanticMetric[]> => {
+    try {
+      const response = await $fetch<{ metrics: SemanticMetric[], total_count: number, metadata?: any }>(
+        apiUrl('/api/v1/metrics/recommendations'),
+        {
+          method: 'POST',
+          body: {
+            environment_id: environmentId,
+            data_source_id: dataSourceId,
+            data_model_id: dataModelId
+          }
+        }
+      )
+      return response.metrics || []
+    } catch (err) {
+      console.error('Failed to generate metric recommendations:', err)
+      throw err
     }
   }
 
@@ -214,9 +236,9 @@ export const useMetrics = () => {
     updateMetric,
     deleteMetric,
     executeMetric,
-    validateMetric,
     cloneMetric,
     getMetricVersions,
-    getMetricsForModel
+    getMetricsForModel,
+    recommendMetrics
   }
 } 

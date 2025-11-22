@@ -74,15 +74,6 @@ function getCatalogColor(catalog: string) {
     <div class="flex justify-between items-center mb-6">
       <h1 class="text-2xl font-bold">Data Sources</h1>
       <div class="flex items-center gap-2">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          @click="refresh" 
-          :disabled="loading || !selectedEnvironmentId"
-        >
-          <RefreshCw class="w-4 h-4 mr-2" :class="{ 'animate-spin': loading }" />
-          Refresh
-        </Button>
             <CreateDataSourceDialog 
               v-if="selectedEnvironmentId" 
               @data-source-created="handleDataSourceCreated"
@@ -146,8 +137,8 @@ function getCatalogColor(catalog: string) {
     <div v-else-if="dataSources.length === 0">
       <div class="text-center py-8">
         <Database class="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <h3 class="text-lg font-medium text-gray-900 mb-2">No data sources found</h3>
-        <p class="text-gray-500 mb-4">Get started by creating your first data source.</p>
+        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No data sources connected</h3>
+        <p class="text-gray-500 mb-4">Get started by connecting your first data source.</p>
         <CreateDataSourceDialog @data-source-created="handleDataSourceCreated" />
       </div>
     </div>

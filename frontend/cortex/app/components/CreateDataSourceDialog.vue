@@ -3,83 +3,98 @@
     <DialogTrigger as-child>
       <Button variant="outline" size="sm">
         <Plus class="w-4 h-4 mr-2" />
-        Create Data Source
+        Add
       </Button>
     </DialogTrigger>
     <DialogContent class="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>Create New Data Source</DialogTitle>
-        <DialogDescription>
-          Create a new data source to connect to external data systems.
-        </DialogDescription>
+        <DialogTitle>Connect your Data Source</DialogTitle>
       </DialogHeader>
       <form @submit.prevent="handleSubmit" class="space-y-6">
         <div class="space-y-4">
           <div class="space-y-2">
-            <Label for="name">Data Source Name</Label>
-            <Input
-              id="name"
-              v-model="form.name"
-              placeholder="Enter data source name"
-              :disabled="isLoading"
-              required
-            />
-          </div>
-          
-          <div class="space-y-2">
-            <Label for="alias">Alias</Label>
-            <Input
-              id="alias"
-              v-model="form.alias"
-              placeholder="Auto-generated from name"
-              :disabled="isLoading"
-              required
-              @blur="markAsManuallyEdited"
-            />
-            <p v-if="aliasError" class="text-xs text-red-500">{{ aliasError }}</p>
-          </div>
-          
-          <div class="space-y-2">
-            <Label for="description">Description</Label>
-            <Textarea
-              id="description"
-              v-model="form.description"
-              placeholder="Enter data source description"
-              :disabled="isLoading"
-              rows="3"
-            />
-          </div>
-        </div>
-        
-        <div class="grid grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <Label for="source_catalog">Source Catalog</Label>
-            <Select v-model="form.source_catalog" :disabled="isLoading">
-              <SelectTrigger>
-                <SelectValue placeholder="Select catalog" />
+            <Select v-model="form.source_type" :disabled="isLoading">
+              <SelectTrigger class="flex items-center gap-2">
+                <SelectValue :placeholder="form.source_type ? getSourceTypeLabel(form.source_type) : 'Select database type'" />
+                <SelectIcon v-if="form.source_type" as-child>
+                  <NuxtImg 
+                    :src="getIconPath(form.source_type)" 
+                    :alt="form.source_type"
+                    class="w-4 h-4"
+                  />
+                </SelectIcon>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="DATABASE">Database</SelectItem>
-                <SelectItem value="API" disabled>API (Coming Soon)</SelectItem>
-                <SelectItem value="FILE" disabled>File (Coming Soon)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div class="space-y-2">
-            <Label for="source_type">Source Type</Label>
-            <Select v-model="form.source_type" :disabled="isLoading || form.source_catalog !== 'DATABASE'">
-              <SelectTrigger>
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="postgresql">PostgreSQL</SelectItem>
-                <SelectItem value="mysql">MySQL</SelectItem>
-                <SelectItem value="sqlite">SQLite</SelectItem>
-                <SelectItem value="oracle">Oracle</SelectItem>
-                <SelectItem value="bigquery">BigQuery</SelectItem>
-                <SelectItem value="snowflake">Snowflake</SelectItem>
-                <SelectItem value="redshift">Redshift</SelectItem>
+                <SelectItem value="postgresql">
+                  <div class="flex items-center gap-2">
+                    <NuxtImg 
+                      :src="getIconPath('postgresql')" 
+                      alt="PostgreSQL"
+                      class="w-4 h-4"
+                    />
+                    <span>PostgreSQL</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="mysql">
+                  <div class="flex items-center gap-2">
+                    <NuxtImg 
+                      :src="getIconPath('mysql')" 
+                      alt="MySQL"
+                      class="w-4 h-4"
+                    />
+                    <span>MySQL</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="sqlite">
+                  <div class="flex items-center gap-2">
+                    <NuxtImg 
+                      :src="getIconPath('sqlite')" 
+                      alt="SQLite"
+                      class="w-4 h-4"
+                    />
+                    <span>SQLite</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="oracle">
+                  <div class="flex items-center gap-2">
+                    <NuxtImg 
+                      :src="getIconPath('oracle')" 
+                      alt="Oracle"
+                      class="w-4 h-4"
+                    />
+                    <span>Oracle</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="bigquery">
+                  <div class="flex items-center gap-2">
+                    <NuxtImg 
+                      :src="getIconPath('bigquery')" 
+                      alt="BigQuery"
+                      class="w-4 h-4"
+                    />
+                    <span>BigQuery</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="snowflake">
+                  <div class="flex items-center gap-2">
+                    <NuxtImg 
+                      :src="getIconPath('snowflake')" 
+                      alt="Snowflake"
+                      class="w-4 h-4"
+                    />
+                    <span>Snowflake</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="redshift">
+                  <div class="flex items-center gap-2">
+                    <NuxtImg 
+                      :src="getIconPath('redshift')" 
+                      alt="Redshift"
+                      class="w-4 h-4"
+                    />
+                    <span>Redshift</span>
+                  </div>
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -120,6 +135,50 @@
             </div>
           </div>
         </div>
+
+        <!-- Advanced Options Collapsible -->
+        <Collapsible v-slot="{ open: isAdvancedOpen }">
+          <CollapsibleTrigger class="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors w-full">
+            <ChevronDown :class="['w-4 h-4 transition-transform duration-200', { 'rotate-180': isAdvancedOpen }]" />
+            <span>Advanced</span>
+          </CollapsibleTrigger>
+          <CollapsibleContent class="space-y-4 pt-4">
+            <div class="space-y-2">
+              <Label for="name">Name</Label>
+              <Input
+                id="name"
+                v-model="form.name"
+                placeholder="Enter data source name"
+                :disabled="isLoading"
+                required
+              />
+            </div>
+            
+            <div class="space-y-2">
+              <Label for="alias">Alias</Label>
+              <Input
+                id="alias"
+                v-model="form.alias"
+                placeholder="Auto-generated from name"
+                :disabled="isLoading"
+                required
+                @blur="markAsManuallyEdited"
+              />
+              <p v-if="aliasError" class="text-xs text-red-500">{{ aliasError }}</p>
+            </div>
+            
+            <div class="space-y-2">
+              <Label for="description">Description</Label>
+              <Textarea
+                id="description"
+                v-model="form.description"
+                placeholder="Enter data source description"
+                :disabled="isLoading"
+                rows="3"
+              />
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
         
         <DialogFooter>
           <Button type="button" variant="outline" @click="resetAndClose" :disabled="isLoading">
@@ -137,6 +196,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
+import { useDark } from '@vueuse/core'
+import { ChevronDown } from 'lucide-vue-next'
 
 // Define emits
 const emit = defineEmits<{
@@ -160,6 +221,8 @@ import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
 import { Textarea } from '~/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '~/components/ui/collapsible'
+import { SelectIcon } from 'reka-ui'
 import { Plus, Loader2 } from 'lucide-vue-next'
 
 // Import database configuration components
@@ -168,7 +231,6 @@ import MySQLConfig from '~/components/data-sources/MySQLConfig.vue'
 import SQLiteConfig from '~/components/data-sources/SQLiteConfig.vue'
 import BigQueryConfig from '~/components/data-sources/BigQueryConfig.vue'
 import CommonSQLConfig from '~/components/data-sources/CommonSQLConfig.vue'
-
 
 const { createDataSource } = useDataSources()
 const { selectedEnvironmentId } = useEnvironments()
@@ -181,22 +243,134 @@ const {
   resetManualEditFlag
 } = useAliasGenerator()
 
+// Dark mode detection
+const isDark = useDark({
+  valueDark: 'dark',
+  valueLight: 'light',
+  selector: 'html',
+  attribute: 'class',
+  storageKey: 'cortex-color-scheme'
+})
+
 const open = ref(false)
 const isLoading = ref(false)
+const nameManuallyEdited = ref(false)
 
 const form = reactive({
   name: '',
   alias: '',
   description: '',
-  source_catalog: '' as 'DATABASE' | 'API' | 'FILE',
+  source_catalog: 'DATABASE' as 'DATABASE' | 'API' | 'FILE',
   source_type: '' as 'postgresql' | 'mysql' | 'sqlite' | 'oracle' | 'bigquery' | 'snowflake' | 'redshift',
   config: {} as any
 })
 
-// Auto-generate alias from name
+// Map source types to icon names
+function getIconName(sourceType: string): string {
+  const iconMap: Record<string, string> = {
+    postgresql: 'postgres',
+    mysql: 'mysql',
+    sqlite: 'sqlite',
+    oracle: 'oracle',
+    bigquery: 'bigquery',
+    snowflake: 'snowflake',
+    redshift: 'redshift'
+  }
+  return iconMap[sourceType] || sourceType
+}
+
+// Get icon path based on source type and dark mode
+function getIconPath(sourceType: string): string {
+  const iconName = getIconName(sourceType)
+  const mode = isDark.value ? 'dark' : 'light'
+  return `/icons/brands/${iconName}-${mode}.svg`
+}
+
+// Get source type display label
+function getSourceTypeLabel(sourceType: string): string {
+  const labels: Record<string, string> = {
+    postgresql: 'PostgreSQL',
+    mysql: 'MySQL',
+    sqlite: 'SQLite',
+    oracle: 'Oracle',
+    bigquery: 'BigQuery',
+    snowflake: 'Snowflake',
+    redshift: 'Redshift'
+  }
+  return labels[sourceType] || sourceType
+}
+
+// Capitalize first letter of each word
+function capitalizeWords(str: string): string {
+  return str
+    .split(/[\s_-]+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
+// Auto-generate name from database configuration
+function generateNameFromConfig(): string {
+  if (!form.source_type || !form.config) {
+    return ''
+  }
+
+  const config = form.config
+  let hostName = ''
+
+  // Get host name based on source type
+  if (form.source_type === 'sqlite') {
+    // For SQLite, use database path or filename
+    hostName = config.database ? config.database.split('/').pop()?.split('\\').pop()?.replace(/\.[^/.]+$/, '') || 'SQLite' : 'SQLite'
+  } else if (form.source_type === 'bigquery') {
+    // For BigQuery, use project_id
+    hostName = config.project_id || 'BigQuery'
+  } else {
+    // For other databases, use host
+    hostName = config.host || 'Database'
+  }
+
+  // Capitalize host name
+  const capitalizedHost = capitalizeWords(hostName)
+
+  // Get source type display name
+  const sourceTypeNames: Record<string, string> = {
+    postgresql: 'PostgreSQL',
+    mysql: 'MySQL',
+    sqlite: 'SQLite',
+    oracle: 'Oracle',
+    bigquery: 'BigQuery',
+    snowflake: 'Snowflake',
+    redshift: 'Redshift'
+  }
+
+  const sourceTypeName = sourceTypeNames[form.source_type] || form.source_type
+
+  return `${capitalizedHost} ${sourceTypeName} Dataset`
+}
+
+// Auto-generate name when config changes
+watch(() => form.config, (newConfig) => {
+  if (form.source_type && newConfig && typeof newConfig === 'object' && !nameManuallyEdited.value) {
+    const generatedName = generateNameFromConfig()
+    if (generatedName) {
+      form.name = generatedName
+    }
+  }
+}, { deep: true })
+
+// Track manual name edits and auto-generate alias
 watch(() => form.name, (newName) => {
-  if (newName && !aliasManuallyEdited.value) {
+  if (newName) {
+    // Mark as manually edited if user types something different from generated name
+    const generatedName = generateNameFromConfig()
+    if (form.name !== generatedName) {
+      nameManuallyEdited.value = true
+    }
+    
+    // Auto-generate alias from name
+    if (!aliasManuallyEdited.value) {
     form.alias = generateAlias(newName)
+    }
   }
 })
 
@@ -204,8 +378,18 @@ watch(() => form.name, (newName) => {
 watch(() => form.source_type, (newType) => {
   if (newType) {
     form.config = getDefaultConfig(newType)
+    nameManuallyEdited.value = false
+    // Generate name after config is set
+    setTimeout(() => {
+      const generatedName = generateNameFromConfig()
+      if (generatedName && !nameManuallyEdited.value) {
+        form.name = generatedName
+      }
+    }, 0)
   } else {
     form.config = {}
+    form.name = ''
+    nameManuallyEdited.value = false
   }
 })
 
@@ -229,14 +413,6 @@ watch(() => form.source_type, (newSourceType, oldSourceType) => {
       // For non-SQL databases (like BigQuery), remove dialect if it exists
       delete form.config.dialect
     }
-  }
-})
-
-// Reset source type when catalog changes away from DATABASE
-watch(() => form.source_catalog, (newCatalog) => {
-  if (newCatalog !== 'DATABASE') {
-    form.source_type = '' as any
-    form.config = {}
   }
 })
 
@@ -387,11 +563,12 @@ function resetAndClose() {
   form.name = ''
   form.alias = ''
   form.description = ''
-  form.source_catalog = '' as 'DATABASE' | 'API' | 'FILE'
+  form.source_catalog = 'DATABASE' as 'DATABASE' | 'API' | 'FILE'
   form.source_type = '' as any
   form.config = {}
   
-  // Reset alias generator state
+  // Reset flags
+  nameManuallyEdited.value = false
   resetManualEditFlag()
 }
 </script> 

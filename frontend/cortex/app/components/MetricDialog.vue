@@ -161,7 +161,7 @@ import { Textarea } from '~/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Target, Loader2, Database } from 'lucide-vue-next'
-import MetricSchemaBuilder from '~/components/metric-builder/MetricSchemaBuilder.vue'
+import MetricSchemaBuilder from '~/components/metric/builder/MetricSchemaBuilder.vue'
 
 interface Props {
   open: boolean
@@ -185,6 +185,7 @@ const emit = defineEmits<{
 const { createMetric, updateMetric, getMetric } = useMetrics()
 const { models, fetchModels, getModel } = useDataModels()
 const { getDataSourceSchema } = useDataSources()
+const { selectedEnvironmentId } = useEnvironments()
 
 const isLoading = ref(false)
 const activeTab = ref('basic')
@@ -280,7 +281,7 @@ const closeDialog = () => {
 
 const onDataModelChange = async (value: any) => {
   const modelId = value as string
-  if (!modelId) return
+  if (!modelId || !selectedEnvironmentId.value) return
   
   // Data models no longer have data source associations
   // Users will select data sources independently for each metric
@@ -304,7 +305,7 @@ const loadSchemaForDataSource = async (dataSourceId: string) => {
 const loadMetricData = async (metricId: string) => {
   try {
     isLoading.value = true
-    const metric = await getMetric(metricId)
+    const metric = await getMetric(metricId, selectedEnvironmentId.value || '')
     if (metric) {
       // Populate form data
       form.value = {
@@ -380,7 +381,7 @@ const handleSubmit = async () => {
     }
 
     if (props.isEditing && props.metricToEdit?.id) {
-      const updatedMetric = await updateMetric(props.metricToEdit.id, metricData)
+      const updatedMetric = await updateMetric(props.metricToEdit.id, selectedEnvironmentId.value || '', metricData)
       if (updatedMetric) {
         toast.success('Metric updated successfully')
         emit('updated', updatedMetric)
@@ -471,20 +472,28 @@ watch(() => schemaData.value.description, (newDescription) => {
 watch(() => props.open, async (isOpen) => {
   if (isOpen && props.isEditing && props.metricToEdit?.id) {
     // For edit mode, load models first so we can display the data model name
-    if (!models.value || models.value.length === 0) {
-      await fetchModels()
+    if (selectedEnvironmentId.value && (!models.value || models.value.length === 0)) {
+      await fetchModels(selectedEnvironmentId.value)
     }
     await loadMetricData(props.metricToEdit.id)
   } else if (isOpen && !props.isEditing) {
     // For create mode, ensure models are loaded
-    if (!models.value || models.value.length === 0) {
-      await fetchModels()
+    if (selectedEnvironmentId.value && (!models.value || models.value.length === 0)) {
+      await fetchModels(selectedEnvironmentId.value)
     }
     
-    // If we have a prefilled data model ID, load its schema
+    // Pre-select the first data model if no prefilled model is provided
+    if (!props.prefilledDataModelId && models.value && models.value.length > 0) {
+      const firstModel = models.value[0]
+      if (firstModel) {
+        form.value.data_model_id = firstModel.id
+      }
+    }
+    
+    // If we have a prefilled data model ID, use it
     if (props.prefilledDataModelId) {
+      form.value.data_model_id = props.prefilledDataModelId
       try {
-        const model = await getModel(props.prefilledDataModelId)
         // Data models no longer have data source associations
         // Users will select data sources independently for each metric
         selectedDataSourceId.value = ''

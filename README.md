@@ -14,6 +14,7 @@ This platform is designed to abstract complex data sources into a business-frien
   - Define and manage data models in JSON with measures, dimensions, filters, and aggregations
   - Dynamic context aware schema generation
   - Advanced output formatting with IN_QUERY and POST_QUERY(Coming Soon) transformation modes
+  - Conditional logic support for dynamic column combinations
   - Versioning and audit trails for metrics and data models
   - Parameter system for dynamic query generation
   - Metric extension and inheritance support (Coming Soon)

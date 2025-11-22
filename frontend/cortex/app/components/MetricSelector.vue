@@ -13,6 +13,7 @@ import {
 import { Button } from '~/components/ui/button'
 import { useDataModels } from '~/composables/useDataModels'
 import { useMetrics, type SemanticMetric } from '~/composables/useMetrics'
+import { useEnvironments } from '~/composables/useEnvironments'
 
 interface Emits {
   (e: 'select', metric: SemanticMetric): void
@@ -31,14 +32,15 @@ const props = withDefaults(defineProps<Props>(), {
 
 const { models, fetchModels } = useDataModels()
 const { getMetricsForModel } = useMetrics()
+const { selectedEnvironmentId } = useEnvironments()
 const modelIdToMetrics = ref<Record<string, SemanticMetric[]>>({})
 const loadingModelIds = ref<Record<string, boolean>>({})
 
 async function ensureMetrics(modelId: string) {
-  if (modelIdToMetrics.value[modelId] || loadingModelIds.value[modelId]) return
+  if (modelIdToMetrics.value[modelId] || loadingModelIds.value[modelId] || !selectedEnvironmentId.value) return
   loadingModelIds.value[modelId] = true
   try {
-    const metrics = await getMetricsForModel(modelId)
+    const metrics = await getMetricsForModel(modelId, selectedEnvironmentId.value)
     modelIdToMetrics.value[modelId] = metrics
   } finally {
     loadingModelIds.value = { ...loadingModelIds.value, [modelId]: false }
@@ -50,7 +52,9 @@ function handleSelect(metric: SemanticMetric) {
 }
 
 onMounted(async () => {
-  await fetchModels()
+  if (selectedEnvironmentId.value) {
+    await fetchModels(selectedEnvironmentId.value)
+  }
 })
 </script>
 

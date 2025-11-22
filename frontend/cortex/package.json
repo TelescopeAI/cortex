@@ -22,13 +22,14 @@
     "clsx": "^2.1.1",
     "echarts": "^5.5.1",
     "lucide-vue-next": "^0.525.0",
-    "nuxt": "^4.0.0",
+    "motion-v": "^1.7.4",
+    "nuxt": "^4.2.1",
     "nuxt-charts": "0.2.0-beta.0",
     "nuxt-echarts": "0.4.0",
     "nuxt-shiki": "0.3.1",
     "reka-ui": "^2.6.0",
     "shadcn-nuxt": "2.2.0",
-    "tailwind-merge": "^3.3.1",
+    "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.11",
     "tw-animate-css": "^1.3.5",
     "vee-validate": "^4.15.1",
@@ -39,6 +40,7 @@
   },
   "packageManager": "yarn@1.22.19+sha1.4ba7fc5c6e704fce2066ecbfb0b0d8976fe62447",
   "devDependencies": {
-    "@nuxtjs/color-mode": "^3.5.2"
+    "@nuxtjs/color-mode": "^3.5.2",
+    "typescript": "^5.9.3"
   }
 }

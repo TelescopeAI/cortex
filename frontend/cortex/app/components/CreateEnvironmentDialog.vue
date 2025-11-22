@@ -1,10 +1,12 @@
 <template>
   <Dialog v-model:open="open">
     <DialogTrigger as-child>
+      <slot name="trigger">
       <Button variant="outline" size="sm">
         <Plus class="w-4 h-4 mr-2" />
         Create Environment
       </Button>
+      </slot>
     </DialogTrigger>
     <DialogContent class="sm:max-w-[425px]">
       <DialogHeader>
@@ -49,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { toast } from 'vue-sonner'
 import { useEnvironments } from '~/composables/useEnvironments'
 import { useWorkspaces } from '~/composables/useWorkspaces'
@@ -68,8 +70,15 @@ import { Label } from '~/components/ui/label'
 import { Textarea } from '~/components/ui/textarea'
 import { Plus, Loader2 } from 'lucide-vue-next'
 
-const { createEnvironment } = useEnvironments()
-const { selectedWorkspaceId } = useWorkspaces()
+const props = defineProps<{
+  workspaceId?: string
+}>()
+
+const { createEnvironment, selectEnvironment } = useEnvironments()
+const { selectedWorkspaceId, selectWorkspace } = useWorkspaces()
+
+// Use provided workspaceId or fall back to selected workspace
+const targetWorkspaceId = computed(() => props.workspaceId || selectedWorkspaceId.value)
 
 const open = ref(false)
 const isLoading = ref(false)
@@ -85,7 +94,7 @@ async function handleSubmit() {
     return
   }
 
-  if (!selectedWorkspaceId.value) {
+  if (!targetWorkspaceId.value) {
     toast.error('Please select a workspace first')
     return
   }
@@ -93,11 +102,19 @@ async function handleSubmit() {
   isLoading.value = true
   
   try {
-    await createEnvironment({
+    const createdEnvironment = await createEnvironment({
       name: form.name.trim(),
       description: form.description.trim(),
-      workspace_id: selectedWorkspaceId.value
+      workspace_id: targetWorkspaceId.value
     })
+    
+    // Automatically select the workspace and newly created environment
+    if (targetWorkspaceId.value) {
+      selectWorkspace(targetWorkspaceId.value)
+    }
+    if (createdEnvironment?.id) {
+      selectEnvironment(createdEnvironment.id)
+    }
     
     toast.success('Environment created successfully')
     open.value = false

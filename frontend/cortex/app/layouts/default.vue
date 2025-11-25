@@ -1,5 +1,5 @@
 <template>
-  <div class="w-screen h-screen p-8 max-w-full overflow-auto">
+  <div class="w-screen h-screen p-8 max-w-full overflow-auto bg-sidebar/50">
     <slot />
     <Toaster />
   </div>

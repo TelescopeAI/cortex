@@ -16,7 +16,8 @@ export default defineNuxtConfig({
     'nuxt-charts',
     'nuxt-shiki',
     'nuxt-echarts',
-    '@nuxt/image'
+    '@nuxt/image',
+    '@nuxt/fonts',
   ],
   css: [
     './app/assets/css/tailwind.css',
@@ -84,4 +85,13 @@ export default defineNuxtConfig({
   image: {
     dir: 'assets/images'
   },
+  fonts: {
+    defaults: {
+      weights: [400],
+      styles: ['normal', 'italic'],
+      subsets: [
+        'Space Grotesk'
+      ]
+    },
+  }
 })

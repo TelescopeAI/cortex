@@ -2560,4 +2560,4 @@ api = []
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.14"
-content-hash = "55d080649a17b825327e6a80f81ab06de0fcbc65ca9fd3c0478c4ad865e17da2"
+content-hash = "db3cddbde768a1e510d036947b23198c5dbd5332c26f6313f87b49d8236b7f4e"

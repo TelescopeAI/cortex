@@ -53,6 +53,16 @@ export default {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      fontFamily: {
+        sans: ['Space Grotesk', 'sans-serif'], // Set as the primary sans font
+        mono: ['Space Mono', 'monospace'], // Example for mono font
+      },
+      breakpoints: {
+        'md': '768px',
+        'lg': '1024px',
+        'xl': '1366px',
+        '2xl': '1536px',
+      },
     },
   },
   plugins: [],

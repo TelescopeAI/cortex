@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@formkit/drag-and-drop": "^0.5.3",
+    "@nuxt/fonts": "0.12.1",
     "@nuxt/image": "1.11.0",
     "@tailwindcss/vite": "^4.1.11",
     "@tanstack/vue-table": "^8.21.3",
@@ -36,6 +37,7 @@
     "vue": "^3.5.17",
     "vue-router": "^4.5.1",
     "vue-sonner": "^2.0.1",
+    "vue-use-spring": "^0.3.3",
     "zod": "^4.0.5"
   },
   "packageManager": "yarn@1.22.19+sha1.4ba7fc5c6e704fce2066ecbfb0b0d8976fe62447",

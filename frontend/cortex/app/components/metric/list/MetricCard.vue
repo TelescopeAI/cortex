@@ -1,46 +1,37 @@
 <template>
   <Card 
-    class="hover:shadow-md transition-shadow cursor-pointer"
+    class="hover:shadow-2xl hover:shadow-blue-400/40 hover:border-blue-400
+           hover:drop-shadow-2xl hover:inset-shadow-blue-900
+          h-80 lg:h-40 justify-between
+           transition-shadow cursor-pointer gap-0"
     @click="$emit('click')"
   >
-    <CardHeader class="pb-3">
-      <div class="flex items-start justify-between">
+    <CardHeader class="">
+      <div class="flex flex-col items-start justify-between gap-y-2">
         <div class="space-y-1 flex-1">
-          <CardTitle class="text-base font-medium">{{ metric.title || metric.name }}</CardTitle>
-          <p class="text-sm text-muted-foreground line-clamp-2">
-            {{ metric.description || 'No description available' }}
+          <CardTitle class="text-xl font-extrabold text-indigo-900 dark:text-white font-medium">{{ metric.title || metric.name }}</CardTitle>
+          
+        </div>
+        <p v-if="metric.description"
+        class="text-sm line-clamp-2 text-blue-600 dark:text-blue-200"
+        :class="{ 'text-blue-600 dark:text-blue-200': metric.description, 'text-muted-foreground': !metric.description }"
+        >
+            {{ metric.description || '' }}
           </p>
-        </div>
-        <div class="flex flex-col items-end space-y-1">
-          <Badge :variant="getStatusBadgeVariant(metric.status)">
-            {{ getStatusIcon(metric.status) }} {{ metric.status || 'valid' }}
-          </Badge>
-          <Badge v-if="metric.public" variant="secondary" class="text-xs">Public</Badge>
-        </div>
       </div>
     </CardHeader>
     
     <CardContent class="pt-0">
       <div class="space-y-3">
-        <!-- Metric Info -->
-        <div class="flex items-center justify-between text-sm">
-          <div class="flex items-center space-x-2 text-muted-foreground">
+        
+        <div class="flex flex-col md:flex-row items-center justify-between">
+          <div class="flex flex-row justify-start items-center gap-x-2">
             <FolderOpen class="h-3 w-3" />
-            <span>{{ metric.data_model_name || 'Unknown Model' }}</span>
+            <span class="text-sm text-muted-foreground">{{ metric.data_model_name || 'Unknown Model' }}</span>
           </div>
-          <span class="text-muted-foreground">{{ metric.alias || metric.name }}</span>
-        </div>
-        
-        <!-- Parameters -->
-        <div v-if="metric.parameters && metric.parameters.length > 0" class="flex items-center space-x-1 text-sm text-muted-foreground">
-          <Settings class="h-3 w-3" />
-          <span>{{ metric.parameters.length }} parameters</span>
-        </div>
-        
-        <div class="flex items-center justify-between">
-          <span class="text-xs text-muted-foreground">
-            {{ formatRelativeTime(metric.updated_at) }}
-          </span>
+          <span class="text-xs text-lime-700 dark:text-lime-300">
+            Updated {{ formatRelativeTime(metric.updated_at) }}
+            </span>
         </div>
       </div>
     </CardContent>

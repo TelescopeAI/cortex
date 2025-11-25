@@ -1,5 +1,7 @@
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, TYPE_CHECKING
 from uuid import UUID
+
+from pydantic import field_validator
 
 from cortex.core.types.telescope import TSModel
 from cortex.core.types.dashboards import (
@@ -10,6 +12,9 @@ from cortex.core.types.dashboards import (
     ValueSelectionMode,
     ValueSelectionConfig,
 )
+
+if TYPE_CHECKING:
+    from cortex.api.schemas.requests.metrics import MetricCreateRequest
 
 
 class DashboardLayoutRequest(TSModel):
@@ -121,16 +126,37 @@ class MetricExecutionOverridesRequest(TSModel):
 
 
 class DashboardWidgetRequest(TSModel):
-    """Request model for dashboard widget creation/update."""
+    """Request model for dashboard widget creation/update.
+    
+    Metric can be specified either by metric_id (reference to stored metric) or
+    by providing a metric object directly (inline metric definition via MetricCreateRequest).
+    """
     alias: str
     section_alias: str
-    metric_id: UUID
+    metric_id: Optional[UUID] = None  # Reference to stored metric (mutually exclusive with metric)
+    metric: Optional["MetricCreateRequest"] = None  # Inline metric definition (mutually exclusive with metric_id)
     position: int
     grid_config: WidgetGridConfigRequest
     title: str  # Required widget title
     description: Optional[str] = None
     visualization: VisualizationConfigRequest
     metric_overrides: Optional[MetricExecutionOverridesRequest] = None
+    
+    @field_validator('metric_id', 'metric', mode='after')
+    @classmethod
+    def validate_metric_specification(cls, v, info):
+        """Ensure exactly one of metric_id or metric is provided."""
+        data = info.data
+        metric_id = data.get('metric_id')
+        metric = data.get('metric')
+        
+        # Only validate if we're checking the last field
+        if info.field_name == 'metric':
+            if metric_id is not None and metric is not None:
+                raise ValueError("Cannot provide both metric_id and metric; provide exactly one")
+            if metric_id is None and metric is None:
+                raise ValueError("Must provide either metric_id or metric")
+        return v
 
 
 class DashboardSectionRequest(TSModel):
@@ -199,3 +225,13 @@ class SetDefaultViewRequest(TSModel):
     """Request model for setting default view."""
     # Reference view by alias string
     view_alias: str
+
+
+# Rebuild models to resolve forward references
+def _rebuild_models():
+    """Rebuild Pydantic models to resolve forward references."""
+    from cortex.api.schemas.requests.metrics import MetricCreateRequest
+    DashboardWidgetRequest.model_rebuild()
+
+
+_rebuild_models()

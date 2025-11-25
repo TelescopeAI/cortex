@@ -10,8 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '~/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '~/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
-import { Separator } from '~/components/ui/separator'
-import { Search, Filter, Plus, MoreHorizontal, ChevronDown, Database, Loader2, Sparkles } from 'lucide-vue-next'
+import { TracingBeam } from '~/components/ui/tracing-beam'
+import { Search, Filter, Plus, MoreHorizontal, ChevronDown, Database, Loader2, Sparkles, Target } from 'lucide-vue-next'
 import type { DataModel } from '~/composables/useDataModels'
 import type { SemanticMetric } from '~/composables/useMetrics'
 import CreateMetricDialog from '~/components/CreateMetricDialog.vue'
@@ -360,25 +360,64 @@ onMounted(() => {
 <template>
   <div class="container mx-auto py-6 space-y-6">
     <!-- Page Header -->
-    <div class="flex items-center justify-between">
+    <div class="flex flex-col md:flex-row flex-wrap items-start md:items-center space-y-4 md:space-y-0 md:space-x-4 justify-between mb-10">
       <div class="space-y-1">
-        <h2 class="text-2xl font-semibold tracking-tight">📊 Metrics Management</h2>
-        <p class="text-sm text-muted-foreground">
-          Manage your data models and metrics in one unified interface
-        </p>
+        <h2 class="text-2xl font-semibold tracking-tight">Metrics</h2>
       </div>
       
-      <div class="flex items-center space-x-2">
-        <!-- Generate Recommendations Button -->
-        <Button variant="outline" size="sm" @click="navigateTo('/metrics/recommendations')">
+      <div class="flex flex-col md:flex-row flex-wrap items-start md:items-center space-y-4 md:space-y-2  xl:space-y-0 md:space-x-4 justify-between">
+        <div class="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
+          <!-- Search -->
+          <div class="min-w-[25vw]">
+            <div class="relative">
+              <Search class="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                v-model="searchQuery"
+                placeholder="Search models and metrics..."
+                class="pl-8"
+              />
+            </div>
+          </div>
+          
+          
+          <!-- Status Filter -->
+          <Select v-model="selectedStatus">
+            <SelectTrigger class="w-[140px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem :value="null">All Status</SelectItem>
+              <SelectItem value="valid">Valid</SelectItem>
+              <SelectItem value="invalid">Invalid</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <!-- Model Filter (for metrics view) -->
+          <Select v-if="currentView === 'metrics'" v-model="selectedModel">
+            <SelectTrigger class="w-[180px]">
+              <SelectValue placeholder="Model" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem :value="null">All Models</SelectItem>
+              <SelectItem v-for="model in models || []" :key="model.id" :value="model.id">
+                {{ model.name }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div class="flex flex-row space-x-4">
+          <!-- Generate Recommendations Button -->
+        <Button variant="outline" size="lg" class="cursor-pointer hover:bg-fuchsia-600 hover:dark:bg-fuchsia-600 hover:text-white"
+         @click="navigateTo('/metrics/recommendations')">
           <Sparkles class="h-4 w-4 mr-2" />
-          Recommendations
+          Auto Generate
         </Button>
         
         <!-- Create New Dropdown -->
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
-            <Button size="sm">
+            <Button size="lg">
               <Plus class="h-4 w-4 mr-2" />
               Add
               <ChevronDown class="h-4 w-4 ml-2" />
@@ -395,6 +434,7 @@ onMounted(() => {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </div>
     </div>
 
@@ -475,51 +515,7 @@ onMounted(() => {
       @created="onMetricCreated"
     />
 
-    <!-- Filters and Search -->
-    <Card>
-      <CardContent class="pt-6">
-        <div class="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
-          <!-- Search -->
-          <div class="flex-1">
-            <div class="relative">
-              <Search class="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                v-model="searchQuery"
-                placeholder="Search models and metrics..."
-                class="pl-8"
-              />
-            </div>
-          </div>
-          
-          
-          <!-- Status Filter -->
-          <Select v-model="selectedStatus">
-            <SelectTrigger class="w-[140px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem :value="null">All Status</SelectItem>
-              <SelectItem value="valid">Valid</SelectItem>
-              <SelectItem value="invalid">Invalid</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <!-- Model Filter (for metrics view) -->
-          <Select v-if="currentView === 'metrics'" v-model="selectedModel">
-            <SelectTrigger class="w-[180px]">
-              <SelectValue placeholder="Model" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem :value="null">All Models</SelectItem>
-              <SelectItem v-for="model in models || []" :key="model.id" :value="model.id">
-                {{ model.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </CardContent>
-    </Card>
+    
 
     <!-- View Toggle -->
     <Tabs :value="currentView" @update:value="onViewChange" default-value="metrics" class="w-full">
@@ -686,7 +682,7 @@ onMounted(() => {
               <h3 class="text-sm font-medium text-muted-foreground">Recently Updated</h3>
               <Badge variant="secondary">{{ categorizedMetrics.recent.length }}</Badge>
             </div>
-            <div class="space-y-4 px-6">
+            <div class="pl-6 space-y-4 grid grid-cols-1 md:grid-cols-3 gap-4">
               <MetricListMetricCard
                 v-for="metric in categorizedMetrics.recent"
                 :key="metric.id"
@@ -702,7 +698,7 @@ onMounted(() => {
               <h3 class="text-sm font-medium text-muted-foreground">Updated This Month</h3>
               <Badge variant="secondary">{{ categorizedMetrics.thisMonth.length }}</Badge>
             </div>
-            <div class="space-y-4 px-6">
+            <div class="space-y-4 pl-6 grid grid-cols-3 gap-4">
               <MetricListMetricCard
                 v-for="metric in categorizedMetrics.thisMonth"
                 :key="metric.id"
@@ -718,7 +714,7 @@ onMounted(() => {
               <h3 class="text-sm font-medium text-muted-foreground">Older</h3>
               <Badge variant="secondary">{{ categorizedMetrics.older.length }}</Badge>
             </div>
-            <div class="space-y-4 px-6">
+            <div class="space-y-4 pl-6 grid grid-cols-3 gap-4">
               <MetricListMetricCard
                 v-for="metric in categorizedMetrics.older"
                 :key="metric.id"

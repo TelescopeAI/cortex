@@ -20,14 +20,13 @@ duckdb-engine = "^0.17.0"
 pymysql = {extras = ["rsa"], version = "^1.1.2"}
 redis = "^6.4.0"
 
-
 [tool.poetry.group.api]
 optional = true
 
 [tool.poetry.group.api.dependencies]
 fastapi = {extras = ["standard"], version = "^0.115.8"}
 scalar-fastapi = "^1.0.3"
-secweb = "^1.18.1"
+secweb = "^1.25.2"
 uvicorn="^0.36.1"
 
 [tool.poetry.extras]

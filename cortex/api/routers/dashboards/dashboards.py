@@ -24,6 +24,7 @@ from cortex.core.exceptions.dashboards import (
     DashboardExecutionError, WidgetExecutionError
 )
 from cortex.core.services.metrics import MetricExecutionService
+from cortex.core.semantics.metrics.metric import SemanticMetric
 from cortex.core.types.dashboards import AxisDataType
 
 DashboardRouter = APIRouter()
@@ -623,7 +624,7 @@ def _convert_create_request_to_dashboard(request: DashboardCreateRequest) -> Das
     response_model=DashboardExecutionResponse,
     tags=["Dashboards"]
 )
-async def preview_dashboard_config(dashboard_id: UUID, config: DashboardUpdateRequest):
+async def preview_dashboard(dashboard_id: UUID, config: DashboardUpdateRequest):
     """
     Preview dashboard execution results without saving to database.
     Takes a dashboard configuration and simulates execution to show expected output.
@@ -645,15 +646,26 @@ async def preview_dashboard_config(dashboard_id: UUID, config: DashboardUpdateRe
         for section in preview_view.sections:
             for index, widget in enumerate(section.widgets):
                 try:
-                    # Execute the actual metric
-                    if not widget.metric_id:
-                        raise ValueError("Widget must have a metric_id for preview")
+                    # Execute the actual metric - support both metric_id and embedded metric
+                    execution_kwargs = {
+                        "context_id": preview_view.context_id
+                    }
+                    
+                    if widget.metric:
+                        # Convert MetricCreateRequest to SemanticMetric for execution
+                        embedded_metric = SemanticMetric(
+                            id=uuid4(),  # Generate temporary ID
+                            environment_id=config.environment_id if hasattr(config, 'environment_id') else uuid4(),
+                            **widget.metric.model_dump()
+                        )
+                        execution_kwargs["metric"] = embedded_metric
+                    elif widget.metric_id:
+                        execution_kwargs["metric_id"] = widget.metric_id
+                    else:
+                        raise ValueError("Widget must have either metric_id or embedded metric for preview")
 
                     # Execute metric using the shared service
-                    execution_result = MetricExecutionService.execute_metric(
-                        metric_id=widget.metric_id,
-                        context_id=preview_view.context_id
-                    )
+                    execution_result = MetricExecutionService.execute_metric(**execution_kwargs)
 
                     if not execution_result.get("success"):
                         raise Exception(execution_result.get("error", "Metric execution failed"))

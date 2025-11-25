@@ -30,7 +30,8 @@ class MetricExecutionService:
     
     @staticmethod
     def execute_metric(
-        metric_id: UUID,
+        metric_id: Optional[UUID] = None,
+        metric: Optional[SemanticMetric] = None,
         context_id: Optional[str] = None,
         parameters: Optional[Dict[str, Any]] = None,
         limit: Optional[int] = None,
@@ -45,7 +46,8 @@ class MetricExecutionService:
         Execute a metric and return the result.
         
         Args:
-            metric_id: UUID of the metric to execute
+            metric_id: UUID of the metric to execute (mutually exclusive with metric)
+            metric: SemanticMetric object to execute directly (mutually exclusive with metric_id)
             context_id: Optional context ID for execution
             parameters: Optional parameters for metric execution
             limit: Optional limit for result rows
@@ -60,38 +62,50 @@ class MetricExecutionService:
             Dict containing execution result with success, data, metadata, and errors
             
         Raises:
-            ValueError: If metric or data model not found
+            ValueError: If neither metric_id nor metric provided, or both provided,
+                       or if metric/data model not found
             Exception: For execution errors
         """
+        # Validate that exactly one of metric_id or metric is provided
+        if metric_id is not None and metric is not None:
+            raise ValueError("Cannot provide both metric_id and metric; provide exactly one")
+        if metric_id is None and metric is None:
+            raise ValueError("Must provide either metric_id or metric")
+        
         metric_service = MetricService()
         model_service = DataModelService()
         
         try:
-            # Get metric
-            db_metric = metric_service.get_metric_by_id(metric_id)
-            if not db_metric:
-                raise ValueError(f"Metric with ID {metric_id} not found")
-            
-            # Convert ORM to Pydantic using automatic conversion
-            metric = SemanticMetric.model_validate(db_metric)
+            # Get or use provided metric
+            if metric is not None:
+                # Use the provided metric directly
+                resolved_metric = metric
+                effective_metric_id = metric.id
+            else:
+                # Fetch metric from database
+                db_metric = metric_service.get_metric_by_id(metric_id)
+                if not db_metric:
+                    raise ValueError(f"Metric with ID {metric_id} not found")
+                resolved_metric = SemanticMetric.model_validate(db_metric)
+                effective_metric_id = metric_id
             
             # Get data model for the metric
-            data_model = model_service.get_data_model_by_id(metric.data_model_id)
+            data_model = model_service.get_data_model_by_id(resolved_metric.data_model_id)
             if not data_model:
-                raise ValueError(f"Data model with ID {metric.data_model_id} not found")
+                raise ValueError(f"Data model with ID {resolved_metric.data_model_id} not found")
             
             # Convert ORM to Pydantic using automatic conversion
-            pydantic_model = DataModel.model_validate(data_model)
+            data_model = DataModel.model_validate(data_model)
             
             # Validate metric before execution
-            validation_result = ValidationService.validate_metric_execution(metric, pydantic_model)
+            validation_result = ValidationService.validate_metric_execution(resolved_metric, data_model)
             
             # If validation fails, return early with validation errors
             if not validation_result.is_valid:
                 return {
                     "success": False,
                     "data": None,
-                    "metadata": {"metric_id": str(metric_id)},
+                    "metadata": {"metric_id": str(effective_metric_id)},
                     "error": "Metric validation failed",
                     "validation_errors": validation_result.errors,
                     "validation_warnings": validation_result.warnings,
@@ -102,8 +116,8 @@ class MetricExecutionService:
             
             # Execute the metric with the new architecture
             result = executor.execute_metric(
-                metric=metric,
-                data_model=pydantic_model,
+                metric=resolved_metric,
+                data_model=data_model,
                 parameters=parameters or {},
                 limit=limit,
                 offset=offset,
@@ -277,7 +291,8 @@ class MetricsGenerationService:
     def _create_boolean_measure(
         column_name: str,
         table_name: str,
-        humanized_name: str
+        humanized_name: str,
+        humanized_measure_name: Optional[str] = None
     ) -> SemanticMeasure:
         """
         Create a measure for a boolean column using native Condition objects.
@@ -298,8 +313,11 @@ class MetricsGenerationService:
             else_return=0
         )
         
+        # Use humanized measure name if provided, otherwise generate default
+        measure_name = humanized_measure_name or MetricsGenerationService._humanize_name(f"count_{column_name}")
+        
         return SemanticMeasure(
-            name=f"count_{column_name}",
+            name=measure_name,
             description=f"Count of {humanized_name}",
             type=SemanticMeasureType.SUM,
             conditional=True,
@@ -353,8 +371,9 @@ class MetricsGenerationService:
         id_columns = classified_columns.get("id", [])
         count_column = id_columns[0]["name"] if id_columns else None
         
+        humanized_count = MetricsGenerationService._humanize_name("count")
         count_measure = SemanticMeasure(
-            name="count",
+            name=humanized_count,
             description=f"Count of {humanized_table}",
             type=SemanticMeasureType.COUNT,
             query=count_column if count_column else "*",
@@ -378,9 +397,10 @@ class MetricsGenerationService:
         for num_col in classified_columns.get("numeric", []):
             col_name = num_col["name"]
             humanized_col = MetricsGenerationService._humanize_name(col_name)
+            humanized_measure_name = MetricsGenerationService._humanize_name(f"total_{col_name}")
             
             sum_measure = SemanticMeasure(
-                name=f"total_{col_name}",
+                name=humanized_measure_name,
                 description=f"Total {humanized_col}",
                 type=SemanticMeasureType.SUM,
                 query=col_name,
@@ -404,9 +424,10 @@ class MetricsGenerationService:
         for bool_col in classified_columns.get("boolean", []):
             col_name = bool_col["name"]
             humanized_col = MetricsGenerationService._humanize_name(col_name)
+            humanized_bool_measure_name = MetricsGenerationService._humanize_name(f"count_{col_name}")
             
             bool_measure = MetricsGenerationService._create_boolean_measure(
-                col_name, table_name, humanized_col
+                col_name, table_name, humanized_col, humanized_bool_measure_name
             )
             
             metric_title = f"Count of {humanized_col}"
@@ -450,9 +471,10 @@ class MetricsGenerationService:
             for num_col in classified_columns.get("numeric", []):
                 col_name = num_col["name"]
                 humanized_col = MetricsGenerationService._humanize_name(col_name)
+                humanized_measure_name = MetricsGenerationService._humanize_name(f"total_{col_name}")
                 
                 sum_measure = SemanticMeasure(
-                    name=f"total_{col_name}",
+                    name=humanized_measure_name,
                     description=f"Total {humanized_col}",
                     type=SemanticMeasureType.SUM,
                     query=col_name,
@@ -492,8 +514,9 @@ class MetricsGenerationService:
         id_columns = classified_columns.get("id", [])
         count_column = id_columns[0]["name"] if id_columns else None
         
+        humanized_count = MetricsGenerationService._humanize_name("count")
         count_measure = SemanticMeasure(
-            name="count",
+            name=humanized_count,
             description=f"Count of {humanized_table}",
             type=SemanticMeasureType.COUNT,
             query=count_column if count_column else "*",
@@ -506,7 +529,7 @@ class MetricsGenerationService:
             humanized_col = MetricsGenerationService._humanize_name(col_name)
             
             dimension = SemanticDimension(
-                name=col_name,
+                name=humanized_col,
                 description=humanized_col,
                 query=col_name,
                 table=table_name
@@ -533,7 +556,7 @@ class MetricsGenerationService:
             humanized_col = MetricsGenerationService._humanize_name(col_name)
             
             dimension = SemanticDimension(
-                name=col_name,
+                name=humanized_col,
                 description=humanized_col,
                 query=col_name,
                 table=table_name
@@ -560,7 +583,7 @@ class MetricsGenerationService:
             humanized_date = MetricsGenerationService._humanize_name(primary_date_col)
             
             date_dimension = SemanticDimension(
-                name=primary_date_col,
+                name=humanized_date,
                 description=humanized_date,
                 query=primary_date_col,
                 table=table_name
@@ -569,9 +592,10 @@ class MetricsGenerationService:
             for num_col in classified_columns.get("numeric", []):
                 col_name = num_col["name"]
                 humanized_col = MetricsGenerationService._humanize_name(col_name)
+                humanized_measure_name = MetricsGenerationService._humanize_name(f"total_{col_name}")
                 
                 sum_measure = SemanticMeasure(
-                    name=f"total_{col_name}",
+                    name=humanized_measure_name,
                     description=f"Total {humanized_col}",
                     type=SemanticMeasureType.SUM,
                     query=col_name,
@@ -597,9 +621,10 @@ class MetricsGenerationService:
         for bool_col in classified_columns.get("boolean", []):
             bool_name = bool_col["name"]
             humanized_bool = MetricsGenerationService._humanize_name(bool_name)
+            humanized_bool_measure_name = MetricsGenerationService._humanize_name(f"count_{bool_name}")
             
             bool_measure = MetricsGenerationService._create_boolean_measure(
-                bool_name, table_name, humanized_bool
+                bool_name, table_name, humanized_bool, humanized_bool_measure_name
             )
             
             for cat_col in categorical_columns:
@@ -607,7 +632,7 @@ class MetricsGenerationService:
                 humanized_cat = MetricsGenerationService._humanize_name(cat_name)
                 
                 dimension = SemanticDimension(
-                    name=cat_name,
+                    name=humanized_cat,
                     description=humanized_cat,
                     query=cat_name,
                     table=table_name

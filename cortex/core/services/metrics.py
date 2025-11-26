@@ -84,10 +84,11 @@ class MetricExecutionService:
             else:
                 # Fetch metric from database
                 db_metric = metric_service.get_metric_by_id(metric_id)
-                if not db_metric:
+                if db_metric:
+                    resolved_metric = SemanticMetric.model_validate(db_metric)
+                    effective_metric_id = metric_id
+                else:
                     raise ValueError(f"Metric with ID {metric_id} not found")
-                resolved_metric = SemanticMetric.model_validate(db_metric)
-                effective_metric_id = metric_id
             
             # Get data model for the metric
             data_model = model_service.get_data_model_by_id(resolved_metric.data_model_id)

@@ -2,14 +2,13 @@
 import { ref, computed, watch } from 'vue'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '~/components/ui/card'
 import { Button } from '~/components/ui/button'
-import { Badge } from '~/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
-import { Checkbox } from '~/components/ui/checkbox'
 import { Separator } from '~/components/ui/separator'
 import { Alert, AlertDescription } from '~/components/ui/alert'
 import { Sparkles, Database, Target, Loader2, CheckCircle2, XCircle, ArrowLeft, ChevronRight } from 'lucide-vue-next'
 import type { SemanticMetric } from '~/composables/useMetrics'
 import { toast } from 'vue-sonner'
+import MetricPreviewCard from '~/components/recommend/MetricPreviewCard.vue'
 
 // Page metadata
 definePageMeta({
@@ -54,24 +53,6 @@ const selectedDataSourceName = computed(() => {
 const selectedDataModelName = computed(() => {
   return models.value?.find(m => m.id === selectedDataModel.value)?.name || 'Unknown'
 })
-
-// Helper function to determine if metric is comparison type
-const isComparisonMetric = (metric: SemanticMetric) => {
-  return metric.dimensions && metric.dimensions.length > 0
-}
-
-// Helper function to get metric type badge
-const getMetricTypeBadge = (metric: SemanticMetric) => {
-  return isComparisonMetric(metric) ? 'Comparison' : 'Single Value'
-}
-
-// Helper function to count measures, dimensions, filters
-const getMetricStats = (metric: SemanticMetric) => {
-  const measures = metric.measures?.length || 0
-  const dimensions = metric.dimensions?.length || 0
-  const filters = metric.filters?.length || 0
-  return { measures, dimensions, filters }
-}
 
 // Event handlers
 const handleGenerate = async () => {
@@ -344,109 +325,13 @@ onMounted(() => {
 
       <!-- Metrics List -->
       <div class="space-y-4">
-        <Card 
+        <MetricPreviewCard 
           v-for="metric in recommendedMetrics" 
           :key="metric.name"
-          class="relative hover:shadow-md transition-shadow"
-          :class="{ 'ring-2 ring-primary': selectedMetricIds.has(metric.name) }"
-        >
-          <CardHeader class="pb-3">
-            <div class="flex items-start space-x-3">
-              <Checkbox 
-                :id="`metric-${metric.name}`"
-                :checked="selectedMetricIds.has(metric.name)"
-                @click="(e: Event) => {
-                  e.stopPropagation();
-                  toggleMetric(metric.name, !(selectedMetricIds.has(metric.name)));
-                }"
-                class="mt-1"
-              />
-              <label :for="`metric-${metric.name}`" class="flex-1 space-y-1 cursor-pointer">
-                <CardTitle class="text-base font-medium">
-                  {{ metric.title || metric.name }}
-                </CardTitle>
-                <p class="text-xs text-muted-foreground line-clamp-2">
-                  {{ metric.description || 'No description' }}
-                </p>
-              </label>
-            </div>
-          </CardHeader>
-
-          <CardContent class="pt-0">
-            <div class="grid gap-4 md:grid-cols-3">
-              <!-- Left Column: Basic Info -->
-              <div class="space-y-3">
-                <!-- Metric Type Badge -->
-                <div class="flex items-center space-x-2">
-                  <Badge :variant="isComparisonMetric(metric) ? 'default' : 'secondary'">
-                    {{ getMetricTypeBadge(metric) }}
-                  </Badge>
-                  <Badge variant="outline" class="text-xs">
-                    {{ metric.table_name }}
-                  </Badge>
-                </div>
-
-                <!-- Metric Stats -->
-                <div class="flex flex-col space-y-1 text-xs text-muted-foreground">
-                  <span v-if="getMetricStats(metric).measures > 0">
-                    📊 {{ getMetricStats(metric).measures }} measure{{ getMetricStats(metric).measures !== 1 ? 's' : '' }}
-                  </span>
-                  <span v-if="getMetricStats(metric).dimensions > 0">
-                    🔷 {{ getMetricStats(metric).dimensions }} dim{{ getMetricStats(metric).dimensions !== 1 ? 's' : '' }}
-                  </span>
-                  <span v-if="getMetricStats(metric).filters > 0">
-                    🔍 {{ getMetricStats(metric).filters }} filter{{ getMetricStats(metric).filters !== 1 ? 's' : '' }}
-                  </span>
-                </div>
-              </div>
-
-              <!-- Middle Column: Measures -->
-              <div v-if="metric.measures && metric.measures.length > 0" class="space-y-2">
-                <p class="text-xs font-medium">Measures:</p>
-                <div class="space-y-1">
-                  <div 
-                    v-for="(measure, idx) in metric.measures" 
-                    :key="idx"
-                    class="text-xs text-muted-foreground pl-2"
-                  >
-                    • {{ measure.type?.toUpperCase() }}({{ measure.query || measure.name }})
-                  </div>
-                </div>
-              </div>
-
-              <!-- Right Column: Dimensions and Filters -->
-              <div class="space-y-3">
-                <!-- Dimension Details -->
-                <div v-if="metric.dimensions && metric.dimensions.length > 0" class="space-y-2">
-                  <p class="text-xs font-medium">Dimensions:</p>
-                  <div class="space-y-1">
-                    <div 
-                      v-for="(dim, idx) in metric.dimensions" 
-                      :key="idx"
-                      class="text-xs text-muted-foreground pl-2"
-                    >
-                      • {{ dim.name }}
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Filter Details -->
-                <div v-if="metric.filters && metric.filters.length > 0" class="space-y-2">
-                  <p class="text-xs font-medium">Filters:</p>
-                  <div class="space-y-1">
-                    <div 
-                      v-for="(filter, idx) in metric.filters" 
-                      :key="idx"
-                      class="text-xs text-muted-foreground pl-2"
-                    >
-                      • {{ filter.name || filter.query }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          :metric="metric"
+          :selected="selectedMetricIds.has(metric.name)"
+          @toggle-select="(checked) => toggleMetric(metric.name, checked)"
+        />
       </div>
     </div>
 

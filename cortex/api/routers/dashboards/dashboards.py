@@ -26,6 +26,7 @@ from cortex.core.exceptions.dashboards import (
 from cortex.core.services.metrics import MetricExecutionService
 from cortex.core.semantics.metrics.metric import SemanticMetric
 from cortex.core.types.dashboards import AxisDataType
+from cortex.core.dashboards.transformers import MetricExecutionResult
 
 DashboardRouter = APIRouter()
 
@@ -744,7 +745,7 @@ def _create_error_chart_data(error_message: str):
 
 def _convert_to_metric_execution_result(execution_result):
     """Convert metric service execution result to MetricExecutionResult format."""
-    from cortex.core.dashboards.transformers import MetricExecutionResult
+
 
     # Extract data from the execution result
     data = execution_result.get("data", [])

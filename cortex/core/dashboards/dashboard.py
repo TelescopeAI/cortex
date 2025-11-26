@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional, Dict, Any, Literal, TYPE_CHECKING
+from typing import List, Optional, Dict, Any, Literal
 from uuid import UUID, uuid4
 
 import pytz
@@ -11,9 +11,7 @@ from cortex.core.types.dashboards import (
     NumberFormat, ComparisonType, ValueSelectionMode, ValueSelectionConfig
 )
 from cortex.core.types.telescope import TSModel
-
-if TYPE_CHECKING:
-    from cortex.core.semantics.metrics.metric import SemanticMetric
+from cortex.core.semantics.metrics.metric import SemanticMetric
 
 
 class Dashboard(TSModel):
@@ -153,7 +151,7 @@ class SingleValueConfig(TSModel):
     """
     Configuration for single value displays (KPI cards).
     """
-    number_format: NumberFormat
+    number_format: Optional[NumberFormat] = NumberFormat.DECIMAL  # Default to decimal format
     prefix: Optional[str] = None
     suffix: Optional[str] = None
     show_comparison: bool = True
@@ -164,8 +162,8 @@ class SingleValueConfig(TSModel):
     show_title: bool = True
     show_description: bool = False
     compact_mode: bool = False
-    # New: selection strategy when multiple rows exist
-    selection_mode: ValueSelectionMode = ValueSelectionMode.FIRST
+    # Selection strategy when multiple rows exist
+    selection_mode: Optional[ValueSelectionMode] = ValueSelectionMode.FIRST
     selection_config: Optional[ValueSelectionConfig] = None
 
 
@@ -219,7 +217,7 @@ class DashboardWidget(TSModel):
     alias: str  # Required alias for referencing within dashboard
     section_alias: str  # Reference to DashboardSection by alias
     metric_id: Optional[UUID] = None  # Reference to stored SemanticMetric (mutually exclusive with metric)
-    metric: Optional["SemanticMetric"] = None  # Inline metric definition (mutually exclusive with metric_id)
+    metric: Optional[SemanticMetric] = None  # Inline metric definition (mutually exclusive with metric_id)
     
     # Position within section
     position: int  # Position within the section (0-based)
@@ -234,7 +232,7 @@ class DashboardWidget(TSModel):
     
     # Metric execution overrides (can override view's context)
     metric_overrides: Optional[MetricExecutionOverrides] = None
-    
+
     @model_validator(mode='after')
     def validate_metric_specification(self):
         """Ensure exactly one of metric_id or metric is provided."""
@@ -247,13 +245,7 @@ class DashboardWidget(TSModel):
 
 # Forward references for Pydantic - import SemanticMetric before rebuilding
 # to resolve the forward reference in DashboardWidget
-def _rebuild_models():
-    """Rebuild all Pydantic models to resolve forward references."""
-    from cortex.core.semantics.metrics.metric import SemanticMetric
-    # Rebuild in reverse dependency order (leaf nodes first)
-    DashboardWidget.model_rebuild()
-    DashboardSection.model_rebuild()
-    DashboardView.model_rebuild()
-    Dashboard.model_rebuild()
-
-_rebuild_models()
+DashboardWidget.model_rebuild()
+DashboardSection.model_rebuild()
+DashboardView.model_rebuild()
+Dashboard.model_rebuild()

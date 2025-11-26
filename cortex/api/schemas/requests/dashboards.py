@@ -1,7 +1,7 @@
-from typing import Optional, List, Dict, Any, Union, TYPE_CHECKING
+from typing import Optional, List, Dict, Any
 from uuid import UUID
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 
 from cortex.core.types.telescope import TSModel
 from cortex.core.types.dashboards import (
@@ -13,8 +13,7 @@ from cortex.core.types.dashboards import (
     ValueSelectionConfig,
 )
 
-if TYPE_CHECKING:
-    from cortex.api.schemas.requests.metrics import MetricCreateRequest
+from cortex.api.schemas.requests.metrics import MetricCreateRequest
 
 
 class DashboardLayoutRequest(TSModel):
@@ -63,7 +62,7 @@ class DataMappingRequest(TSModel):
 
 class SingleValueConfigRequest(TSModel):
     """Request model for single value configuration."""
-    number_format: NumberFormat
+    number_format: Optional[NumberFormat] = NumberFormat.DECIMAL  # Default to decimal format
     prefix: Optional[str] = None
     suffix: Optional[str] = None
     show_comparison: bool = True
@@ -73,18 +72,18 @@ class SingleValueConfigRequest(TSModel):
     show_title: bool = True
     show_description: bool = False
     compact_mode: bool = False
-    # Value selection
-    selection_mode: Optional[ValueSelectionMode] = None
+    # Value selection - default to FIRST row when multiple rows exist
+    selection_mode: Optional[ValueSelectionMode] = ValueSelectionMode.FIRST
     selection_config: Optional[ValueSelectionConfig] = None
 
 
 class ChartConfigRequest(TSModel):
     """Request model for chart configuration."""
-    show_points: Optional[bool] = None
-    line_width: Optional[int] = None
+    show_points: Optional[bool] = True
+    line_width: Optional[int] = 2
     bar_width: Optional[float] = None
-    stack_bars: Optional[bool] = None
-    smooth_lines: Optional[bool] = None
+    stack_bars: bool = False
+    smooth_lines: bool = False
     area_stacking_type: Optional[str] = None
 
 
@@ -98,8 +97,8 @@ class GaugeConfigRequest(TSModel):
     show_target: bool = True
     gauge_type: str = "arc"
     thickness: int = 10
-    # Optional value selection as in single value
-    selection_mode: Optional[ValueSelectionMode] = None
+    # Value selection - default to FIRST row when multiple rows exist
+    selection_mode: Optional[ValueSelectionMode] = ValueSelectionMode.FIRST
     selection_config: Optional[ValueSelectionConfig] = None
 
 
@@ -134,7 +133,7 @@ class DashboardWidgetRequest(TSModel):
     alias: str
     section_alias: str
     metric_id: Optional[UUID] = None  # Reference to stored metric (mutually exclusive with metric)
-    metric: Optional["MetricCreateRequest"] = None  # Inline metric definition (mutually exclusive with metric_id)
+    metric: Optional[MetricCreateRequest] = None  # Inline metric definition (mutually exclusive with metric_id)
     position: int
     grid_config: WidgetGridConfigRequest
     title: str  # Required widget title
@@ -142,21 +141,14 @@ class DashboardWidgetRequest(TSModel):
     visualization: VisualizationConfigRequest
     metric_overrides: Optional[MetricExecutionOverridesRequest] = None
     
-    @field_validator('metric_id', 'metric', mode='after')
-    @classmethod
-    def validate_metric_specification(cls, v, info):
+    @model_validator(mode='after')
+    def validate_metric_specification(self):
         """Ensure exactly one of metric_id or metric is provided."""
-        data = info.data
-        metric_id = data.get('metric_id')
-        metric = data.get('metric')
-        
-        # Only validate if we're checking the last field
-        if info.field_name == 'metric':
-            if metric_id is not None and metric is not None:
-                raise ValueError("Cannot provide both metric_id and metric; provide exactly one")
-            if metric_id is None and metric is None:
-                raise ValueError("Must provide either metric_id or metric")
-        return v
+        if self.metric_id is not None and self.metric is not None:
+            raise ValueError("Cannot provide both metric_id and metric; provide exactly one")
+        if self.metric_id is None and self.metric is None:
+            raise ValueError("Must provide either metric_id or metric")
+        return self
 
 
 class DashboardSectionRequest(TSModel):
@@ -227,11 +219,4 @@ class SetDefaultViewRequest(TSModel):
     view_alias: str
 
 
-# Rebuild models to resolve forward references
-def _rebuild_models():
-    """Rebuild Pydantic models to resolve forward references."""
-    from cortex.api.schemas.requests.metrics import MetricCreateRequest
-    DashboardWidgetRequest.model_rebuild()
-
-
-_rebuild_models()
+DashboardWidgetRequest.model_rebuild()

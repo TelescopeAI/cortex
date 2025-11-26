@@ -22,7 +22,7 @@ const props = withDefaults(defineProps<{
 })
 
 const formattedValue = computed(() => {
-  if (props.value === null || props.value === undefined) return 'N/A'
+  if (props.value === null || props.value === undefined) return '0'
   const cfg = props.config || {}
 
   // If value is a non-numeric string (e.g., concatenate mode), render as-is with prefix/suffix

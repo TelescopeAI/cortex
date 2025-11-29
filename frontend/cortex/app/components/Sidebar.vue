@@ -99,19 +99,19 @@ watch([selectedWorkspaceId, selectedEnvironmentId], ([workspaceId, environmentId
 
       <!-- Navigation -->
       <SidebarMenu>
-        <SidebarMenuButton @click="router.push('/')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
+        <SidebarMenuButton @click="router.push('/')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:inset-shadow-xl hover:border cursor-pointer transition-colors">
           <Home class="w-4 h-4 mr-2" />
           Home
         </SidebarMenuButton>
-        <SidebarMenuButton @click="router.push('/metrics')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
+        <SidebarMenuButton @click="router.push('/metrics')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:inset-shadow-xl hover:border cursor-pointer transition-colors">
           <Target class="w-4 h-4 mr-2" />
           Metrics
         </SidebarMenuButton>
-        <SidebarMenuButton @click="router.push('/dashboards')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
+        <SidebarMenuButton @click="router.push('/dashboards')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:inset-shadow-xl hover:border cursor-pointer transition-colors">
           <BarChart3 class="w-4 h-4 mr-2" />
           Dashboards
         </SidebarMenuButton>
-        <SidebarMenuButton @click="router.push('/data/sources')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
+        <SidebarMenuButton @click="router.push('/data/sources')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:inset-shadow-xl hover:border cursor-pointer  transition-colors">
           <Database class="w-4 h-4 mr-2" />
           Data Sources
         </SidebarMenuButton>
@@ -119,7 +119,7 @@ watch([selectedWorkspaceId, selectedEnvironmentId], ([workspaceId, environmentId
           <Zap class="w-4 h-4 mr-2" />
           Pre-Aggregations
         </SidebarMenuButton> -->
-        <SidebarMenuButton @click="router.push('/consumers')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors">
+        <SidebarMenuButton @click="router.push('/consumers')" class="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:inset-shadow-xl hover:border cursor-pointer transition-colors">
           <Users class="w-4 h-4 mr-2" />
           Consumers
         </SidebarMenuButton>

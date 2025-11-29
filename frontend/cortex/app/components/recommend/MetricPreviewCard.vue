@@ -30,7 +30,7 @@ const metricTitle = computed(() => {
 
 <template>
   <Card 
-    class="relative hover:shadow-xl hover:shadow-indigo-100 transition-shadow"
+    class="relative hover:shadow-xl hover:dark:shadow-md hover:shadow-indigo-100 dark:hover:shadow-indigo-500 transition-shadow"
     :class="{ 'ring-2 ring-primary': selected }"
   >
     <CardContent class="p-4">
@@ -48,7 +48,7 @@ const metricTitle = computed(() => {
             />
             
             <div class="flex-1 space-y-2">
-              <h3 class="text-2xl font-semibold text-indigo-900 leading-tight">{{ metricTitle }}</h3>
+              <h3 class="text-2xl font-semibold text-indigo-900 dark:text-indigo-100 leading-tight">{{ metricTitle }}</h3>
               <p class="text-sm text-muted-foreground line-clamp-3">
                 {{ metricDescription }}
               </p>

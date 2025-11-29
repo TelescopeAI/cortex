@@ -168,6 +168,21 @@ class DashboardViewRequest(TSModel):
     sections: Optional[List[DashboardSectionRequest]] = None
     context_id: Optional[str] = None
     layout: Optional[DashboardLayoutRequest] = None
+    
+    @model_validator(mode='after')
+    def ensure_default_section(self):
+        """Ensure view has at least one section, create a default if none provided."""
+        if self.sections is None or len(self.sections) == 0:
+            self.sections = [
+                DashboardSectionRequest(
+                    alias='default',
+                    title='Default',
+                    description=None,
+                    position=0,
+                    widgets=[]
+                )
+            ]
+        return self
 
 
 class DashboardCreateRequest(TSModel):
@@ -177,9 +192,25 @@ class DashboardCreateRequest(TSModel):
     name: str
     description: Optional[str] = None
     type: DashboardType
-    views: List[DashboardViewRequest]
+    views: Optional[List[DashboardViewRequest]] = None
     default_view_index: int = 0  # Index in views list to set as default
     tags: Optional[List[str]] = None
+    
+    @model_validator(mode='after')
+    def ensure_default_view(self):
+        """Ensure dashboard has at least one view, create a default if none provided."""
+        if self.views is None or len(self.views) == 0:
+            self.views = [
+                DashboardViewRequest(
+                    alias='default',
+                    title='Default',
+                    description=None,
+                    sections=None,  # Will be populated by DashboardViewRequest validator
+                    context_id=None,
+                    layout=None
+                )
+            ]
+        return self
 
 
 class DashboardUpdateRequest(TSModel):

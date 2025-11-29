@@ -4,6 +4,7 @@ from uuid import UUID
 
 from cortex.core.types.telescope import TSModel
 from cortex.core.types.dashboards import DashboardType, VisualizationType, ColorScheme, NumberFormat, ValueSelectionMode
+from cortex.api.schemas.responses.metrics import MetricResponse
 
 
 class DashboardLayoutResponse(TSModel):
@@ -118,10 +119,15 @@ class MetricExecutionOverridesResponse(TSModel):
 
 
 class DashboardWidgetResponse(TSModel):
-    """Response model for dashboard widget."""
+    """Response model for dashboard widget.
+    
+    Supports both metric_id (reference to stored metric) and metric (embedded metric).
+    Exactly one of metric_id or metric must be provided.
+    """
     alias: str
     section_alias: str
-    metric_id: UUID
+    metric_id: Optional[UUID] = None  # Reference to stored metric
+    metric: Optional[MetricResponse] = None  # Embedded metric definition
     position: int
     grid_config: WidgetGridConfigResponse
     title: str

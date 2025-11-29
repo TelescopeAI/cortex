@@ -52,7 +52,7 @@ const selectedMetric = ref<SemanticMetric | null>(null)
 const availableTables = ref<Array<{ name: string; columns: Array<{ name: string; type: string }> }>>([])
 const dataMapping = ref<any>({})
 const singleValue = reactive<any>({
-  number_format: 'auto',
+  number_format: 'decimal',
   prefix: '',
   suffix: '',
   show_comparison: true,
@@ -148,8 +148,8 @@ watch(() => props.widget, (widget, oldWidget) => {
     form.title = widget.title || ''
     form.metric_id = widget.metric_id || ''
     form.type = widget.visualization?.type || 'single_value'
-    form.columns = widget.grid_config?.columns || 3
-    form.rows = widget.grid_config?.rows || 1
+    form.columns = widget.grid_config?.columns || 12
+    form.rows = widget.grid_config?.rows || 3
     
     // Load data mapping from widget
     if (widget.visualization?.data_mapping) {

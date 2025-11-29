@@ -1,7 +1,6 @@
 <template>
   <Card 
-    class="hover:shadow-2xl hover:shadow-blue-400/40 hover:border-blue-400
-           hover:drop-shadow-2xl hover:inset-shadow-blue-900
+    class="hover:ring-2 hover:ring-indigo-900
           h-80 lg:h-40 justify-between
            transition-shadow cursor-pointer gap-0"
     @click="$emit('click')"

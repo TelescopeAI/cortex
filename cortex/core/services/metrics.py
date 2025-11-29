@@ -368,31 +368,39 @@ class MetricsGenerationService:
         humanized_table = MetricsGenerationService._humanize_name(table_name)
         
         # 1. Count metric
-        # Find primary ID column or use COUNT(*)
+        # Find primary ID column or use first available column (avoid '*' which causes issues)
         id_columns = classified_columns.get("id", [])
         count_column = id_columns[0]["name"] if id_columns else None
         
-        humanized_count = MetricsGenerationService._humanize_name("count")
-        count_measure = SemanticMeasure(
-            name=humanized_count,
-            description=f"Count of {humanized_table}",
-            type=SemanticMeasureType.COUNT,
-            query=count_column if count_column else "*",
-            table=table_name
-        )
+        # If no ID column, use the first column from any category
+        if not count_column:
+            all_columns = table.get("columns", [])
+            if all_columns:
+                count_column = all_columns[0].get("name")
         
-        metric_title = f"Count of {humanized_table}"
-        metrics.append(SemanticMetric(
-            environment_id=environment_id,
-            data_model_id=data_model_id,
-            data_source_id=data_source_id,
-            name=metric_title,
-            title=metric_title,
-            description=f"Total number of records in the {humanized_table} table",
-            table_name=table_name,
-            measures=[count_measure],
-            grouped=False
-        ))
+        # Only create count metric if we have a valid column
+        if count_column:
+            humanized_count = MetricsGenerationService._humanize_name("count")
+            count_measure = SemanticMeasure(
+                name=humanized_count,
+                description=f"Count of {humanized_table}",
+                type=SemanticMeasureType.COUNT,
+                query=count_column,
+                table=table_name
+            )
+            
+            metric_title = f"Count of {humanized_table}"
+            metrics.append(SemanticMetric(
+                environment_id=environment_id,
+                data_model_id=data_model_id,
+                data_source_id=data_source_id,
+                name=metric_title,
+                title=metric_title,
+                description=f"Total number of records in the {humanized_table} table",
+                table_name=table_name,
+                measures=[count_measure],
+                grouped=False
+            ))
         
         # 2. Sum metrics for numeric columns
         for num_col in classified_columns.get("numeric", []):
@@ -511,71 +519,79 @@ class MetricsGenerationService:
         table_name = table.get("name")
         humanized_table = MetricsGenerationService._humanize_name(table_name)
         
-        # Find primary ID column for count measure
+        # Find primary ID column for count measure or use first available column (avoid '*' which causes issues)
         id_columns = classified_columns.get("id", [])
         count_column = id_columns[0]["name"] if id_columns else None
         
-        humanized_count = MetricsGenerationService._humanize_name("count")
-        count_measure = SemanticMeasure(
-            name=humanized_count,
-            description=f"Count of {humanized_table}",
-            type=SemanticMeasureType.COUNT,
-            query=count_column if count_column else "*",
-            table=table_name
-        )
+        # If no ID column, use the first column from any category
+        if not count_column:
+            all_columns = table.get("columns", [])
+            if all_columns:
+                count_column = all_columns[0].get("name")
         
-        # 1. Count by date columns
-        for date_col in classified_columns.get("date", []):
-            col_name = date_col["name"]
-            humanized_col = MetricsGenerationService._humanize_name(col_name)
-            
-            dimension = SemanticDimension(
-                name=humanized_col,
-                description=humanized_col,
-                query=col_name,
+        # Only generate count-based comparison metrics if we have a valid column
+        if count_column:
+            humanized_count = MetricsGenerationService._humanize_name("count")
+            count_measure = SemanticMeasure(
+                name=humanized_count,
+                description=f"Count of {humanized_table}",
+                type=SemanticMeasureType.COUNT,
+                query=count_column,
                 table=table_name
             )
             
-            metric_title = f"Count of {humanized_table} by {humanized_col}"
-            metrics.append(SemanticMetric(
-                environment_id=environment_id,
-                data_model_id=data_model_id,
-                data_source_id=data_source_id,
-                name=metric_title,
-                title=metric_title,
-                description=f"Number of {humanized_table} records grouped by {humanized_col}",
-                table_name=table_name,
-                measures=[count_measure],
-                dimensions=[dimension],
-                grouped=True
-            ))
-        
-        # 2. Count by ID and categorical dimensions
-        dimension_columns = classified_columns.get("id", []) + classified_columns.get("categorical", [])
-        for dim_col in dimension_columns:
-            col_name = dim_col["name"]
-            humanized_col = MetricsGenerationService._humanize_name(col_name)
+            # 1. Count by date columns
+            for date_col in classified_columns.get("date", []):
+                col_name = date_col["name"]
+                humanized_col = MetricsGenerationService._humanize_name(col_name)
+                
+                dimension = SemanticDimension(
+                    name=humanized_col,
+                    description=humanized_col,
+                    query=col_name,
+                    table=table_name
+                )
+                
+                metric_title = f"Count of {humanized_table} by {humanized_col}"
+                metrics.append(SemanticMetric(
+                    environment_id=environment_id,
+                    data_model_id=data_model_id,
+                    data_source_id=data_source_id,
+                    name=metric_title,
+                    title=metric_title,
+                    description=f"Number of {humanized_table} records grouped by {humanized_col}",
+                    table_name=table_name,
+                    measures=[count_measure],
+                    dimensions=[dimension],
+                    grouped=True
+                ))
             
-            dimension = SemanticDimension(
-                name=humanized_col,
-                description=humanized_col,
-                query=col_name,
-                table=table_name
-            )
-            
-            metric_title = f"Count of {humanized_table} per {humanized_col}"
-            metrics.append(SemanticMetric(
-                environment_id=environment_id,
-                data_model_id=data_model_id,
-                data_source_id=data_source_id,
-                name=metric_title,
-                title=metric_title,
-                description=f"Distribution of {humanized_table} records across different {humanized_col} values",
-                table_name=table_name,
-                measures=[count_measure],
-                dimensions=[dimension],
-                grouped=True
-            ))
+            # 2. Count by ID and categorical dimensions
+            dimension_columns = classified_columns.get("id", []) + classified_columns.get("categorical", [])
+            for dim_col in dimension_columns:
+                col_name = dim_col["name"]
+                humanized_col = MetricsGenerationService._humanize_name(col_name)
+                
+                dimension = SemanticDimension(
+                    name=humanized_col,
+                    description=humanized_col,
+                    query=col_name,
+                    table=table_name
+                )
+                
+                metric_title = f"Count of {humanized_table} per {humanized_col}"
+                metrics.append(SemanticMetric(
+                    environment_id=environment_id,
+                    data_model_id=data_model_id,
+                    data_source_id=data_source_id,
+                    name=metric_title,
+                    title=metric_title,
+                    description=f"Distribution of {humanized_table} records across different {humanized_col} values",
+                    table_name=table_name,
+                    measures=[count_measure],
+                    dimensions=[dimension],
+                    grouped=True
+                ))
         
         # 3. Numeric measures by primary date dimension
         date_columns = classified_columns.get("date", [])

@@ -90,6 +90,7 @@ export default defineNuxtConfig({
       weights: [400],
       styles: ['normal', 'italic'],
       subsets: [
+        'Inter',
         'Space Grotesk'
       ]
     },

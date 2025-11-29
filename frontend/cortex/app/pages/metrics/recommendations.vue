@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, shallowRef } from 'vue'
+import { useIntersectionObserver } from '@vueuse/core'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '~/components/ui/card'
 import { Button } from '~/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
@@ -31,6 +32,18 @@ const selectedMetricIds = ref<Set<string>>(new Set())
 const isGenerating = ref(false)
 const isCreating = ref(false)
 const creationProgress = ref({ current: 0, total: 0, errors: [] as string[] })
+
+// Scroll detection for sticky header
+const scrollSentinel = ref<HTMLElement | null>(null)
+const isScrolled = shallowRef(false)
+
+useIntersectionObserver(
+  scrollSentinel,
+  ([entry]) => {
+    isScrolled.value = !entry?.isIntersecting
+  },
+  { threshold: 0 }
+)
 
 // Computed
 const canGenerate = computed(() => {
@@ -198,7 +211,7 @@ onMounted(() => {
 
     <div class="space-y-1">
       <h2 class="text-2xl font-semibold tracking-tight flex items-center space-x-2">
-        <Sparkles class="h-6 w-6 text-primary" />
+        <Sparkles class="h-6 w-6 text-primary hover:text-fuchsia-600 hover:animate-bounce hover:cursor-none" />
         <span>Generate Metric Recommendations</span>
       </h2>
       <p class="text-sm text-muted-foreground">
@@ -270,21 +283,31 @@ onMounted(() => {
             @click="handleGenerate" 
             :disabled="!canGenerate"
             size="lg"
+            class="hover:bg-fuchsia-600 hover:dark:bg-fuchsia-600 hover:text-white cursor-pointer"
           >
             <Loader2 v-if="isGenerating" class="h-4 w-4 mr-2 animate-spin" />
             <Sparkles v-else class="h-4 w-4 mr-2" />
-            {{ isGenerating ? 'Generating...' : 'Generate Recommendations' }}
+            {{ isGenerating ? 'Generating...' : 'Generate' }}
           </Button>
         </div>
       </CardContent>
     </Card>
 
     <!-- Step 2: Review -->
-    <div v-if="step === 'review'" class="space-y-6">
+    <div v-if="step === 'review'" class="space-y-6 flex flex-col">
+      <!-- Scroll sentinel for detecting when header becomes sticky -->
+      <div ref="scrollSentinel" class="h-0" aria-hidden="true"></div>
+      
       <!-- Summary Card -->
-      <Card>
-        <CardContent class="pt-6">
-          <div class="flex items-center justify-between">
+      <Card 
+        class="sticky top-0 z-1000 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+        :class="isScrolled ? 'w-fit justify-center self-center bg-background/20 backdrop-blur-xl shadow-lg scale-[0.98]' : 'scale-100'"
+      >
+        <CardContent 
+          class="transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+          :class="isScrolled ? 'w-fit' : 'w-full'"
+        >
+          <div class="flex items-center justify-between gap-x-10">
             <div class="space-y-1">
               <div class="flex items-center space-x-2">
                 <Database class="h-4 w-4 text-muted-foreground" />
@@ -315,7 +338,7 @@ onMounted(() => {
                 :disabled="selectedMetricIds.size === 0"
                 size="sm"
               >
-                Create {{ selectedMetricIds.size }} Selected
+                Add {{ selectedMetricIds.size }} Metrics
                 <ChevronRight class="h-4 w-4 ml-2" />
               </Button>
             </div>

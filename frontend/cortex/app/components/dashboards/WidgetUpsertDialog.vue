@@ -59,8 +59,8 @@ watch(() => props.initial, (val) => {
   form.title = val?.title ?? ''
   form.metric_id = (val as any)?.metric_id ?? ''
   form.type = (val as any)?.visualization?.type ?? 'single_value'
-  form.columns = (val as any)?.grid_config?.columns ?? 3
-  form.rows = (val as any)?.grid_config?.rows ?? 1
+  form.columns = (val as any)?.grid_config?.columns ?? 12
+  form.rows = (val as any)?.grid_config?.rows ?? 3
   if ((val as any)?.metric_id) {
     // fetch metric details for friendly label
     getMetric((val as any).metric_id as any).then(m => { if (m) { selectedMetric.value = m; buildAvailableTablesFromMetric(m) } })

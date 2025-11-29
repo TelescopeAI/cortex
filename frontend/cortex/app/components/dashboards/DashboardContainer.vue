@@ -16,6 +16,7 @@ interface Props {
   executionResults?: any
   lastExecutionTime?: string
   refreshKey?: number
+  metricsCount?: number
 }
 
 interface Emits {
@@ -23,7 +24,6 @@ interface Emits {
   (e: 'widget-updated'): void
   (e: 'section-updated'): void
   (e: 'add-section'): void
-  (e: 'add-widget', sectionId: string): void
   (e: 'edit-widget', widget: DashboardWidget): void
 }
 
@@ -172,15 +172,16 @@ function getWidgetExecutionResult(widgetId: string) {
         :execution-results="executionResults"
         :draggable="false"
         :dashboard-id="props.dashboard.id as any"
+        :dashboard="props.dashboard"
         :view-alias="props.view.alias"
         :refresh-key="props.refreshKey"
+        :metrics-count="props.metricsCount"
         @execute-widget="executeWidget"
         @widget-updated="handleWidgetUpdate"
         @section-updated="handleSectionUpdate"
         @drag-start="onSectionDragStart(section)"
         @drag-end="onSectionDragEnd"
         @drop="onSectionDrop(section)"
-        @add-widget="(sectionId) => emit('add-widget', sectionId)"
         @edit-widget="(widget) => emit('edit-widget', widget)"
       />
     </div>

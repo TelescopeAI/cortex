@@ -374,7 +374,7 @@ export function useDashboards() {
               title: widget.title || 'Preview Widget',
               description: widget.description || '',
               position: widget.position || index,
-              grid_config: widget.grid_config || { columns: 3, rows: 2 },
+              grid_config: widget.grid_config || { columns: 12, rows: 3 },
               visualization: {
                 type: widget.visualization?.type || 'single_value',
                 data_mapping: {

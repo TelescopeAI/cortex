@@ -21,10 +21,8 @@ RUN poetry config virtualenvs.create false && \
     poetry install --with api --no-interaction --no-ansi --no-root
 
 # Copy application code (this changes more frequently)
+# Note: migrations are now included inside cortex/migrations/ so no separate copy needed
 COPY cortex/ ./cortex/
-
-# Copy migrations directory (needed for auto-migration on startup)
-COPY migrations/ ./migrations/
 
 EXPOSE 9002
 

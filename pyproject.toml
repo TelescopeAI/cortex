@@ -1,11 +1,12 @@
 [tool.poetry]
 name = "telescope-cortex"
-version = "0.0.1a3"
+version = "0.0.1a4"
 description = "Minimal Headless BI for perfectionists with deadline"
 authors = ["Nilotpal Roychowdhury <nilotpal@jointelescope.com>"]
 license = "MIT"
 readme = "README.md"
 packages = [{include = "cortex"}]
+include = ["cortex/api/static/**/*", "cortex/migrations/**/*"]
 
 [tool.poetry.dependencies]
 python = ">=3.12,<3.14"
@@ -19,6 +20,11 @@ duckdb = "^1.4.1"
 duckdb-engine = "^0.17.0"
 pymysql = {extras = ["rsa"], version = "^1.1.2"}
 redis = "^6.4.0"
+# Optional API dependencies (installed with telescope-cortex[api])
+fastapi = {extras = ["standard"], version = "^0.115.8", optional = true}
+scalar-fastapi = {version = "^1.0.3", optional = true}
+secweb = {version = "^1.25.2", optional = true}
+uvicorn = {version = "^0.36.1", optional = true}
 
 [tool.poetry.group.api]
 optional = true
@@ -27,10 +33,10 @@ optional = true
 fastapi = {extras = ["standard"], version = "^0.115.8"}
 scalar-fastapi = "^1.0.3"
 secweb = "^1.25.2"
-uvicorn="^0.36.1"
+uvicorn = "^0.36.1"
 
 [tool.poetry.extras]
-api = ["fastapi", "scalar-fastapi", "secweb"]
+api = ["fastapi", "scalar-fastapi", "secweb", "uvicorn"]
 
 [build-system]
 requires = ["poetry-core"]

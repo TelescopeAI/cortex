@@ -38,7 +38,7 @@ if ExecutionEnv.https_enabled():
     SSL_KEYFILE = os.getenv("LOCAL_SSL_KEY")
     SSL_CERTIFICATE = os.getenv("LOCAL_SSL_CERT")
 
-ORIGINS = os.getenv("ALLOWED_ORIGINS").split(",")
+ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:9002").split(",")
 
 
 @asynccontextmanager

@@ -63,7 +63,7 @@
                   <SelectItem value="avg">average</SelectItem>
                   <SelectItem value="min">minimum</SelectItem>
                   <SelectItem value="max">maximum</SelectItem>
-                  <SelectItem value="distinct_count">distinct count</SelectItem>
+                  <SelectItem value="count_distinct">distinct count</SelectItem>
                   <SelectItem value="custom">custom</SelectItem>
                 </SelectContent>
               </Select>

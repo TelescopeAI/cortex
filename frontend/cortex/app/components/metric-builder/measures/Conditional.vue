@@ -60,7 +60,7 @@ const updateConditions = (conditions: Condition | null) => {
           <SelectItem value="avg">AVG</SelectItem>
           <SelectItem value="min">MIN</SelectItem>
           <SelectItem value="max">MAX</SelectItem>
-          <SelectItem value="distinct_count">COUNT DISTINCT</SelectItem>
+          <SelectItem value="count_distinct">COUNT DISTINCT</SelectItem>
         </SelectContent>
       </Select>
     </div>

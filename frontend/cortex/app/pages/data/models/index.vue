@@ -16,14 +16,14 @@
 
     <!-- Search and Filters -->
     <div class="flex items-center space-x-4">
-      <div class="flex-1 max-w-sm">
-        <Input
-          v-model="searchQuery"
-          placeholder="Search models..."
-          class="w-full"
-        />
-      </div>
-      
+      <ExpandableSearch
+        v-model="searchQuery"
+        :placeholder="['Search models...', 'Search by name...', 'Search by alias...']"
+        default-mode="minimal"
+        full-width="350px"
+        :expand-on-focus="true"
+        expand-to="full"
+      />
 
       <Select v-model="statusFilter">
         <SelectTrigger class="w-[150px]">
@@ -269,6 +269,7 @@ import {
   Plus, Grid3x3, List, Database, Hash, Clock, CheckCircle, XCircle, 
   MoreHorizontal, Copy, Trash2, AlertCircle 
 } from 'lucide-vue-next'
+import ExpandableSearch from '~/components/ExpandableSearch.vue'
 
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'

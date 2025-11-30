@@ -16,7 +16,6 @@ import { Progress } from '~/components/ui/progress'
 import { Switch } from '~/components/ui/switch'
 import { Checkbox } from '~/components/ui/checkbox'
 import { 
-  Search, 
   Filter, 
   Plus, 
   MoreHorizontal, 
@@ -35,6 +34,7 @@ import {
   Eye,
   Zap
 } from 'lucide-vue-next'
+import ExpandableSearch from '~/components/ExpandableSearch.vue'
 import type { SemanticMetric } from '~/composables/useMetrics'
 import type { 
   PreAggregationSpec, 
@@ -529,16 +529,14 @@ onUnmounted(() => {
       <CardContent class="pt-6">
         <div class="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
           <!-- Search -->
-          <div class="flex-1">
-            <div class="relative">
-              <Search class="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                v-model="searchQuery"
-                placeholder="Search pre-aggregations..."
-                class="pl-8"
-              />
-            </div>
-          </div>
+          <ExpandableSearch
+            v-model="searchQuery"
+            :placeholder="['Search pre-aggregations...', 'Search by name...']"
+            default-mode="minimal"
+            full-width="350px"
+            :expand-on-focus="true"
+            expand-to="full"
+          />
           
           <!-- Metric Filter -->
           <Select v-model="selectedMetric">

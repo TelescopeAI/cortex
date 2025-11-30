@@ -523,7 +523,7 @@ watch(currentDataSourceId, (newId, oldId) => {
 </script>
 
 <template>
-  <div class="container mx-auto py-6 space-y-6">
+  <div class="py-6 space-y-6">
     <!-- Loading state -->
     <div v-if="loading" class="space-y-6">
       <div class="flex items-center space-x-4">

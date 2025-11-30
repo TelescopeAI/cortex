@@ -89,7 +89,7 @@ const collapsibleSections = reactive({
     isOpen: false // Always closed by default, user expands when needed
   },
   widgetSettings: {
-    label: 'Widget Settings',
+    label: 'Visualization',
     icon: Settings,
     isOpen: true
   }
@@ -119,17 +119,33 @@ watch(selectedDataSourceId, async (newId) => {
   }
 })
 
-// Watch schema builder changes to update available tables for data mapping
-// This ensures embedded metric measures/dimensions are available in the widget config
+// Watch schema builder changes to update available tables and selectedMetric
+// This ensures embedded metric measures/dimensions are available in the widget config and preview
 watch(
   () => ({
     measures: schemaBuilder.schema.value.measures,
     dimensions: schemaBuilder.schema.value.dimensions,
-    tableName: schemaBuilder.schema.value.table_name || schemaBuilder.schema.value.name
+    tableName: schemaBuilder.schema.value.table_name || schemaBuilder.schema.value.name,
+    name: schemaBuilder.schema.value.name,
+    alias: schemaBuilder.schema.value.alias,
+    title: schemaBuilder.schema.value.title,
+    description: schemaBuilder.schema.value.description,
+    data_source_id: schemaBuilder.schema.value.data_source_id,
+    data_model_id: schemaBuilder.schema.value.data_model_id,
+    query: schemaBuilder.schema.value.query,
+    filters: schemaBuilder.schema.value.filters,
+    joins: schemaBuilder.schema.value.joins,
+    order: schemaBuilder.schema.value.order,
+    limit: schemaBuilder.schema.value.limit,
+    grouped: schemaBuilder.schema.value.grouped,
+    ordered: schemaBuilder.schema.value.ordered
   }),
-  ({ measures, dimensions, tableName }) => {
+  (schema) => {
     // Only update if we're in custom metric mode
     if (activeMetricTab.value === 'custom') {
+      const { measures, dimensions, tableName } = schema
+      
+      // Update available tables for data mapping
       const columns: { name: string; type: string }[] = []
       
       // Add dimensions
@@ -147,6 +163,29 @@ watch(
           name: tableName || 'Custom Metric', 
           columns 
         }]
+      }
+      
+      // Also update selectedMetric so preview uses latest schema data
+      if (editor.isEmbeddedMetric.value && schema.name) {
+        editor.selectedMetric.value = {
+          id: '',
+          name: schema.name,
+          alias: schema.alias || undefined,
+          title: schema.title || schema.name,
+          description: schema.description || undefined,
+          table_name: schema.tableName || undefined,
+          query: schema.query || undefined,
+          data_source_id: schema.data_source_id || selectedDataSourceId.value || undefined,
+          data_model_id: schema.data_model_id || undefined,
+          limit: schema.limit || undefined,
+          grouped: schema.grouped ?? true,
+          ordered: schema.ordered ?? true,
+          measures: measures?.length ? [...measures] : undefined,
+          dimensions: dimensions?.length ? [...dimensions] : undefined,
+          joins: schema.joins?.length ? [...schema.joins] : undefined,
+          filters: schema.filters?.length ? [...schema.filters] : undefined,
+          order: schema.order?.length ? [...schema.order] : undefined,
+        } as SemanticMetric
       }
     }
   },
@@ -372,10 +411,14 @@ function toggleExpanded() {
   isExpanded.value = !isExpanded.value
 }
 
-// Load widget data when editing
-watch(() => props.widget, (widget) => {
-  if (widget) {
-    loadWidgetForEditing(widget)
+// Track if widget has been loaded to prevent re-loading on prop reference changes
+const widgetLoaded = ref(false)
+
+// Load widget data when editing (only on initial load or when widget alias changes)
+watch(() => props.widget?.alias, (newAlias, oldAlias) => {
+  if (props.widget && (!widgetLoaded.value || newAlias !== oldAlias)) {
+    loadWidgetForEditing(props.widget)
+    widgetLoaded.value = true
   }
 }, { immediate: true })
 
@@ -644,7 +687,7 @@ onMounted(() => {
 
             <!-- Visualization Type -->
             <div class="space-y-2">
-              <Label>Visualization</Label>
+              <Label>Type</Label>
               <VisualizationTypeSelector v-model="editor.form.type" />
             </div>
 

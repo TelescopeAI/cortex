@@ -272,14 +272,21 @@ export function useWidgetEditor(options: UseWidgetEditorOptions) {
       Object.assign(gaugeConfig, widget.visualization.gauge_config)
     }
 
-    // Load metric details
+    // Load metric details - handle both metric_id and embedded metric
     if (widget.metric_id && selectedEnvironmentId.value) {
+      // Referenced metric - fetch from API
       getMetric(widget.metric_id, selectedEnvironmentId.value).then(m => {
         if (m) {
           selectedMetric.value = m
           buildAvailableTablesFromMetric(m)
         }
       })
+    } else if ((widget as any).metric) {
+      // Embedded metric - use directly
+      const embeddedMetric = (widget as any).metric
+      selectedMetric.value = embeddedMetric
+      isEmbeddedMetric.value = true
+      buildAvailableTablesFromMetric(embeddedMetric)
     }
 
     isInitialLoad.value = false

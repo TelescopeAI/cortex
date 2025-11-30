@@ -11,7 +11,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '~/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { TracingBeam } from '~/components/ui/tracing-beam'
-import { Search, Filter, Plus, MoreHorizontal, ChevronDown, Database, Loader2, Sparkles, Target } from 'lucide-vue-next'
+import { Filter, Plus, MoreHorizontal, ChevronDown, Database, Loader2, Sparkles, Target } from 'lucide-vue-next'
+import ExpandableSearch from '~/components/ExpandableSearch.vue'
 import type { DataModel } from '~/composables/useDataModels'
 import type { SemanticMetric } from '~/composables/useMetrics'
 import CreateMetricDialog from '~/components/CreateMetricDialog.vue'
@@ -358,53 +359,23 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="container mx-auto py-6 space-y-6">
+  <div class="container min-w-full space-y-6">
     <!-- Page Header -->
-    <div class="flex flex-col md:flex-row flex-wrap items-start md:items-center space-y-4 md:space-y-0 md:space-x-4 justify-between mb-10">
+    <div class="flex flex-col md:flex-row flex-wrap items-start w-full justify-between">
       <div class="space-y-1">
-        <h2 class="text-2xl font-semibold tracking-tight">Metrics</h2>
+        <h2 class="text-5xl font-bold">Metrics</h2>
       </div>
-      
-      <div class="flex flex-col md:flex-row flex-wrap items-start md:items-center space-y-4 md:space-y-2  xl:space-y-0 md:space-x-4 justify-between">
+      <div class="w-fit flex flex-row items-start space-x-4 justify-between">
         <div class="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
           <!-- Search -->
-          <div class="min-w-[25vw]">
-            <div class="relative">
-              <Search class="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                v-model="searchQuery"
-                placeholder="Search models and metrics..."
-                class="pl-8"
-              />
-            </div>
-          </div>
-          
-          
-          <!-- Status Filter -->
-          <Select v-model="selectedStatus">
-            <SelectTrigger class="w-[140px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem :value="null">All Status</SelectItem>
-              <SelectItem value="valid">Valid</SelectItem>
-              <SelectItem value="invalid">Invalid</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <!-- Model Filter (for metrics view) -->
-          <Select v-if="currentView === 'metrics'" v-model="selectedModel">
-            <SelectTrigger class="w-[180px]">
-              <SelectValue placeholder="Model" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem :value="null">All Models</SelectItem>
-              <SelectItem v-for="model in models || []" :key="model.id" :value="model.id">
-                {{ model.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+          <ExpandableSearch
+            v-model="searchQuery"
+            :placeholder="['Search by model name', 'Search by metric name']"
+            default-mode="minimal"
+            full-width="400px"
+            :expand-on-focus="true"
+            expand-to="full"
+          />
         </div>
         <div class="flex flex-row space-x-4">
           <!-- Generate Recommendations Button -->
@@ -436,6 +407,7 @@ onMounted(() => {
         </DropdownMenu>
         </div>
       </div>
+      
     </div>
 
     <!-- Create Model Dialog -->

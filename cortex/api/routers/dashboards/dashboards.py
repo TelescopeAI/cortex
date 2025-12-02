@@ -24,7 +24,15 @@ from cortex.core.exceptions.dashboards import (
     DashboardExecutionError, WidgetExecutionError
 )
 from cortex.core.services.metrics import MetricExecutionService
+from cortex.core.semantics.metrics.metric import SemanticMetric
 from cortex.core.types.dashboards import AxisDataType
+from cortex.core.dashboards.transformers import MetricExecutionResult
+from cortex.core.dashboards.dashboard import (
+        DashboardView, DashboardSection, DashboardWidget,
+        VisualizationConfig, DataMapping, WidgetGridConfig,
+        DashboardLayout, MetricExecutionOverrides,
+        SingleValueConfig, GaugeConfig, ChartConfig
+    )
 
 DashboardRouter = APIRouter()
 
@@ -372,14 +380,21 @@ async def execute_widget(dashboard_id: UUID, view_alias: str, widget_alias: str)
         if target_widget is None:
             raise WidgetExecutionError(widget_alias, "Widget not found")
 
-        if not target_widget.metric_id:
-            raise WidgetExecutionError(widget_alias, "Widget must reference a metric")
+        # Execute metric using shared service - support both metric_id and embedded metric
+        execution_kwargs = {
+            "context_id": target_view.context_id
+        }
+        
+        if target_widget.metric:
+            # Use embedded metric
+            execution_kwargs["metric"] = target_widget.metric
+        elif target_widget.metric_id:
+            # Use metric reference
+            execution_kwargs["metric_id"] = target_widget.metric_id
+        else:
+            raise WidgetExecutionError(widget_alias, "Widget must have either metric_id or embedded metric")
 
-        # Execute metric using shared service
-        execution_result = MetricExecutionService.execute_metric(
-            metric_id=target_widget.metric_id,
-            context_id=target_view.context_id
-        )
+        execution_result = MetricExecutionService.execute_metric(**execution_kwargs)
 
         if not execution_result.get("success"):
             data_payload = _create_error_chart_data(execution_result.get("error", "Metric execution failed"))
@@ -487,14 +502,7 @@ async def delete_widget(dashboard_id: UUID, view_alias: str, widget_alias: str):
 # Helper functions
 def _convert_create_request_to_dashboard(request: DashboardCreateRequest) -> Dashboard:
     """Convert dashboard create request to domain model."""
-    from cortex.core.dashboards.dashboard import (
-        DashboardView, DashboardSection, DashboardWidget,
-        VisualizationConfig, DataMapping, WidgetGridConfig,
-        DashboardLayout, MetricExecutionOverrides,
-        SingleValueConfig, GaugeConfig, ChartConfig
-    )
     
-
     # Convert views (support optional aliases in future; client can send in layout field later)
     views = []
     default_view_id = None
@@ -559,18 +567,32 @@ def _convert_create_request_to_dashboard(request: DashboardCreateRequest) -> Das
                     custom_colors=widget_req.visualization.custom_colors
                 )
 
-                widget = DashboardWidget(
-                    alias=widget_req.alias,
-                    section_alias=widget_req.section_alias,
-                    metric_id=widget_req.metric_id,
-                    position=widget_req.position,
-                    grid_config=WidgetGridConfig(**widget_req.grid_config.model_dump()),
-                    title=widget_req.title,
-                    description=widget_req.description,
-                    visualization=viz_config,
-                    metric_overrides=MetricExecutionOverrides(
+                # Handle both metric_id (reference) and metric (embedded)
+                widget_kwargs = {
+                    "alias": widget_req.alias,
+                    "section_alias": widget_req.section_alias,
+                    "position": widget_req.position,
+                    "grid_config": WidgetGridConfig(**widget_req.grid_config.model_dump()),
+                    "title": widget_req.title,
+                    "description": widget_req.description,
+                    "visualization": viz_config,
+                    "metric_overrides": MetricExecutionOverrides(
                         **widget_req.metric_overrides.model_dump()) if widget_req.metric_overrides else None
-                )
+                }
+                
+                # Add metric_id or metric, whichever is provided
+                if widget_req.metric:
+                    # Convert MetricCreateRequest to SemanticMetric for embedded metric
+                    
+                    widget_kwargs["metric"] = SemanticMetric(
+                        id=uuid4(),  # Generate temporary ID for embedded metric
+                        environment_id=request.environment_id,
+                        **widget_req.metric.model_dump()
+                    )
+                elif widget_req.metric_id:
+                    widget_kwargs["metric_id"] = widget_req.metric_id
+                
+                widget = DashboardWidget(**widget_kwargs)
                 widgets.append(widget)
 
             section = DashboardSection(
@@ -623,7 +645,7 @@ def _convert_create_request_to_dashboard(request: DashboardCreateRequest) -> Das
     response_model=DashboardExecutionResponse,
     tags=["Dashboards"]
 )
-async def preview_dashboard_config(dashboard_id: UUID, config: DashboardUpdateRequest):
+async def preview_dashboard(dashboard_id: UUID, config: DashboardUpdateRequest):
     """
     Preview dashboard execution results without saving to database.
     Takes a dashboard configuration and simulates execution to show expected output.
@@ -645,15 +667,26 @@ async def preview_dashboard_config(dashboard_id: UUID, config: DashboardUpdateRe
         for section in preview_view.sections:
             for index, widget in enumerate(section.widgets):
                 try:
-                    # Execute the actual metric
-                    if not widget.metric_id:
-                        raise ValueError("Widget must have a metric_id for preview")
+                    # Execute the actual metric - support both metric_id and embedded metric
+                    execution_kwargs = {
+                        "context_id": preview_view.context_id
+                    }
+                    
+                    if widget.metric:
+                        # Convert MetricCreateRequest to SemanticMetric for execution
+                        embedded_metric = SemanticMetric(
+                            id=uuid4(),  # Generate temporary ID
+                            environment_id=config.environment_id if hasattr(config, 'environment_id') else uuid4(),
+                            **widget.metric.model_dump()
+                        )
+                        execution_kwargs["metric"] = embedded_metric
+                    elif widget.metric_id:
+                        execution_kwargs["metric_id"] = widget.metric_id
+                    else:
+                        raise ValueError("Widget must have either metric_id or embedded metric for preview")
 
                     # Execute metric using the shared service
-                    execution_result = MetricExecutionService.execute_metric(
-                        metric_id=widget.metric_id,
-                        context_id=preview_view.context_id
-                    )
+                    execution_result = MetricExecutionService.execute_metric(**execution_kwargs)
 
                     if not execution_result.get("success"):
                         raise Exception(execution_result.get("error", "Metric execution failed"))
@@ -732,7 +765,7 @@ def _create_error_chart_data(error_message: str):
 
 def _convert_to_metric_execution_result(execution_result):
     """Convert metric service execution result to MetricExecutionResult format."""
-    from cortex.core.dashboards.transformers import MetricExecutionResult
+
 
     # Extract data from the execution result
     data = execution_result.get("data", [])

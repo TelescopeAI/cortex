@@ -1,9 +1,27 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Force generation of order utilities for dynamic class names */
+@layer utilities {
+  .order-1 { order: 1; }
+  .order-2 { order: 2; }
+  .order-3 { order: 3; }
+  .order-4 { order: 4; }
+  .order-5 { order: 5; }
+  .order-6 { order: 6; }
+  .order-7 { order: 7; }
+  .order-8 { order: 8; }
+  .order-9 { order: 9; }
+  .order-10 { order: 10; }
+}
+
+
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --font-sans: "Inter", sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -140,7 +158,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
   }
   
   /* Card content background styling for better chart readability */

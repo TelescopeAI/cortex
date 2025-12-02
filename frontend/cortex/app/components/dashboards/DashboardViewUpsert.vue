@@ -116,13 +116,21 @@ async function handleSubmit() {
         }
       }
     } else {
-      // Create new view
+      // Create new view with a default section
       const newView: DashboardView = {
         alias: form.alias.trim(),
         title: form.title.trim(),
         description: form.description.trim() || undefined,
         context_id: form.context_id.trim() || undefined,
-        sections: [],
+        sections: [
+          {
+            alias: 'default',
+            title: 'Default',
+            description: undefined,
+            position: 0,
+            widgets: []
+          }
+        ],
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       } as any

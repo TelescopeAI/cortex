@@ -18,6 +18,7 @@ from cortex.core.semantics.cache import CachePreference
 class MetricResponse(BaseModel):
     """Response schema for metric data"""
     id: UUID
+    environment_id: UUID
     data_model_id: UUID
     name: str
     alias: Optional[str]
@@ -91,3 +92,10 @@ class MetricVersionListResponse(BaseModel):
     """Response schema for listing metric versions"""
     versions: List[MetricVersionResponse]
     total_count: int 
+
+
+class MetricRecommendationsResponse(BaseModel):
+    """Response schema for metric recommendations"""
+    metrics: List[MetricResponse]
+    total_count: int
+    metadata: Optional[Dict[str, Any]] = None 

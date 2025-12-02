@@ -13,10 +13,11 @@ This platform is designed to abstract complex data sources into a business-frien
 - **Semantic Layer**
   - Define and manage data models in JSON with measures, dimensions, filters, and aggregations
   - Dynamic context aware schema generation
-  - Advanced output formatting with IN_QUERY and POST_QUERY(Coming Soon) transformation modes
+  - Conditional logic support for dynamic column combinations
   - Versioning and audit trails for metrics and data models
   - Parameter system for dynamic query generation
-  - Metric extension and inheritance support (Coming Soon)
+  - Automated metric discovery and recommendations from database schemas
+  - Metric preview mode for validation before saving
 
 - **Query Engine**
   - Translates semantic definitions into optimized queries
@@ -38,6 +39,8 @@ This platform is designed to abstract complex data sources into a business-frien
   - Advanced chart features with ECharts integration
   - Field mapping and data transformation for visualizations
   - Widget-level metric execution with override support
+  - Embedded metrics: Define metrics directly within dashboard widgets without saving them first
+  - Dashboard preview with real-time metric execution
 
 - **Multi-Tenancy**
   - Hierarchical organization: Workspaces → Environments → Consumers
@@ -55,42 +58,6 @@ This platform is designed to abstract complex data sources into a business-frien
   - Query performance analytics and slow query identification
   - Cache hit rate tracking and statistics
   - Execution history with filtering and search capabilities
-
-- **Performance Optimization**
-  - Pre-aggregation specs with rollup [IN PROGRESS]
-  - Configurable TTL-based caching strategies
-
-## Architecture
-
-The project follows a layered architecture within a monorepo, ensuring modularity, ease of maintenance, and independent evolution of key components.
-
-### Semantic Layer
-
-This semantic layer is designed with AI agent integration in mind, providing:
-
-- **Structured Semantic Models**: JSON-based metric definitions with measures, dimensions, joins, and aggregations
-- **Advanced Output Formatting**: Support for data transformations at both query time (IN_QUERY) and post-execution (POST_QUERY)
-- **Context-Aware Execution**: Consumer properties and environment isolation for personalized data access
-- **Query Abstraction**: Database-agnostic query generation from semantic definitions
-- **Execution Logging**: Comprehensive query execution logs for AI training and optimization
-- **Parameter System**: Dynamic parameter substitution for flexible query generation
-- **Validation Pipeline**: Automated validation and compilation of semantic models
-
-This foundation will enable AI agents to:
-- Translate natural language queries into semantic metric definitions
-- Recommend relevant metrics and dimensions based on user context
-- Optimize query performance through pattern analysis
-- Generate automated insights and anomaly detection
-- Learn from user behavior and query patterns for continuous improvement
-
-### AI Agent Integration Points
-
-1. **Natural Language Interface**: Convert user questions into `SemanticMetric` instances
-2. **Intelligent Discovery**: Semantic search and recommendation across available metrics
-3. **Automated Modeling**: AI-powered generation of data models from schema analysis
-4. **Context Personalization**: Leverage consumer properties for role-based suggestions
-5. **Performance Optimization**: Query pattern analysis and optimization recommendations
-6. **Quality Monitoring**: Automated data quality assessment and anomaly detection
 
 ## Getting Started
 
@@ -139,15 +106,21 @@ export CORTEX_AUTO_APPLY_DB_MIGRATIONS=true
 poetry run uvicorn cortex.api.main:app --reload --host 0.0.0.0 --port 9002
 ```
 
-#### Database Migrations
+#### Database Migrations & Onboarding
 
-The platform supports automatic database migrations on startup. Set the following environment variable to enable:
+The platform includes an automated onboarding system that handles initial setup:
+
+- **Automatic Migrations**: Database migrations are automatically applied on startup (when enabled)
+- **Default Workspace & Environment**: Creates default workspace and test environment if none exist
+- **Default Data Model**: Automatically creates a default data model in the first available environment
+
+Set the following environment variable to enable auto-migration:
 
 ```bash
 export CORTEX_AUTO_APPLY_DB_MIGRATIONS=true
 ```
 
-For more information on running migrations manually or troubleshooting migration issues, see the [Migration Guide](migrations/MIGRATION_GUIDE.md).
+For more information on running migrations manually or troubleshooting migration issues, see the [Migration Guide](cortex/migrations/MIGRATION_GUIDE.md).
 
 #### Environment Configuration
 
@@ -250,19 +223,48 @@ The platform includes a modern Vue.js frontend built with Nuxt 4 and TypeScript 
 - **Data Source Configuration**: Visual interface for connecting and configuring data sources
 - **Data Model Builder**: Create and manage data models with schema introspection
 - **Metric Builder**: Visual interface for creating semantic metrics with measures, dimensions, filters, and aggregations
+  - Metric preview mode to validate definitions before saving
+  - Automated metric recommendations from database schemas
 - **Dashboard Builder**: Create multi-view dashboards with drag-and-drop widget placement
+  - Embedded metrics: Define metrics directly in dashboard widgets
 - **Visualization Editor**: Configure 10+ chart types with advanced field mapping
 - **Consumer & Group Management**: Manage end users and consumer groups
 - **Query History**: View and analyze query execution history and performance
 - **Pre-aggregation Management**: Configure and monitor rollup tables
 - **Real-time Preview**: Instant visualization of metric results during development
 
-### Stack
-- **Framework**: Nuxt 4
-- **Language**: TypeScript with full type safety
-- **Charts**: ECharts for advanced visualizations
-- **UI**: Tailwind CSS with custom components
-- **State Management**: Composables with reactive state
+## Architecture
+
+The project follows a layered architecture within a monorepo, ensuring modularity, ease of maintenance, and independent evolution of key components.
+
+### Semantic Layer
+
+This semantic layer is designed with AI agent integration in mind, providing:
+
+- **Structured Semantic Models**: JSON-based metric definitions with measures, dimensions, joins, and aggregations
+- **Advanced Output Formatting**: Support for data transformations at both query time (IN_QUERY) and post-execution (POST_QUERY)
+- **Context-Aware Execution**: Consumer properties and environment isolation for personalized data access
+- **Query Abstraction**: Database-agnostic query generation from semantic definitions
+- **Execution Logging**: Comprehensive query execution logs for AI training and optimization
+- **Parameter System**: Dynamic parameter substitution for flexible query generation
+- **Validation Pipeline**: Automated validation and compilation of semantic models
+
+This foundation will enable AI agents to:
+- Translate natural language queries into semantic metric definitions
+- Recommend relevant metrics and dimensions based on user context
+- Optimize query performance through pattern analysis
+- Generate automated insights and anomaly detection
+- Learn from user behavior and query patterns for continuous improvement
+
+### AI Agent Integration Points
+
+1. **Natural Language Interface**: Convert user questions into `SemanticMetric` instances
+2. **Intelligent Discovery**: Semantic search and recommendation across available metrics
+3. **Automated Modeling**: AI-powered generation of data models from schema analysis
+4. **Context Personalization**: Leverage consumer properties for role-based suggestions
+5. **Performance Optimization**: Query pattern analysis and optimization recommendations
+6. **Quality Monitoring**: Automated data quality assessment and anomaly detection
+
 
 ### Setup
 ```bash
@@ -357,9 +359,11 @@ cortex/
 │   │   ├── consumers/        # User management
 │   │   ├── dashboards/       # Dashboard engine
 │   │   ├── data/             # Data models and sources
+│   │   ├── onboarding/       # Onboarding and setup automation
 │   │   ├── preaggregations/  # Pre-aggregation system
 │   │   ├── query/            # Query engine
 │   │   ├── semantics/        # Semantic layer
+│   │   ├── services/         # Business logic services
 │   │   ├── storage/          # Database storage
 │   │   └── workspaces/       # Multi-tenancy
 ├── frontend/cortex/          # Nuxt admin interface
@@ -391,46 +395,6 @@ cortex/
 - **Query Explorer**: Query history and performance monitoring
 - **User Management**: Consumer and group administration
 
-### Database Migrations
-
-The platform uses Alembic for database schema management:
-
-```bash
-# Create a new migration
-alembic revision --autogenerate -m "description"
-
-# Apply migrations
-alembic upgrade head
-
-# Rollback one migration
-alembic downgrade -1
-
-# View migration history
-alembic history
-```
-
-Auto-apply migrations on startup (for development):
-```bash
-export CORTEX_AUTO_APPLY_DB_MIGRATIONS=true
-```
-
-## Technology Stack
-
-### Backend
-- **Language**: Python 3.12+
-- **Web Framework**: FastAPI with Pydantic v2
-- **Database ORM**: SQLAlchemy 2.0
-- **Migrations**: Alembic
-- **Databases**: PostgreSQL, MySQL, BigQuery, SQLite
-- **Caching**: Redis, In-Memory
-- **Package Manager**: Poetry
-
-### Frontend
-- **Framework**: Nuxt 4
-- **Language**: Vue and TypeScript
-- **UI Library**: Tailwind CSS
-- **Charts**: Apache ECharts
-- **Package Manager**: Yarn
 
 ## License
 
@@ -448,8 +412,9 @@ Contributions are welcome! Please feel free to submit a [Pull Request](https://g
 
 For questions and support:
 - [Open an issue on GitHub](https://github.com/TelescopeAI/cortex/issues)
-- Email: support@jointelescope.com
+- Email: [support@jointelescope.com](mailto:support@jointelescope.com)
 - Documentation: [docs.jointelescope.com](https://docs.jointelescope.com)
+- [Migration Guide](cortex/migrations/MIGRATION_GUIDE.md)
 
 ## Roadmap
 
@@ -457,12 +422,8 @@ Upcoming features:
 - [ ] File-based data sources (CSV, Excel, Google Sheets)
 - [ ] Advanced AI agent integration
 - [ ] Natural language query interface
-- [ ] Automated metric recommendations
-- [ ] Multi-database joins
-- [ ] Real-time streaming analytics
 - [ ] User authentication and authorization system
-- [ ] Advanced access control and row-level security
 - [ ] Embedded analytics SDK
 - [ ] Mobile-responsive dashboard views
-- [ ] MongoDB and DuckDB support
+- [ ] Multi-database joins
 

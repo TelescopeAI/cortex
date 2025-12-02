@@ -16,7 +16,6 @@ import {
 import type { Dashboard, DashboardView, DashboardWidget, DashboardSection, VisualizationConfig } from '~/types/dashboards'
 import { useAliasGenerator } from '~/composables/useAliasGenerator'
 import DashboardContainer from '~/components/dashboards/DashboardContainer.vue'
-import WidgetUpsertDialog from '~/components/dashboards/WidgetUpsertDialog.vue'
 import WidgetEditSheet from '~/components/dashboards/WidgetEditSheet.vue'
 import DashboardViewSelector from '~/components/dashboards/DashboardViewSelector.vue'
 import DashboardViewUpsert from '~/components/dashboards/DashboardViewUpsert.vue'
@@ -44,6 +43,11 @@ const {
   getViewById 
 } = useDashboards()
 const { generateAlias } = useAliasGenerator()
+const { metrics, fetchMetrics } = useMetrics()
+const { selectedEnvironmentId } = useEnvironments()
+
+// Metrics count for dynamic tab ordering in inline widget editor
+const metricsCount = computed(() => metrics.value?.length || 0)
 
 // Component state
 const selectedViewId = ref<string>('')
@@ -58,17 +62,9 @@ const showEditViewDialog = ref(false)
 const showAddSectionDialog = ref(false)
 const editingView = ref<DashboardView | null>(null)
 const addSectionForm = reactive({ title: '', description: '', alias: '' })
-const showAddWidgetDialog = ref(false)
+// Note: Widget creation is now handled inline in DashboardSection via InlineWidgetEditor
 const showEditWidgetSheet = ref(false)
 const editingWidget = ref<any>(null)
-const addWidgetForm = reactive({
-  sectionId: '' as string,
-  title: '',
-  metric_id: '',
-  type: 'single_value' as string,
-  columns: 3,
-  rows: 1
-})
 
 // Computed
 const dashboard = computed(() => currentDashboard.value)
@@ -162,10 +158,10 @@ function cleanDashboardForUpdate(dashboard: any): any {
                 columns: dm.columns ?? null
               }
 
-              return {
+              // Build widget object - include either metric_id or metric (for embedded)
+              const cleanedWidget: any = {
                 alias: widget.alias || `widget_${Date.now()}`,
                 section_alias: widget.section_alias || widget.section_id || sectionAlias,
-                metric_id: widget.metric_id,
                 position: widget.position,
                 grid_config: widget.grid_config,
                 title: widget.title || 'Widget',
@@ -176,6 +172,15 @@ function cleanDashboardForUpdate(dashboard: any): any {
                 },
                 metric_overrides: widget.metric_overrides
               }
+              
+              // Include either metric_id or embedded metric
+              if (widget.metric_id) {
+                cleanedWidget.metric_id = widget.metric_id
+              } else if (widget.metric) {
+                cleanedWidget.metric = widget.metric
+              }
+              
+              return cleanedWidget
             }) || []
           }
           
@@ -198,15 +203,24 @@ async function loadDashboard() {
   try {
     await fetchDashboard(dashboardId)
     
-    // Set initial view to default view
     const d = (dashboard.value as unknown) as Dashboard | null
     if (!d) return
+    
+    // Only set view if not already selected or if current selection is invalid
+    const views = Array.isArray(d.views) ? d.views : []
+    const currentViewStillExists = selectedViewId.value && views.some(v => v.alias === selectedViewId.value)
+    
+    // If current view still exists, keep it selected
+    if (currentViewStillExists) {
+      return
+    }
+    
+    // Otherwise, set to default view or first available view
     const def = getDefaultView(d)
     if (def) {
       selectedViewId.value = def.alias
       return
     }
-    const views = Array.isArray(d.views) ? d.views : []
     if (views.length > 0 && views[0] && views[0].alias) {
       selectedViewId.value = views[0].alias
     }
@@ -260,13 +274,58 @@ function handleEditView(view: DashboardView) {
   showEditViewDialog.value = true
 }
 
-function handleViewCreated(view: DashboardView) {
+async function handleViewCreated(view: DashboardView) {
+  await loadDashboard()
+  // Set the selected view after dashboard is reloaded to ensure the view exists
   selectedViewId.value = view.alias
-  loadDashboard()
 }
 
 function handleViewUpdated(view: DashboardView) {
   loadDashboard()
+}
+
+async function handleDeleteView(view: DashboardView) {
+  if (!dashboard.value) return
+  
+  try {
+    const mutable = JSON.parse(JSON.stringify(dashboard.value)) as Dashboard
+    
+    // Find and remove the view
+    const viewIndex = mutable.views.findIndex(v => v.alias === view.alias)
+    if (viewIndex < 0) {
+      toast.error('View not found')
+      return
+    }
+    
+    // Remove the view
+    mutable.views.splice(viewIndex, 1)
+    
+    // If we deleted the current view, switch to another view
+    if (selectedViewId.value === view.alias) {
+      // Try to select the default view, or the first available view
+      const defaultViewAlias = (mutable as any).default_view
+      if (defaultViewAlias && mutable.views.some(v => v.alias === defaultViewAlias)) {
+        selectedViewId.value = defaultViewAlias
+      } else if (mutable.views.length > 0 && mutable.views[0]) {
+        selectedViewId.value = mutable.views[0].alias
+      }
+    }
+    
+    // If we deleted the default view, set a new default
+    if ((mutable as any).default_view === view.alias && mutable.views.length > 0 && mutable.views[0]) {
+      (mutable as any).default_view = mutable.views[0].alias
+    }
+    
+    // Clean and update the dashboard
+    const cleanedDashboard = cleanDashboardForUpdate(mutable)
+    await updateDashboard(mutable.id, cleanedDashboard)
+    
+    toast.success('View deleted successfully')
+    await loadDashboard()
+  } catch (err: any) {
+    console.error('Failed to delete view:', err)
+    toast.error(err?.message || 'Failed to delete view')
+  }
 }
 
 async function addSection() {
@@ -359,125 +418,7 @@ function goBack() {
   router.push('/dashboards')
 }
 
-function onRequestAddWidget(sectionId: string) {
-  console.log('onRequestAddWidget called with sectionId:', sectionId)
-  addWidgetForm.sectionId = sectionId
-  console.log('Set addWidgetForm.sectionId to:', addWidgetForm.sectionId)
-  showAddWidgetDialog.value = true
-}
-
-function onWidgetSubmit(partial: any) {
-  console.log('onWidgetSubmit called with:', partial)
-  
-  // Update form with submitted data (preserve sectionId)
-  addWidgetForm.title = partial.title || ''
-  addWidgetForm.metric_id = partial.metric_id || ''
-  addWidgetForm.type = partial.visualization?.type || 'single_value'
-  addWidgetForm.columns = partial.grid_config?.columns || 3
-  addWidgetForm.rows = partial.grid_config?.rows || 1
-  // Note: sectionId is already set from onRequestAddWidget, don't overwrite it
-  
-  console.log('Updated addWidgetForm:', addWidgetForm)
-  
-  // Call the add widget function with the full partial to preserve mapping/config
-  addWidget(partial)
-}
-
-async function addWidget(partial?: any) {
-  console.log('addWidget called')
-  console.log('Dashboard:', dashboard.value)
-  console.log('Current view:', currentView.value)
-  console.log('addWidgetForm:', addWidgetForm)
-  
-  if (!dashboard.value || !currentView.value) {
-    console.log('Missing dashboard or current view, returning early')
-    return
-  }
-  
-  const mutable = JSON.parse(JSON.stringify(dashboard.value)) as Dashboard
-  const vIdx = Array.isArray(mutable.views) ? mutable.views.findIndex(v => v.alias === (currentView.value as any).alias) : -1
-  console.log('View index:', vIdx)
-  
-  if (vIdx < 0 || !mutable.views[vIdx]) {
-    console.log('View not found, returning early')
-    return
-  }
-  
-  const sectionList = mutable.views[vIdx].sections || []
-  const sIdx = sectionList.findIndex(s => s.alias === addWidgetForm.sectionId)
-  console.log('Section index:', sIdx, 'Looking for section:', addWidgetForm.sectionId)
-  
-  if (sIdx < 0 || !sectionList[sIdx]) {
-    console.log('Section not found, returning early')
-    return
-  }
-  const incomingViz = partial?.visualization || {}
-  const incomingDM = incomingViz.data_mapping || {}
-  // Normalize mapping: default x as categorical, y as numerical
-  const normalizedDM = {
-    x_axis: incomingDM.x_axis ? {
-      field: incomingDM.x_axis.field,
-      data_type: incomingDM.x_axis.data_type ?? incomingDM.x_axis.type ?? 'categorical',
-      label: incomingDM.x_axis.label ?? null,
-      required: incomingDM.x_axis.required ?? true
-    } : null,
-    y_axes: Array.isArray(incomingDM.y_axes) ? incomingDM.y_axes.map((m:any) => ({
-      field: m.field,
-      data_type: m.data_type ?? m.type ?? 'numerical',
-      label: m.label ?? null,
-      required: m.required ?? true
-    })) : null,
-    value_field: incomingDM.value_field ? {
-      field: incomingDM.value_field.field,
-      data_type: incomingDM.value_field.data_type ?? incomingDM.value_field.type ?? 'numerical',
-      label: incomingDM.value_field.label ?? null,
-      required: incomingDM.value_field.required ?? true
-    } : null,
-    category_field: incomingDM.category_field ? {
-      field: incomingDM.category_field.field,
-      data_type: incomingDM.category_field.data_type ?? incomingDM.category_field.type ?? 'categorical',
-      label: incomingDM.category_field.label ?? null,
-      required: incomingDM.category_field.required ?? true
-    } : null,
-    series_field: incomingDM.series_field ? {
-      field: incomingDM.series_field.field,
-      data_type: incomingDM.series_field.data_type ?? incomingDM.series_field.type ?? 'categorical',
-      label: incomingDM.series_field.label ?? null,
-      required: incomingDM.series_field.required ?? false
-    } : null,
-    columns: incomingDM.columns ?? null,
-  }
-
-  const newWidget: DashboardWidget = {
-    alias: `widget_${Date.now()}`, // Generate a temporary alias
-    section_alias: addWidgetForm.sectionId,
-    metric_id: addWidgetForm.metric_id || crypto.randomUUID(),
-    position: (sectionList[sIdx].widgets?.length ?? 0),
-    grid_config: { columns: addWidgetForm.columns, rows: addWidgetForm.rows },
-    title: addWidgetForm.title || 'New Widget',
-    description: undefined,
-    visualization: {
-      type: addWidgetForm.type as any,
-      data_mapping: normalizedDM,
-      single_value_config: (incomingViz.type === 'single_value') ? incomingViz.single_value_config : undefined,
-      gauge_config: (incomingViz.type === 'gauge') ? incomingViz.gauge_config : undefined,
-    } as any
-  }
-  const widgets = sectionList[sIdx].widgets || []
-  sectionList[sIdx] = { ...sectionList[sIdx], widgets: [...widgets, newWidget] }
-  mutable.views[vIdx].sections = sectionList
-  try {
-    const cleanedDashboard = cleanDashboardForUpdate(mutable)
-    await updateDashboard(mutable.id, cleanedDashboard)
-    toast.success('Widget added')
-    showAddWidgetDialog.value = false
-    addWidgetForm.title = ''
-    addWidgetForm.metric_id = ''
-    await loadDashboard()
-  } catch (e) {
-    toast.error('Failed to add widget')
-  }
-}
+// Note: Widget creation is now handled inline via InlineWidgetEditor in DashboardSection
 
 function onEditWidget(widget: any) {
   editingWidget.value = widget
@@ -524,6 +465,17 @@ watch(() => route.params.id, (newId) => {
 
 onMounted(() => {
   loadDashboard()
+  // Fetch metrics count for dynamic tab ordering in inline widget editor
+  if (selectedEnvironmentId.value) {
+    fetchMetrics(selectedEnvironmentId.value)
+  }
+})
+
+// Watch for environment changes to refetch metrics
+watch(selectedEnvironmentId, (newEnvId) => {
+  if (newEnvId) {
+    fetchMetrics(newEnvId)
+  }
 })
 
 // Update page title
@@ -559,6 +511,7 @@ useHead({
           @set-default="setAsDefaultView"
           @add-view="handleAddView"
           @edit-view="handleEditView"
+          @delete-view="handleDeleteView"
         />
 
         
@@ -601,10 +554,10 @@ useHead({
       :execution-results="executionResults"
       :last-execution-time="lastExecutionTime"
       :refresh-key="refreshKey"
+      :metrics-count="metricsCount"
       @execute-widget="(widgetId) => { toast.info('Widget execution coming soon') }"
       @widget-updated="() => { loadDashboard() }"
       @add-section="() => { showAddSectionDialog = true }"
-      @add-widget="onRequestAddWidget"
       @edit-widget="onEditWidget"
     />
 
@@ -664,13 +617,7 @@ useHead({
       </DialogContent>
     </Dialog>
 
-    <!-- Widget Dialogs -->
-    <WidgetUpsertDialog
-      v-model:open="showAddWidgetDialog"
-      mode="create"
-      :initial="{ title: addWidgetForm.title, metric_id: addWidgetForm.metric_id, grid_config: { columns: addWidgetForm.columns, rows: addWidgetForm.rows }, visualization: { type: addWidgetForm.type } }"
-      @submit="onWidgetSubmit"
-    />
+    <!-- Widget Edit Sheet (for backward compatibility with ViewWidget edit button) -->
     <WidgetEditSheet
       v-model:open="showEditWidgetSheet"
       :widget="editingWidget"

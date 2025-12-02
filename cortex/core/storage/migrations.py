@@ -1,5 +1,6 @@
 import os
 import logging
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -8,11 +9,42 @@ from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
+from cortex import migrations
 
 from cortex.core.config.execution_env import ExecutionEnv
 from cortex.core.storage.store import CortexStorage
 
 logger = logging.getLogger(__name__)
+
+
+def _find_migrations_dir() -> Path:
+    """
+    Find the migrations directory.
+    
+    Works in both development (running from repo) and installed package scenarios.
+    Since migrations is now inside the cortex package (cortex/migrations/), 
+    discovery is simpler.
+    """
+    # Strategy 1: Import from cortex.migrations (works for both installed and dev)
+    try:
+        migrations_dir = Path(migrations.__file__).parent
+        if (migrations_dir / "alembic.ini").exists():
+            return migrations_dir
+    except ImportError:
+        pass
+    
+    # Strategy 2: Check relative to this file (fallback for development)
+    # When in dev, structure is: cortex/cortex/core/storage/migrations.py
+    # and cortex/cortex/migrations/
+    current_dir = Path(__file__).parent
+    migrations_dir = current_dir.parent.parent / "migrations"
+    if (migrations_dir / "alembic.ini").exists():
+        return migrations_dir
+    
+    raise FileNotFoundError(
+        "Could not find migrations directory. "
+        "Ensure the cortex package is properly installed with its migrations subpackage."
+    )
 
 
 class MigrationManager:
@@ -26,8 +58,7 @@ class MigrationManager:
     def _get_alembic_config(self) -> Config:
         """Get Alembic configuration with proper database URL."""
         # Get the migrations directory path
-        current_dir = Path(__file__).parent
-        migrations_dir = current_dir.parent.parent.parent / "migrations"
+        migrations_dir = _find_migrations_dir()
         alembic_ini_path = migrations_dir / "alembic.ini"
         
         if not alembic_ini_path.exists():

@@ -310,10 +310,11 @@ class DataTransformationService(TSModel):
                 metric_result, x_index, y_index, series_config
             )
         else:
-            # Single series chart
+            # Single series chart - filter out rows with None x or y values
             data_points = [
                 ChartDataPoint(x=row[x_index], y=row[y_index])
                 for row in metric_result.data
+                if row[x_index] is not None and row[y_index] is not None
             ]
             
             series = [ChartSeries(
@@ -336,16 +337,24 @@ class DataTransformationService(TSModel):
         try:
             split_index = metric_result.columns.index(split_by_field)
         except ValueError:
-            # Fallback to single series
+            # Fallback to single series - filter out rows with None x or y values
             return [ChartSeries(
                 name="Value",
-                data=[ChartDataPoint(x=row[x_index], y=row[y_index]) for row in metric_result.data]
+                data=[
+                    ChartDataPoint(x=row[x_index], y=row[y_index]) 
+                    for row in metric_result.data
+                    if row[x_index] is not None and row[y_index] is not None
+                ]
             )]
         
         # Group data by series
         series_data: Dict[str, List[ChartDataPoint]] = {}
         
         for row in metric_result.data:
+            # Skip rows with None x or y values
+            if row[x_index] is None or row[y_index] is None:
+                continue
+                
             series_name = str(row[split_index])
             if series_name not in series_data:
                 series_data[series_name] = []

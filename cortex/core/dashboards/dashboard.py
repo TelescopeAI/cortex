@@ -3,7 +3,7 @@ from typing import List, Optional, Dict, Any, Literal
 from uuid import UUID, uuid4
 
 import pytz
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from cortex.core.dashboards.mapping.base import DataMapping as MappingDataMapping
 from cortex.core.types.dashboards import (
@@ -11,6 +11,7 @@ from cortex.core.types.dashboards import (
     NumberFormat, ComparisonType, ValueSelectionMode, ValueSelectionConfig
 )
 from cortex.core.types.telescope import TSModel
+from cortex.core.semantics.metrics.metric import SemanticMetric
 
 
 class Dashboard(TSModel):
@@ -150,7 +151,7 @@ class SingleValueConfig(TSModel):
     """
     Configuration for single value displays (KPI cards).
     """
-    number_format: NumberFormat
+    number_format: Optional[NumberFormat] = NumberFormat.DECIMAL  # Default to decimal format
     prefix: Optional[str] = None
     suffix: Optional[str] = None
     show_comparison: bool = True
@@ -161,8 +162,8 @@ class SingleValueConfig(TSModel):
     show_title: bool = True
     show_description: bool = False
     compact_mode: bool = False
-    # New: selection strategy when multiple rows exist
-    selection_mode: ValueSelectionMode = ValueSelectionMode.FIRST
+    # Selection strategy when multiple rows exist
+    selection_mode: Optional[ValueSelectionMode] = ValueSelectionMode.FIRST
     selection_config: Optional[ValueSelectionConfig] = None
 
 
@@ -209,10 +210,14 @@ class DashboardWidget(TSModel):
     Individual widget containing a semantic metric with display configuration.
     Widgets inherit the environment and context from their parent view.
     Uses relative positioning (rows/columns) instead of absolute sizing.
+    
+    Metric can be specified either by metric_id (reference to stored metric) or
+    by providing a metric object directly (inline metric definition).
     """
     alias: str  # Required alias for referencing within dashboard
     section_alias: str  # Reference to DashboardSection by alias
-    metric_id: UUID  # Reference to SemanticMetric
+    metric_id: Optional[UUID] = None  # Reference to stored SemanticMetric (mutually exclusive with metric)
+    metric: Optional[SemanticMetric] = None  # Inline metric definition (mutually exclusive with metric_id)
     
     # Position within section
     position: int  # Position within the section (0-based)
@@ -228,9 +233,19 @@ class DashboardWidget(TSModel):
     # Metric execution overrides (can override view's context)
     metric_overrides: Optional[MetricExecutionOverrides] = None
 
+    @model_validator(mode='after')
+    def validate_metric_specification(self):
+        """Ensure exactly one of metric_id or metric is provided."""
+        if self.metric_id is not None and self.metric is not None:
+            raise ValueError("Cannot provide both metric_id and metric; provide exactly one")
+        if self.metric_id is None and self.metric is None:
+            raise ValueError("Must provide either metric_id or metric")
+        return self
 
-# Forward references for Pydantic
-Dashboard.model_rebuild()
-DashboardView.model_rebuild()
-DashboardSection.model_rebuild()
+
+# Forward references for Pydantic - import SemanticMetric before rebuilding
+# to resolve the forward reference in DashboardWidget
 DashboardWidget.model_rebuild()
+DashboardSection.model_rebuild()
+DashboardView.model_rebuild()
+Dashboard.model_rebuild()

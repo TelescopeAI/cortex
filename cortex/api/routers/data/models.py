@@ -6,17 +6,14 @@ from fastapi import APIRouter, HTTPException, status, Query
 from cortex.api.schemas.requests.data_models import (
     DataModelCreateRequest,
     DataModelUpdateRequest,
-    ModelExecutionRequest,
-    ModelValidationRequest
+    ModelExecutionRequest
 )
 from cortex.api.schemas.responses.data_models import (
     DataModelResponse,
     DataModelListResponse,
-    ModelExecutionResponse,
-    ModelValidationResponse
+    ModelExecutionResponse
 )
 from cortex.core.data.modelling.model import DataModel
-from cortex.core.data.modelling.validation_service import ValidationService
 from cortex.core.data.db.model_service import DataModelService
 from cortex.core.query.executor import QueryExecutor
 
@@ -36,16 +33,12 @@ async def create_data_model(model_data: DataModelCreateRequest):
     try:
         # Create the data model
         data_model = DataModel(
+            environment_id=model_data.environment_id,
             name=model_data.name,
             alias=model_data.alias,
             description=model_data.description,
             config=model_data.config or {}
         )
-        
-        # Automatic validation - validate the model using ValidationService
-        validation_result = ValidationService.validate_data_model(data_model)
-        data_model.is_valid = validation_result.is_valid
-        data_model.validation_errors = validation_result.errors if validation_result.errors else None
         
         # Save to database
         db_service = DataModelService()
@@ -72,17 +65,17 @@ async def create_data_model(model_data: DataModelCreateRequest):
 @DataModelsRouter.get("/data/models/{model_id}", response_model=DataModelResponse,
                       tags=["Data Models"]
 )
-async def get_data_model(model_id: UUID):
-    """Get a specific data model by ID."""
+async def get_data_model(model_id: UUID, environment_id: UUID = Query(..., description="Environment ID")):
+    """Get a specific data model by ID, validating it belongs to the environment."""
     try:
         # Fetch from database
         db_service = DataModelService()
         try:
-            db_model = db_service.get_data_model_by_id(model_id)
+            db_model = db_service.get_data_model_by_id(model_id, environment_id=environment_id)
             if not db_model:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Data model with ID {model_id} not found"
+                    detail=f"Data model with ID {model_id} not found in environment {environment_id}"
                 )
             
             # Convert ORM to Pydantic using automatic conversion
@@ -108,17 +101,19 @@ async def get_data_model(model_id: UUID):
                       tags=["Data Models"]
 )
 async def list_data_models(
+    environment_id: UUID = Query(..., description="Environment ID"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Page size"),
     is_active: Optional[bool] = Query(None, description="Filter by active status")
 ):
-    """List data models with optional filtering and pagination."""
+    """List data models for a specific environment with optional filtering and pagination."""
     try:
         # Fetch from database with filters
         db_service = DataModelService()
         try:
             skip = (page - 1) * page_size
             db_models = db_service.get_all_data_models(
+                environment_id=environment_id,
                 skip=skip,
                 limit=page_size,
                 active_only=is_active
@@ -158,16 +153,16 @@ async def list_data_models(
                       tags=["Data Models"]
 )
 async def update_data_model(model_id: UUID, model_data: DataModelUpdateRequest):
-    """Update an existing data model."""
+    """Update an existing data model, validating it belongs to the environment."""
     try:
         # Fetch existing model from database
         db_service = DataModelService()
         try:
-            existing_db_model = db_service.get_data_model_by_id(model_id)
+            existing_db_model = db_service.get_data_model_by_id(model_id, environment_id=model_data.environment_id)
             if not existing_db_model:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Data model with ID {model_id} not found"
+                    detail=f"Data model with ID {model_id} not found in environment {model_data.environment_id}"
                 )
             
             # Prepare update data (only include fields that are provided and not None)
@@ -184,22 +179,6 @@ async def update_data_model(model_id: UUID, model_data: DataModelUpdateRequest):
                 update_data['config'] = model_data.config
             if hasattr(model_data, 'is_active') and model_data.is_active is not None:
                 update_data['is_active'] = model_data.is_active
-            
-            # Always validate when any significant field changes (automatic validation)
-            should_validate = any(field in update_data for field in ['name', 'data_source_id', 'config'])
-            
-            if should_validate:
-                # Convert existing model to Pydantic for validation
-                existing_model = DataModel.model_validate(existing_db_model)
-                
-                # Apply updates to create updated model for validation
-                for key, value in update_data.items():
-                    setattr(existing_model, key, value)
-                
-                # Validate the updated model (automatic validation)
-                validation_result = ValidationService.validate_data_model(existing_model)
-                update_data['is_valid'] = validation_result.is_valid
-                update_data['validation_errors'] = validation_result.errors if validation_result.errors else None
             
             # Update the model in database
             updated_db_model = db_service.update_data_model(model_id, update_data)
@@ -232,11 +211,18 @@ async def update_data_model(model_id: UUID, model_data: DataModelUpdateRequest):
 @DataModelsRouter.delete("/data/models/{model_id}", status_code=status.HTTP_204_NO_CONTENT,
                          tags=["Data Models"]
 )
-async def delete_data_model(model_id: UUID):
-    """Delete a data model (soft delete)."""
+async def delete_data_model(model_id: UUID, environment_id: UUID = Query(..., description="Environment ID")):
+    """Delete a data model (soft delete), validating it belongs to the environment."""
     try:
         db_service = DataModelService()
         try:
+            # Validate model exists in this environment before deleting
+            existing_model = db_service.get_data_model_by_id(model_id, environment_id=environment_id)
+            if not existing_model:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Data model with ID {model_id} not found in environment {environment_id}"
+                )
             success = db_service.delete_data_model(model_id)
             if not success:
                 raise HTTPException(
@@ -252,55 +238,6 @@ async def delete_data_model(model_id: UUID):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete data model: {str(e)}"
-        )
-
-
-@DataModelsRouter.post("/data/models/{model_id}/validate", response_model=ModelValidationResponse,
-                       tags=["Data Models"]
-)
-async def validate_data_model(model_id: UUID, validation_request: ModelValidationRequest):
-    """Validate a data model and automatically update its status."""
-    try:
-        # Fetch the model from database
-        db_service = DataModelService()
-        try:
-            db_model = db_service.get_data_model_by_id(model_id)
-            if not db_model:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Data model with ID {model_id} not found"
-                )
-            
-            # Convert to Pydantic model for validation
-            data_model = DataModel.model_validate(db_model)
-            
-            # Perform validation
-            validation_result = ValidationService.validate_data_model(data_model)
-            
-            # Always update model's validation status in database (automatic validation storage)
-            update_data = {
-                'is_valid': validation_result.is_valid,
-                'validation_errors': validation_result.errors if validation_result.errors else None
-            }
-            db_service.update_data_model(model_id, update_data)
-            
-            return ModelValidationResponse(
-                model_id=model_id,
-                is_valid=validation_result.is_valid,
-                errors=validation_result.errors or [],
-                warnings=validation_result.warnings or [],
-                validated_at=validation_result.validated_at
-            )
-            
-        finally:
-            db_service.close()
-        
-    except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to validate data model: {str(e)}"
         )
 
 

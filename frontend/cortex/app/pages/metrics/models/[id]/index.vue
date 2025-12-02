@@ -10,7 +10,8 @@ import { Textarea } from '~/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from '~/components/ui/sheet'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
-import { ArrowLeft, Edit, PlayCircle, Plus, Settings, Target, MoreHorizontal, Loader2 } from 'lucide-vue-next'
+import { ArrowLeft, Edit, PlayCircle, Plus, Settings, Target, MoreHorizontal, Loader2, Trash2 } from 'lucide-vue-next'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '~/components/ui/alert-dialog'
 import { toast } from 'vue-sonner'
 import CreateMetricDialog from '~/components/CreateMetricDialog.vue'
 
@@ -26,7 +27,8 @@ const modelId = route.params.id as string
 
 // Use composables
 const { getModel, executeModel, validateModel, updateModel } = useDataModels()
-const { getMetricsForModel } = useMetrics()
+const { getMetricsForModel, deleteMetric } = useMetrics()
+const { selectedEnvironmentId } = useEnvironments()
 
 // Component state
 const model = ref<any>(null)
@@ -36,6 +38,11 @@ const executing = ref(false)
 const validating = ref(false)
 const isEditSheetOpen = ref(false)
 const isUpdating = ref(false)
+
+// Delete dialog state
+const deleteDialogOpen = ref(false)
+const metricToDelete = ref<any>(null)
+const isDeleting = ref(false)
 
 // Edit form state
 const editForm = ref({
@@ -119,7 +126,7 @@ const onEdit = () => {
 }
 
 const onSaveEdit = async () => {
-  if (!model.value) return
+  if (!model.value || !selectedEnvironmentId.value) return
 
   isUpdating.value = true
   try {
@@ -150,7 +157,7 @@ const onSaveEdit = async () => {
       updateData.config = config
     }
 
-    const updatedModel = await updateModel(model.value.id, updateData)
+    const updatedModel = await updateModel(model.value.id, selectedEnvironmentId.value, updateData)
 
     if (updatedModel) {
       model.value = updatedModel
@@ -166,7 +173,7 @@ const onSaveEdit = async () => {
 }
 
 const onValidate = async () => {
-  if (!model.value) return
+  if (!model.value || !selectedEnvironmentId.value) return
   
   validating.value = true
   try {
@@ -183,7 +190,7 @@ const onValidate = async () => {
 }
 
 const onExecute = async () => {
-  if (!model.value) return
+  if (!model.value || !selectedEnvironmentId.value) return
   
   executing.value = true
   try {
@@ -201,6 +208,35 @@ const onMetricClick = (metricId: string) => {
   navigateTo(`/metrics/${metricId}`)
 }
 
+const onDeleteMetricClick = (metric: any, event: Event) => {
+  event.stopPropagation()
+  metricToDelete.value = metric
+  deleteDialogOpen.value = true
+}
+
+const onDeleteMetric = async () => {
+  if (!metricToDelete.value || !selectedEnvironmentId.value) return
+  
+  isDeleting.value = true
+  try {
+    const success = await deleteMetric(metricToDelete.value.id, selectedEnvironmentId.value)
+    if (success) {
+      toast.success('Metric deleted successfully')
+      // Refresh the metrics list
+      await loadModelMetrics()
+      deleteDialogOpen.value = false
+      metricToDelete.value = null
+    } else {
+      toast.error('Failed to delete metric')
+    }
+  } catch (error) {
+    console.error('Failed to delete metric:', error)
+    toast.error('Failed to delete metric')
+  } finally {
+    isDeleting.value = false
+  }
+}
+
 const onAddMetric = () => {
   // Open the create metric dialog instead of navigating
   createMetricDialogRef.value?.openDialog()
@@ -208,14 +244,23 @@ const onAddMetric = () => {
 
 const onMetricCreated = async (metric: any) => {
   // Refresh the metrics list when a new metric is created
-  await loadModelMetrics()
+  if (selectedEnvironmentId.value) {
+    await loadModelMetrics()
+  }
   toast.success('Metric added to model successfully')
 }
 
 // Data loading
 const loadModel = async () => {
   try {
-    model.value = await getModel(modelId)
+    if (!selectedEnvironmentId.value) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Environment not selected'
+      })
+    }
+    
+    model.value = await getModel(modelId, selectedEnvironmentId.value)
     if (!model.value) {
       throw createError({
         statusCode: 404,
@@ -233,7 +278,9 @@ const loadModel = async () => {
 
 const loadModelMetrics = async () => {
   try {
-    modelMetrics.value = await getMetricsForModel(modelId)
+    if (!selectedEnvironmentId.value) return
+    
+    modelMetrics.value = await getMetricsForModel(modelId, selectedEnvironmentId.value)
   } catch (error) {
     console.error('Failed to load model metrics:', error)
     modelMetrics.value = []
@@ -391,7 +438,7 @@ onMounted(() => {
                   <TableHead>Description</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last Updated</TableHead>
-                  <TableHead class="text-right">Actions</TableHead>
+                  <TableHead class="text-right">Delete</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -403,8 +450,8 @@ onMounted(() => {
                   </TableCell>
                   <TableCell>{{ formatLocalizedTime(metric.updated_at) }}</TableCell>
                   <TableCell class="text-right">
-                    <Button variant="ghost" size="sm" @click.stop="onMetricClick(metric.id)">
-                      <MoreHorizontal class="h-4 w-4" />
+                    <Button variant="ghost" size="sm" @click="(e: Event) => onDeleteMetricClick(metric, e)">
+                      <Trash2 class="h-4 w-4 text-destructive" />
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -495,5 +542,28 @@ onMounted(() => {
        :hide-initial-trigger="true"
        @created="onMetricCreated"
      />
+
+    <!-- Delete Metric Alert Dialog -->
+    <AlertDialog v-model:open="deleteDialogOpen">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete Metric</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete the metric "{{ metricToDelete?.name }}"? This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel :disabled="isDeleting">Cancel</AlertDialogCancel>
+          <AlertDialogAction 
+            @click="onDeleteMetric" 
+            :disabled="isDeleting"
+            class="bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            <Loader2 v-if="isDeleting" class="h-4 w-4 mr-2 animate-spin" />
+            {{ isDeleting ? 'Deleting...' : 'Delete' }}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>
 </template> 

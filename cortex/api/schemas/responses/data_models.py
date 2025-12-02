@@ -9,6 +9,7 @@ from pydantic import Field
 class DataModelResponse(TSModel):
     """Response schema for data model operations."""
     id: UUID
+    environment_id: UUID
     name: str
     alias: Optional[str] = None
     description: Optional[str] = None

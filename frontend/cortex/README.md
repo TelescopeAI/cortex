@@ -75,7 +75,7 @@ frontend/cortex/
 │   │   ├── charts/          # Chart components (ECharts)
 │   │   ├── dashboards/      # Dashboard-related components
 │   │   ├── data-sources/    # Data source configuration components
-│   │   ├── metric-builder/  # Metric builder components
+│   │   ├── metric/builder/  # Metric builder components
 │   │   └── ui/              # Shadcn/ui components
 │   ├── composables/         # Vue 3 composables for state management
 │   ├── pages/               # Nuxt pages (routes)

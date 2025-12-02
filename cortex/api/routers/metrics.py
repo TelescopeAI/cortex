@@ -8,7 +8,8 @@ from cortex.api.schemas.requests.metrics import (
     MetricUpdateRequest,
     MetricExecutionRequest,
     MetricCloneRequest,
-    MetricVersionCreateRequest
+    MetricVersionCreateRequest,
+    MetricRecommendationsRequest
 )
 from cortex.api.schemas.responses.metrics import (
     MetricResponse,
@@ -16,7 +17,8 @@ from cortex.api.schemas.responses.metrics import (
     MetricExecutionResponse,
     MetricValidationResponse,
     MetricVersionResponse,
-    MetricVersionListResponse
+    MetricVersionListResponse,
+    MetricRecommendationsResponse
 )
 from cortex.core.semantics.metrics.metric import SemanticMetric
 from cortex.core.semantics.measures import SemanticMeasure
@@ -25,7 +27,7 @@ from cortex.core.semantics.filters import SemanticFilter
 from cortex.core.data.db.metric_service import MetricService
 from cortex.core.data.db.model_service import DataModelService
 from cortex.core.data.db.source_service import DataSourceCRUD
-from cortex.core.services.metrics import MetricExecutionService
+from cortex.core.services.metrics import MetricExecutionService, MetricsGenerationService
 from cortex.core.data.modelling.model import DataModel
 from cortex.core.connectors.databases.clients.service import DBClientService
 from cortex.core.types.databases import DataSourceTypes
@@ -88,7 +90,7 @@ MetricsRouter = APIRouter()
 async def create_metric(metric_data: MetricCreateRequest):
     """Create a new metric."""
     try:
-        # Verify data model exists
+        # Verify data model exists and get environment_id from it
         model_service = DataModelService()
         try:
             data_model = model_service.get_data_model_by_id(metric_data.data_model_id)
@@ -97,6 +99,9 @@ async def create_metric(metric_data: MetricCreateRequest):
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Data model with ID {metric_data.data_model_id} not found"
                 )
+            
+            # Extract environment_id from the data model
+            environment_id = data_model.environment_id
             
             # Convert ORM to Pydantic using automatic conversion
             pydantic_model = DataModel.model_validate(data_model)
@@ -141,6 +146,7 @@ async def create_metric(metric_data: MetricCreateRequest):
         
         # Create metric with potentially updated measures/dimensions/filters
         metric = SemanticMetric(
+            environment_id=environment_id,
             data_model_id=metric_data.data_model_id,
             name=metric_data.name,
             alias=metric_data.alias,
@@ -191,16 +197,16 @@ async def create_metric(metric_data: MetricCreateRequest):
 
 @MetricsRouter.get("/metrics/{metric_id}", response_model=MetricResponse,
                   tags=["Metrics"])
-async def get_metric(metric_id: UUID):
-    """Get a specific metric by ID."""
+async def get_metric(metric_id: UUID, environment_id: UUID = Query(..., description="Environment ID")):
+    """Get a specific metric by ID, validating it belongs to the environment."""
     try:
         metric_service = MetricService()
         try:
-            db_metric = metric_service.get_metric_by_id(metric_id)
+            db_metric = metric_service.get_metric_by_id(metric_id, environment_id=environment_id)
             if not db_metric:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Metric with ID {metric_id} not found"
+                    detail=f"Metric with ID {metric_id} not found in environment {environment_id}"
                 )
             
             # Convert ORM to Pydantic using automatic conversion
@@ -233,18 +239,20 @@ async def get_metric(metric_id: UUID):
 @MetricsRouter.get("/metrics", response_model=MetricListResponse,
                   tags=["Metrics"])
 async def list_metrics(
+    environment_id: UUID = Query(..., description="Environment ID"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Page size"),
     data_model_id: Optional[UUID] = Query(None, description="Filter by data model ID"),
     public_only: Optional[bool] = Query(None, description="Filter by public status"),
     valid_only: Optional[bool] = Query(None, description="Filter by valid status")
 ):
-    """List metrics with optional filtering and pagination."""
+    """List metrics for a specific environment with optional filtering and pagination."""
     try:
         metric_service = MetricService()
         try:
             skip = (page - 1) * page_size
             db_metrics = metric_service.get_all_metrics(
+                environment_id=environment_id,
                 skip=skip,
                 limit=page_size,
                 data_model_id=data_model_id,
@@ -290,16 +298,16 @@ async def list_metrics(
 @MetricsRouter.put("/metrics/{metric_id}", response_model=MetricResponse,
                   tags=["Metrics"])
 async def update_metric(metric_id: UUID, metric_data: MetricUpdateRequest):
-    """Update an existing metric."""
+    """Update an existing metric, validating it belongs to the environment."""
     try:
         metric_service = MetricService()
         try:
-            # Check if metric exists
-            db_metric = metric_service.get_metric_by_id(metric_id)
+            # Check if metric exists and belongs to environment
+            db_metric = metric_service.get_metric_by_id(metric_id, environment_id=metric_data.environment_id)
             if not db_metric:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Metric with ID {metric_id} not found"
+                    detail=f"Metric with ID {metric_id} not found in environment {metric_data.environment_id}"
                 )
             
             # Auto-infer source_type and source_meta for updated measures, dimensions, and filters
@@ -402,11 +410,18 @@ async def update_metric(metric_id: UUID, metric_data: MetricUpdateRequest):
 @MetricsRouter.delete("/metrics/{metric_id}",
                      status_code=status.HTTP_204_NO_CONTENT,
                      tags=["Metrics"])
-async def delete_metric(metric_id: UUID):
-    """Delete a metric."""
+async def delete_metric(metric_id: UUID, environment_id: UUID = Query(..., description="Environment ID")):
+    """Delete a metric, validating it belongs to the environment."""
     try:
         metric_service = MetricService()
         try:
+            # Validate metric exists in this environment before deleting
+            existing_metric = metric_service.get_metric_by_id(metric_id, environment_id=environment_id)
+            if not existing_metric:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Metric with ID {metric_id} not found in environment {environment_id}"
+                )
             success = metric_service.delete_metric(metric_id)
             if not success:
                 raise HTTPException(
@@ -428,7 +443,7 @@ async def delete_metric(metric_id: UUID):
 @MetricsRouter.post("/metrics/{metric_id}/execute", response_model=MetricExecutionResponse,
                    tags=["Metrics"])
 async def execute_metric(metric_id: UUID, execution_request: MetricExecutionRequest):
-    """Execute a metric with parameters."""
+    """Execute a metric with parameters or preview the generated query."""
     try:
         # Use the shared metric execution service
         result = MetricExecutionService.execute_metric(
@@ -438,15 +453,30 @@ async def execute_metric(metric_id: UUID, execution_request: MetricExecutionRequ
             limit=execution_request.limit,
             offset=execution_request.offset,
             grouped=execution_request.grouped,
-            cache_preference=getattr(execution_request, 'cache', None),
-            modifiers=getattr(execution_request, 'modifiers', None),
+            cache_preference=execution_request.cache,
+            modifiers=execution_request.modifiers,
+            preview=execution_request.preview,
         )
+        
+        # Build error list from result
+        errors = None
+        if not result["success"]:
+            errors = []
+            if result.get("error"):
+                errors.append(result.get("error"))
+            if result.get("validation_errors"):
+                errors.extend(result.get("validation_errors", []))
+        
+        # Include validation warnings in metadata if present
+        metadata = result.get("metadata", {})
+        if result.get("validation_warnings"):
+            metadata["validation_warnings"] = result.get("validation_warnings")
         
         return MetricExecutionResponse(
             success=result["success"],
             data=result.get("data"),
-            metadata=result.get("metadata", {}),
-            errors=[result.get("error")] if not result["success"] else None
+            metadata=metadata,
+            errors=errors
         )
         
     except ValueError as e:
@@ -459,100 +489,6 @@ async def execute_metric(metric_id: UUID, execution_request: MetricExecutionRequ
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to execute metric: {str(e)}"
-        )
-
-
-@MetricsRouter.post("/metrics/{metric_id}/validate", response_model=MetricValidationResponse,
-                   tags=["Metrics"])
-async def validate_metric(metric_id: UUID):
-    """Validate a metric configuration and save compiled query if valid."""
-    try:
-        metric_service = MetricService()
-        try:
-            # Get metric
-            db_metric = metric_service.get_metric_by_id(metric_id)
-            if not db_metric:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Metric with ID {metric_id} not found"
-                )
-            
-            # Convert ORM to Pydantic using automatic conversion
-            metric = SemanticMetric.model_validate(db_metric)
-            
-            # Get data model for the metric
-            model_service = DataModelService()
-            try:
-                data_model = model_service.get_data_model_by_id(metric.data_model_id)
-                if not data_model:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Data model with ID {metric.data_model_id} not found"
-                    )
-                
-                # Convert ORM to Pydantic using automatic conversion
-                pydantic_model = DataModel.model_validate(data_model)
-                
-            finally:
-                model_service.close()
-            
-            # Use ValidationService for comprehensive validation
-            from cortex.core.data.modelling.validation_service import ValidationService
-            
-            validation_result = ValidationService.validate_metric_execution(
-                metric, 
-                pydantic_model
-            )
-            
-            # Try to generate a query to check compilation
-            compiled_query = None
-            try:
-                from cortex.core.query.engine.factory import QueryGeneratorFactory
-                from cortex.core.types.databases import DataSourceTypes
-                
-                generator = QueryGeneratorFactory.create_generator(metric, DataSourceTypes.POSTGRESQL)
-                compiled_query = generator.generate_query(grouped=metric.grouped if metric.grouped is not None else True)
-                
-                # If validation is successful and query compiled, save the compiled query to the database
-                if validation_result.is_valid and compiled_query:
-                    metric_service.update_metric(metric_id, {
-                        "compiled_query": compiled_query,
-                        "is_valid": True,
-                        "validation_errors": None  # Clear any previous validation errors
-                    })
-                    
-            except Exception as e:
-                validation_result.errors.append(f"Query compilation failed: {str(e)}")
-                validation_result.is_valid = False
-                
-                # Mark as invalid if compilation fails
-                metric_service.update_metric(metric_id, {
-                    "is_valid": False,
-                    "validation_errors": [f"Compilation failed: {str(e)}"]
-                })
-            
-            # If validation failed for other reasons, update the database accordingly
-            if not validation_result.is_valid:
-                metric_service.update_metric(metric_id, {
-                    "is_valid": False,
-                    "validation_errors": validation_result.errors
-                })
-            
-            return MetricValidationResponse(
-                is_valid=validation_result.is_valid,
-                errors=validation_result.errors if validation_result.errors else None,
-                warnings=validation_result.warnings if validation_result.warnings else None,
-                compiled_query=compiled_query
-            )
-        finally:
-            metric_service.close()
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to validate metric: {str(e)}"
         )
 
 
@@ -680,4 +616,60 @@ async def create_metric_version(metric_id: UUID, version_request: MetricVersionC
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to create metric version: {str(e)}"
+        )
+
+
+@MetricsRouter.post("/metrics/recommendations", response_model=MetricRecommendationsResponse,
+                   tags=["Metrics"])
+async def generate_metric_recommendations(request: MetricRecommendationsRequest):
+    """
+    Generate metric recommendations from a data source schema.
+    
+    This endpoint analyzes the schema of a data source and generates
+    a set of recommended metrics based on deterministic rules.
+    The generated metrics are not saved - they are returned for review.
+    """
+    try:
+        # Generate metrics using the service
+        generated_metrics = MetricsGenerationService.generate_metrics(
+            environment_id=request.environment_id,
+            data_source_id=request.data_source_id,
+            data_model_id=request.data_model_id
+        )
+        
+        # Convert to response format
+        metric_responses = []
+        model_service = DataModelService()
+        try:
+            data_model = model_service.get_data_model_by_id(request.data_model_id)
+            data_model_name = data_model.name if data_model else "Unknown"
+            
+            for metric in generated_metrics:
+                metric_responses.append(MetricResponse(
+                    **metric.model_dump(),
+                    data_model_name=data_model_name
+                ))
+        finally:
+            model_service.close()
+        
+        return MetricRecommendationsResponse(
+            metrics=metric_responses,
+            total_count=len(metric_responses),
+            metadata={
+                "environment_id": str(request.environment_id),
+                "data_source_id": str(request.data_source_id),
+                "data_model_id": str(request.data_model_id)
+            }
+        )
+        
+    except ValueError as e:
+        # Handle validation errors (e.g., resource not found, wrong environment)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate metric recommendations: {str(e)}"
         ) 

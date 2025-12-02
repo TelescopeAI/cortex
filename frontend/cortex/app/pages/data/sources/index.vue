@@ -3,7 +3,7 @@ import { useDataSources } from '~/composables/useDataSources';
 import { useRouter } from 'vue-router';
 import { useWorkspaces } from '~/composables/useWorkspaces';
 import { useEnvironments } from '~/composables/useEnvironments';
-import { watch, onMounted } from 'vue';
+import { watch, onMounted, ref, computed } from 'vue';
 import {
   Card,
   CardHeader,
@@ -12,9 +12,13 @@ import {
 } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { Skeleton } from '~/components/ui/skeleton';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '~/components/ui/dropdown-menu';
 import CreateDataSourceDialog from '~/components/CreateDataSourceDialog.vue';
-import { Calendar, Database, Globe, FileText, Settings, RefreshCw } from 'lucide-vue-next';
+import ExpandableSearch from '~/components/ExpandableSearch.vue';
+import { Calendar, Database, Globe, FileText, Settings, MoreHorizontal, Eye, Edit, Trash2 } from 'lucide-vue-next';
 import { Button } from '~/components/ui/button';
+
+const searchQuery = ref('');
 
 const { dataSources, loading, error, selectedEnvironmentId, refresh } = useDataSources();
 const { selectedWorkspaceId } = useWorkspaces();
@@ -36,8 +40,9 @@ watch(selectedEnvironmentId, (newEnvironmentId) => {
 }, { immediate: true });
 
 // Handle data source creation event
-function handleDataSourceCreated() {
-  refresh();
+function handleDataSourceCreated(dataSource: import('~/types').DataSource) {
+  // Redirect to the newly created data source page
+  router.push(`/data/sources/${dataSource.id}`)
 }
 
 // Get catalog icon based on source catalog
@@ -58,129 +63,169 @@ function getCatalogIcon(catalog: string) {
 function getCatalogColor(catalog: string) {
   switch (catalog) {
     case 'DATABASE':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
     case 'API':
-      return 'bg-green-100 text-green-800';
+      return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
     case 'FILE':
-      return 'bg-purple-100 text-purple-800';
+      return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
     default:
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
   }
 }
+
+// Filtered data sources based on search
+const filteredDataSources = computed(() => {
+  if (!dataSources.value || dataSources.value.length === 0) return [];
+  if (!searchQuery.value) return dataSources.value;
+  
+  const query = searchQuery.value.toLowerCase();
+  return dataSources.value.filter(source => 
+    source.name.toLowerCase().includes(query) ||
+    source.description?.toLowerCase().includes(query) ||
+    source.source_type.toLowerCase().includes(query)
+  );
+});
 </script>
 
 <template>
-  <div class="p-8">
-    <div class="flex justify-between items-center mb-6">
-      <h1 class="text-2xl font-bold">Data Sources</h1>
-      <div class="flex items-center gap-2">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          @click="refresh" 
-          :disabled="loading || !selectedEnvironmentId"
-        >
-          <RefreshCw class="w-4 h-4 mr-2" :class="{ 'animate-spin': loading }" />
-          Refresh
-        </Button>
-            <CreateDataSourceDialog 
-              v-if="selectedEnvironmentId" 
-              @data-source-created="handleDataSourceCreated"
-            />
+  <div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-5xl font-bold tracking-tight">Data Sources</h1>
+      </div>
+      
+      <div class="flex items-center gap-4">
+        <!-- Search -->
+        <ExpandableSearch
+          v-model="searchQuery"
+          :placeholder="['Search data sources...', 'Search by name...', 'Search by type...']"
+          default-mode="minimal"
+          full-width="350px"
+          :expand-on-focus="true"
+          expand-to="full"
+        />
+        
+        <CreateDataSourceDialog 
+          v-if="selectedEnvironmentId" 
+          @data-source-created="handleDataSourceCreated"
+        />
       </div>
     </div>
     
     <!-- Loading State -->
-    <div v-if="loading" class="grid grid-cols-2 lg:grid-cols-3 space-4">
-      <Card v-for="i in 6" :key="i" class="p-6 m-3">
-        <div class="flex items-start justify-between">
-          <div class="flex-1">
-            <!-- Icon and Title -->
-            <div class="flex items-center gap-2 mb-3">
-              <Skeleton class="h-6 w-24 rounded-full" />
-              <Skeleton class="h-6 w-full" />
-            </div>
-            
-            <!-- Badges -->
-            <div class="flex items-center gap-2 mb-3">
-              <Skeleton class="h-6 w-full rounded-full" />
-            </div>
-            
-            <!-- Description lines -->
-            <div class="space-y-2 mb-3">
-              <Skeleton class="h-4 w-full" />
-              <Skeleton class="h-4 w-full" />
-            </div>
-            
-            <!-- Date with icon -->
-            <div class="flex items-center gap-2 text-sm">
-              <Skeleton class="h-4 w-full" />
-            </div>
+    <div v-if="loading" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <Card v-for="i in 6" :key="i" class="animate-pulse">
+        <CardHeader>
+          <div class="h-4 bg-muted rounded w-3/4"></div>
+          <div class="h-3 bg-muted rounded w-1/2"></div>
+        </CardHeader>
+        <CardContent>
+          <div class="space-y-2">
+            <div class="h-3 bg-muted rounded"></div>
+            <div class="h-3 bg-muted rounded w-2/3"></div>
           </div>
-        </div>
+        </CardContent>
       </Card>
     </div>
     
-    <div v-else-if="error" class="text-center py-8">
-      <p class="text-red-600">Error loading data sources</p>
+    <div v-else-if="error" class="text-center py-12">
+      <Database class="w-12 h-12 mx-auto text-destructive mb-4" />
+      <h3 class="text-lg font-semibold mb-2">Error loading data sources</h3>
+      <p class="text-muted-foreground mb-4">Something went wrong. Please try again.</p>
+      <Button variant="outline" @click="refresh">
+        Retry
+      </Button>
     </div>
     
-    <div v-else-if="!selectedWorkspaceId">
-      <div class="text-center py-8">
-        <Settings class="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <h3 class="text-lg font-medium text-gray-900 mb-2">No Workspace Selected</h3>
-        <p class="text-gray-500 mb-4">Please select a workspace from the dropdown above to view data sources.</p>
-        <p class="text-sm text-gray-400">You can also create a new workspace if needed.</p>
-      </div>
+    <div v-else-if="!selectedWorkspaceId" class="text-center py-12">
+      <Settings class="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+      <h3 class="text-lg font-semibold mb-2">No Workspace Selected</h3>
+      <p class="text-muted-foreground mb-4">Please select a workspace from the dropdown above to view data sources.</p>
     </div>
     
-    <div v-else-if="!selectedEnvironmentId">
-      <div class="text-center py-8">
-        <Settings class="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <h3 class="text-lg font-medium text-gray-900 mb-2">No Environment Selected</h3>
-        <p class="text-gray-500 mb-4">Please select an environment from the dropdown above to view data sources.</p>
-        <p class="text-sm text-gray-400">You can also create a new environment if needed.</p>
-      </div>
+    <div v-else-if="!selectedEnvironmentId" class="text-center py-12">
+      <Settings class="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+      <h3 class="text-lg font-semibold mb-2">No Environment Selected</h3>
+      <p class="text-muted-foreground mb-4">Please select an environment from the dropdown above to view data sources.</p>
     </div>
     
-    <div v-else-if="dataSources.length === 0">
-      <div class="text-center py-8">
-        <Database class="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <h3 class="text-lg font-medium text-gray-900 mb-2">No data sources found</h3>
-        <p class="text-gray-500 mb-4">Get started by creating your first data source.</p>
-        <CreateDataSourceDialog @data-source-created="handleDataSourceCreated" />
-      </div>
+    <div v-else-if="dataSources.length === 0" class="text-center py-12">
+      <Database class="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+      <h3 class="text-lg font-semibold mb-2">No data sources connected</h3>
+      <p class="text-muted-foreground mb-4">Get started by connecting your first data source.</p>
+      <CreateDataSourceDialog @data-source-created="handleDataSourceCreated" />
+    </div>
+
+    <div v-else-if="filteredDataSources.length === 0" class="text-center py-12">
+      <Database class="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+      <h3 class="text-lg font-semibold mb-2">No data sources match your search</h3>
+      <p class="text-muted-foreground mb-4">Try adjusting your search criteria</p>
+      <Button variant="outline" @click="searchQuery = ''">
+        Clear Filters
+      </Button>
     </div>
     
-    <div v-else>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" :key="dataSources.length">
-        <div v-for="dataSource in dataSources" :key="dataSource.id" class="bg-white rounded-lg shadow p-6">
+    <div v-else class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <Card 
+        v-for="dataSource in filteredDataSources" 
+        :key="dataSource.id" 
+        class="cursor-pointer hover:shadow-md transition-shadow"
+        @click="router.push(`/data/sources/${dataSource.id}`)"
+      >
+        <CardHeader class="pb-3">
           <div class="flex items-start justify-between">
             <div class="flex-1">
-              <div class="flex items-center gap-2 mb-2">
-                <component :is="getCatalogIcon(dataSource.source_catalog)" class="w-5 h-5 text-gray-500" />
-                <h3 class="text-lg font-semibold text-gray-900">{{ dataSource.name }}</h3>
-              </div>
-              <div class="flex items-center gap-2 mb-2">
-                <Badge :class="getCatalogColor(dataSource.source_catalog)">
-                  {{ dataSource.source_catalog }}
-                </Badge>
-                <Badge variant="outline">
-                  {{ dataSource.source_type }}
-                </Badge>
-              </div>
-              <p v-if="dataSource.description" class="text-gray-600 mb-2">{{ dataSource.description }}</p>
-              <div class="flex items-center gap-2 text-sm text-gray-500">
-                <Calendar class="w-4 h-4" />
-                <span>Created {{ new Date(dataSource.created_at).toLocaleDateString() }}</span>
-              </div>
+              <CardTitle class="text-lg mb-1 flex items-center gap-2">
+                <component :is="getCatalogIcon(dataSource.source_catalog)" class="w-5 h-5 text-muted-foreground" />
+                {{ dataSource.name }}
+              </CardTitle>
+              <p v-if="dataSource.description" class="text-sm text-muted-foreground line-clamp-2">
+                {{ dataSource.description }}
+              </p>
             </div>
-            <Button variant="outline" size="sm" @click="router.push(`/data/sources/${dataSource.id}`)">
-              View Details
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger as-child @click.stop>
+                <Button variant="ghost" size="icon" class="h-8 w-8">
+                  <MoreHorizontal class="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem @click.stop="router.push(`/data/sources/${dataSource.id}`)">
+                  <Eye class="w-4 h-4 mr-2" />
+                  View
+                </DropdownMenuItem>
+                <DropdownMenuItem @click.stop>
+                  <Edit class="w-4 h-4 mr-2" />
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem @click.stop class="text-destructive">
+                  <Trash2 class="w-4 h-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-        </div>
-      </div>
+        </CardHeader>
+        
+        <CardContent class="pt-0">
+          <div class="space-y-3">
+            <div class="flex items-center gap-2">
+              <Badge :class="getCatalogColor(dataSource.source_catalog)">
+                {{ dataSource.source_catalog }}
+              </Badge>
+              <Badge variant="outline">
+                {{ dataSource.source_type }}
+              </Badge>
+            </div>
+            
+            <div class="flex items-center gap-2 text-xs text-muted-foreground">
+              <Calendar class="w-3 h-3" />
+              <span>Created {{ new Date(dataSource.created_at).toLocaleDateString() }}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   </div>
 </template> 

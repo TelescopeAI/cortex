@@ -346,6 +346,7 @@ export function useDashboards() {
     }
   }
 
+
   async function previewDashboardConfig(dashboardId: string, config: any) {
     loading.value = true
     error.value = null
@@ -367,11 +368,13 @@ export function useDashboards() {
             widgets: section.widgets?.map((widget: any, index: number) => ({
               alias: widget.alias || `preview_widget_${index}`,
               section_alias: section.alias || `preview_section_${index}`,
-              metric_id: widget.metric_id,
+              // Support either metric_id (reference) or metric (embedded)
+              ...(widget.metric_id ? { metric_id: widget.metric_id } : {}),
+              ...(widget.metric ? { metric: widget.metric } : {}),
               title: widget.title || 'Preview Widget',
               description: widget.description || '',
               position: widget.position || index,
-              grid_config: widget.grid_config || { columns: 3, rows: 2 },
+              grid_config: widget.grid_config || { columns: 12, rows: 3 },
               visualization: {
                 type: widget.visualization?.type || 'single_value',
                 data_mapping: {
@@ -475,5 +478,82 @@ export function useDashboards() {
     getDefaultView,
     getViewById,
     getWidgetById
+  }
+}
+
+/**
+ * Generate a widget configuration from a metric with auto-detected visualization type
+ * @param metric - The semantic metric to generate config from
+ * @returns Widget configuration ready to be used in a dashboard
+ */
+export function generateWidgetConfigFromMetric(metric: any): Partial<CreateDashboardWidgetRequest> {
+  const hasMeasures = metric.measures && metric.measures.length > 0
+  const hasDimensions = metric.dimensions && metric.dimensions.length > 0
+  
+  // Determine visualization type
+  let vizType: string = 'single_value'
+  if (hasMeasures && hasDimensions) {
+    // For metrics with both measures and dimensions, randomly choose between chart types
+    const chartTypes = ['line_chart', 'bar_chart', 'area_chart']
+    vizType = chartTypes[Math.floor(Math.random() * chartTypes.length)] || 'line_chart'
+  }
+  
+  // Build data mapping based on metric structure
+  // All visualization types use x_axis and y_axes for consistency:
+  // - Single Value: x_axis = the value field (first measure)
+  // - Charts: x_axis = dimension (category), y_axes = measures
+  const dataMapping: any = {}
+  
+  if (vizType === 'single_value') {
+    // For single value, the backend expects the value in x_axis
+    if (hasMeasures) {
+      const firstMeasure = metric.measures[0]
+      dataMapping.x_axis = {
+        field: firstMeasure.name || firstMeasure.query || 'value',
+        data_type: 'numerical',
+        label: firstMeasure.name,
+        required: true
+      }
+    }
+  } else {
+    // For chart types (line, bar, area), map dimensions to x-axis and measures to y-axes
+    if (hasDimensions) {
+      const firstDim = metric.dimensions[0]
+      dataMapping.x_axis = {
+        field: firstDim.name || firstDim.query || 'dimension',
+        data_type: 'categorical',
+        label: firstDim.name,
+        required: true
+      }
+    }
+    
+    if (hasMeasures) {
+      dataMapping.y_axes = metric.measures.map((measure: any) => ({
+        field: measure.name || measure.query || 'measure',
+        data_type: 'numerical',
+        label: measure.name,
+        required: true
+      }))
+    }
+  }
+  
+  return {
+    metric_id: metric.id,
+    position: 0,
+    grid_config: {
+      columns: vizType === 'single_value' ? 2 : 4,
+      rows: vizType === 'single_value' ? 1 : 2,
+      min_columns: 1,
+      min_rows: 1
+    },
+    title: metric.title || metric.name,
+    description: metric.description,
+    visualization: {
+      type: vizType,
+      data_mapping: dataMapping,
+      show_legend: true,
+      show_grid: true,
+      show_axes_labels: true
+    }
   }
 }

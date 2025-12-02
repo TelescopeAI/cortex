@@ -169,11 +169,11 @@ const chartCategories = computed(() => {
           {{ category }}
         </DropdownMenuLabel>
         
-        <div
+        <DropdownMenuItem
           v-for="type in types"
           :key="type.value"
-          @click="selectType(type.value)"
-          class="flex items-center p-2 cursor-pointer hover:bg-muted/50 rounded-md transition-colors"
+          @select="selectType(type.value)"
+          class="flex items-center p-2 cursor-pointer"
         >
           <component :is="type.icon" class="w-4 h-4 mr-3 text-muted-foreground" />
           <div class="flex-1">
@@ -185,7 +185,7 @@ const chartCategories = computed(() => {
           <Badge :class="type.color" class="text-xs ml-2">
             {{ type.dataType }}
           </Badge>
-        </div>
+        </DropdownMenuItem>
       </div>
     </DropdownMenuContent>
   </DropdownMenu>

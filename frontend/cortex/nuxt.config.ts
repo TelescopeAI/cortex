@@ -16,7 +16,8 @@ export default defineNuxtConfig({
     'nuxt-charts',
     'nuxt-shiki',
     'nuxt-echarts',
-    '@nuxt/image'
+    '@nuxt/image',
+    '@nuxt/fonts',
   ],
   css: [
     './app/assets/css/tailwind.css',
@@ -84,4 +85,15 @@ export default defineNuxtConfig({
   image: {
     dir: 'assets/images'
   },
+  fonts: {
+    families: [
+      { name: 'Inter', provider: 'google' },
+      { name: 'Space Grotesk', provider: 'google' }
+    ],
+    defaults: {
+      weights: [400, 500, 600, 700],
+      styles: ['normal'],
+      subsets: ['latin', 'latin-ext']
+    }
+  }
 })

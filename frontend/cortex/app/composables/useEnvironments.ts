@@ -14,6 +14,9 @@ export function useEnvironments() {
   const loading = useState<boolean>('environments:loading', () => false);
   const error = useState<any>('environments:error', () => null);
 
+  // Cache environments per workspace
+  const environmentsByWorkspace = useState<Record<string, Environment[]>>('environments:byWorkspace', () => ({}));
+
   // Fetch environments for the current workspace
   async function fetchEnvironments() {
     if (!selectedWorkspaceId.value) {
@@ -26,7 +29,10 @@ export function useEnvironments() {
       const result = await $fetch<Environment[]>(apiUrl('/api/v1/environments'), {
         query: { workspace_id: selectedWorkspaceId.value }
       });
-      data.value = result || [];
+      const envs = result || [];
+      data.value = envs;
+      // Cache environments for this workspace
+      environmentsByWorkspace.value[selectedWorkspaceId.value] = envs;
     } catch (err: any) {
       console.error('Failed to fetch environments:', err);
       error.value = err;
@@ -34,6 +40,38 @@ export function useEnvironments() {
     } finally {
       loading.value = false;
     }
+  }
+
+  // Fetch environments for a specific workspace
+  async function fetchEnvironmentsForWorkspace(workspaceId: string) {
+    if (!workspaceId) {
+      return [];
+    }
+    try {
+      const result = await $fetch<Environment[]>(apiUrl('/api/v1/environments'), {
+        query: { workspace_id: workspaceId }
+      });
+      const envs = result || [];
+      // Cache environments for this workspace
+      environmentsByWorkspace.value[workspaceId] = envs;
+      return envs;
+    } catch (err: any) {
+      console.error(`Failed to fetch environments for workspace ${workspaceId}:`, err);
+      return [];
+    }
+  }
+
+  // Get environments for a specific workspace (from cache or fetch if needed)
+  async function getEnvironmentsForWorkspace(workspaceId: string) {
+    if (!workspaceId) {
+      return [];
+    }
+    // Return from cache if available
+    if (environmentsByWorkspace.value[workspaceId]) {
+      return environmentsByWorkspace.value[workspaceId];
+    }
+    // Otherwise fetch
+    return await fetchEnvironmentsForWorkspace(workspaceId);
   }
 
   // Guarded watcher: only refetch when the workspace id actually changes
@@ -56,6 +94,8 @@ export function useEnvironments() {
     });
     // Refresh list after creation so UI updates everywhere
     await fetchEnvironments();
+    // Also refresh the cache for this workspace
+    await fetchEnvironmentsForWorkspace(environment.workspace_id);
     return response;
   }
 
@@ -80,5 +120,8 @@ export function useEnvironments() {
     selectEnvironment,
     createEnvironment,
     getEnvironment,
+    fetchEnvironmentsForWorkspace,
+    getEnvironmentsForWorkspace,
+    environmentsByWorkspace,
   };
 } 

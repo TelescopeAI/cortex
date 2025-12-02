@@ -1,25 +1,30 @@
 [tool.poetry]
 name = "telescope-cortex"
-version = "0.0.1a2"
-description = "Analytics OS for Agents"
+version = "0.0.1a5"
+description = "Minimal Headless BI for perfectionists with deadline"
 authors = ["Nilotpal Roychowdhury <nilotpal@jointelescope.com>"]
 license = "MIT"
 readme = "README.md"
 packages = [{include = "cortex"}]
+include = ["cortex/api/static/**/*", "cortex/migrations/**/*"]
 
 [tool.poetry.dependencies]
 python = ">=3.12,<3.14"
-pydantic = "^2.10.6"
+pydantic = "^2.12.3"
 sqlalchemy = "^2.0.38"
 sqlalchemy-bigquery = "1.15.0"
 psycopg = {extras = ["binary", "pool"], version = "3.2.10"}
 pytz = "^2025.1"
 alembic = "^1.16.5"
-duckdb = "^1.4.0"
+duckdb = "^1.4.1"
 duckdb-engine = "^0.17.0"
 pymysql = {extras = ["rsa"], version = "^1.1.2"}
 redis = "^6.4.0"
-
+# Optional API dependencies (installed with telescope-cortex[api])
+fastapi = {extras = ["standard"], version = "^0.115.8", optional = true}
+scalar-fastapi = {version = "^1.0.3", optional = true}
+secweb = {version = "^1.25.2", optional = true}
+uvicorn = {version = "^0.36.1", optional = true}
 
 [tool.poetry.group.api]
 optional = true
@@ -27,10 +32,11 @@ optional = true
 [tool.poetry.group.api.dependencies]
 fastapi = {extras = ["standard"], version = "^0.115.8"}
 scalar-fastapi = "^1.0.3"
-secweb = "^1.18.1"
+secweb = "^1.25.2"
+uvicorn = "^0.36.1"
 
 [tool.poetry.extras]
-api = ["fastapi", "scalar-fastapi", "secweb"]
+api = ["fastapi", "scalar-fastapi", "secweb", "uvicorn"]
 
 [build-system]
 requires = ["poetry-core"]

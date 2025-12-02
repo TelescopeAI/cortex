@@ -4,7 +4,7 @@
       <DialogHeader>
         <DialogTitle class="flex items-center space-x-2">
           <UserPlus class="h-5 w-5" />
-          <span>Create Consumer</span>
+          <span>Add Consumer</span>
         </DialogTitle>
         <DialogDescription>
           Add a new consumer to your environment.
@@ -60,18 +60,10 @@
         
 
         
-        <div class="space-y-2">
-          <Label for="properties">Properties (JSON)</Label>
-          <Textarea
-            id="properties"
-            v-model="form.properties"
-            placeholder='{"key": "value"}'
-            rows="4"
-            class="font-mono text-sm"
-            :disabled="isLoading"
-          />
-          <p class="text-xs text-muted-foreground">Optional key-value pairs in JSON format</p>
-        </div>
+        <KeyValuePairs
+          v-model="form.properties"
+          :is-loading="isLoading"
+        />
       </form>
       
       <DialogFooter>
@@ -101,9 +93,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
-import { Textarea } from '~/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 import { UserPlus, Loader2 } from 'lucide-vue-next'
+import KeyValuePairs from '~/components/KeyValuePairs.vue'
 
 interface Props {
   open: boolean
@@ -131,7 +122,7 @@ const form = ref({
   last_name: '',
   email: '',
   organization: '',
-  properties: ''
+  properties: null as Record<string, any> | null
 })
 
 const aliasError = ref('')
@@ -149,7 +140,7 @@ const resetForm = () => {
     last_name: '',
     email: '',
     organization: '',
-    properties: ''
+    properties: null
   }
   aliasError.value = ''
   aliasManuallyEdited.value = false
@@ -160,24 +151,13 @@ const handleSubmit = async () => {
 
   isLoading.value = true
   try {
-    // Parse properties if provided
-    let properties = null
-    if (form.value.properties.trim()) {
-      try {
-        properties = JSON.parse(form.value.properties)
-      } catch (error) {
-        toast.error('Invalid JSON format for properties')
-        return
-      }
-    }
-
     const consumerData = {
       environment_id: selectedEnvironmentId.value!,
       first_name: form.value.first_name.trim(),
       last_name: form.value.last_name.trim(),
       email: form.value.email.trim(),
       organization: form.value.organization.trim() || undefined,
-      properties
+      properties: form.value.properties
     }
 
     const createdConsumer = await createConsumer(consumerData)

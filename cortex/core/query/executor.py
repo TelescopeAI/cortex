@@ -53,9 +53,26 @@ class QueryExecutor(TSModel):
         grouped: Optional[bool] = None,
         cache_preference: Optional[CachePreference] = None,
         modifiers: Optional[MetricModifiers] = None,
+        preview: Optional[bool] = False,
     ) -> Dict[str, Any]:
         """
         Execute a specific metric from a data model with comprehensive logging.
+        
+        Args:
+            metric: The metric to execute
+            data_model: The data model containing the metric
+            parameters: Optional parameters for query execution
+            limit: Optional limit on result rows
+            offset: Optional offset for pagination
+            source_type: Database source type (defaults to PostgreSQL)
+            context_id: Optional context identifier
+            grouped: Optional override for grouping
+            cache_preference: Optional cache preferences
+            modifiers: Optional metric modifiers
+            preview: If True, generate query without executing or caching
+            
+        Returns:
+            Dict with success status, data, metadata, and optional errors
         """
         start_time = datetime.now()
 
@@ -146,7 +163,10 @@ class QueryExecutor(TSModel):
                 if cache_preference is not None and hasattr(cache_preference, 'enabled'):
                     request_enabled = bool(getattr(cache_preference, 'enabled'))
                 cache_enabled = bool(request_enabled) if request_enabled is not None else (env_enabled and metric_enabled)
-                print(f"[CORTEX CACHE] resolve enabled -> env={env_enabled} metric={metric_enabled} request={request_enabled} final={cache_enabled}")
+                # Disable cache for preview mode
+                if preview:
+                    cache_enabled = False
+                print(f"[CORTEX CACHE] resolve enabled -> env={env_enabled} metric={metric_enabled} request={request_enabled} preview={preview} final={cache_enabled}")
 
                 if cache_enabled and metric.data_source_id:
                     ds = DataSourceCRUD.get_data_source(metric.data_source_id)
@@ -213,6 +233,23 @@ class QueryExecutor(TSModel):
             enhanced_parameters = self._enhance_parameters_with_context(parameters, context_id)
             query_generator = QueryGeneratorFactory.create_generator(resolved_metric, source_type)
             generated_query = query_generator.generate_query(enhanced_parameters, limit, offset, grouped)
+            
+            # If preview mode, return early with generated query
+            if preview:
+                end_time = datetime.now()
+                duration = (end_time - start_time).total_seconds() * 1000
+                return {
+                    "success": True,
+                    "data": None,
+                    "metadata": {
+                        "metric_id": str(metric.id),
+                        "query": generated_query,
+                        "parameters": parameters,
+                        "preview": True,
+                        "duration": duration,
+                    }
+                }
+            
             query_results = self._execute_database_query(generated_query, metric.data_source_id)
             
             all_formats = OutputProcessor.collect_semantic_formatting(
@@ -325,6 +362,7 @@ class QueryExecutor(TSModel):
                     "parameters": parameters
                 }
             }
+ 
     
     def _execute_database_query(self, query: str, data_source_id: UUID) -> List[Dict[str, Any]]:
         """

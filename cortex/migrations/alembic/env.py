@@ -1,9 +1,9 @@
 import sys
 from logging.config import fileConfig
-
+from pathlib import Path
 from alembic import context
 from sqlalchemy import MetaData
-
+from sqlalchemy.engine import make_url
 from cortex.core.storage.store import CortexStorage
 
 sys.path = ['', '..'] + sys.path[1:]
@@ -44,8 +44,7 @@ print("Total Tables: ", count)
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 # Resolve DB URI and normalize file-based paths for SQLite/DuckDB to project root
-from pathlib import Path
-from sqlalchemy.engine import make_url
+
 
 raw_uri = CortexStorage().db_url
 try:
@@ -57,7 +56,9 @@ try:
     if is_sqlite and parsed.database and parsed.database != ":memory:":
         db_path = Path(parsed.database)
         if not db_path.is_absolute():
-            project_root = Path(__file__).resolve().parents[2]
+            # Path is: cortex/cortex/migrations/alembic/env.py
+            # parents[3] gets us to the project root (cortex/)
+            project_root = Path(__file__).resolve().parents[3]
             abs_path = (project_root / db_path).resolve()
             parsed = parsed.set(database=abs_path.as_posix())
     db_uri = str(parsed).replace('%', '%%')

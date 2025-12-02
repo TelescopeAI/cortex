@@ -16,6 +16,7 @@ class DataModel(TSModel):
     model_config = ConfigDict(from_attributes=True)
     
     id: UUID = Field(default_factory=uuid4)
+    environment_id: UUID
     name: str
     alias: Optional[str] = None
     description: Optional[str] = None

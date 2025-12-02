@@ -43,6 +43,7 @@ class MetricCreateRequest(BaseModel):
 
 class MetricUpdateRequest(BaseModel):
     """Request schema for updating an existing metric"""
+    environment_id: UUID = Field(..., description="Environment ID for the metric")
     name: Optional[str] = None
     alias: Optional[str] = None
     description: Optional[str] = None
@@ -80,6 +81,7 @@ class MetricExecutionRequest(BaseModel):
     ordered: Optional[bool] = Field(default=True, description="Whether to apply ORDER BY for sorting results")
     cache: Optional[CachePreference] = None
     modifiers: Optional[MetricModifiers] = None
+    preview: Optional[bool] = Field(default=False, description="If true, generate and return query without executing or saving to DB")
 
 
 class MetricCloneRequest(BaseModel):
@@ -92,3 +94,10 @@ class MetricVersionCreateRequest(BaseModel):
     """Request schema for creating a metric version"""
     description: Optional[str] = None
     tags: Optional[List[str]] = None 
+
+
+class MetricRecommendationsRequest(BaseModel):
+    """Request schema for generating metric recommendations"""
+    environment_id: UUID
+    data_source_id: UUID
+    data_model_id: UUID 

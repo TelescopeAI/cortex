@@ -2,7 +2,7 @@
 import { useWorkspaces } from '~/composables/useWorkspaces';
 import { useEnvironments } from '~/composables/useEnvironments';
 import { useRouter } from 'vue-router';
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import type { Workspace, Environment } from '~/types';
 import {
   Card,
@@ -27,7 +27,14 @@ import CreateEnvironmentDialog from '~/components/CreateEnvironmentDialog.vue';
 import { ChevronDown, Check } from 'lucide-vue-next';
 
 const { workspaces, selectedWorkspaceId, selectWorkspace, loading: workspacesLoading } = useWorkspaces();
-const { environments, selectedEnvironmentId, selectEnvironment, loading: environmentsLoading } = useEnvironments();
+const { 
+  environments, 
+  selectedEnvironmentId, 
+  selectEnvironment, 
+  loading: environmentsLoading,
+  getEnvironmentsForWorkspace: fetchEnvsForWorkspace,
+  environmentsByWorkspace
+} = useEnvironments();
 const router = useRouter();
 
 function handleWorkspaceSelect(id: string) {
@@ -65,6 +72,99 @@ const dropdownLabel = computed(() => {
   }
   return ''; // Both are selected, no label needed
 });
+
+// Ensure workspaces is always an array for template usage
+const workspacesList = computed(() => {
+  return Array.isArray(workspaces.value) ? workspaces.value : [];
+});
+
+// Auto-select first workspace and first environment if they exist and nothing is selected
+async function autoSelectFirstWorkspaceAndEnvironment() {
+  console.log('[workspaces.vue] autoSelectFirstWorkspaceAndEnvironment called');
+  console.log('[workspaces.vue] Current state:', {
+    workspacesCount: Array.isArray(workspaces.value) ? workspaces.value.length : 0,
+    selectedWorkspaceId: selectedWorkspaceId.value,
+    selectedEnvironmentId: selectedEnvironmentId.value,
+    environmentsByWorkspace: environmentsByWorkspace.value
+  });
+
+  // Only auto-select if nothing is currently selected
+  if (selectedWorkspaceId.value || selectedEnvironmentId.value) {
+    console.log('[workspaces.vue] Already has selections, skipping auto-select');
+    return;
+  }
+
+  // Check if we have workspaces
+  if (!Array.isArray(workspaces.value) || workspaces.value.length === 0) {
+    console.log('[workspaces.vue] No workspaces available for auto-select');
+    return;
+  }
+
+  // Select the first workspace
+  const firstWorkspace = workspaces.value[0];
+  if (!firstWorkspace) {
+    console.log('[workspaces.vue] First workspace is undefined');
+    return;
+  }
+
+  console.log('[workspaces.vue] Auto-selecting first workspace:', firstWorkspace.name);
+  selectWorkspace(firstWorkspace.id);
+
+  // Ensure environments for this workspace are loaded
+  console.log('[workspaces.vue] Fetching environments for first workspace:', firstWorkspace.id);
+  const envs = await fetchEnvsForWorkspace(firstWorkspace.id);
+  console.log('[workspaces.vue] Environments fetched for first workspace:', envs);
+
+  // Check if we have environments for this workspace
+  const workspaceEnvs = environmentsByWorkspace.value[firstWorkspace.id];
+  if (Array.isArray(workspaceEnvs) && workspaceEnvs.length > 0) {
+    // Select the first environment
+    const firstEnvironment = workspaceEnvs[0];
+    if (!firstEnvironment) {
+      console.log('[workspaces.vue] First environment is undefined');
+      return;
+    }
+    console.log('[workspaces.vue] Auto-selecting first environment:', firstEnvironment.name);
+    selectEnvironment(firstEnvironment.id);
+    console.log('[workspaces.vue] Auto-selection complete:', {
+      workspaceId: selectedWorkspaceId.value,
+      environmentId: selectedEnvironmentId.value
+    });
+  } else {
+    console.log('[workspaces.vue] No environments available for auto-select in first workspace');
+  }
+}
+
+// Watch for workspaces to trigger auto-selection
+watch(workspaces, async (newWorkspaces) => {
+  if (!newWorkspaces || !Array.isArray(newWorkspaces) || newWorkspaces.length === 0) {
+    return;
+  }
+  
+  // TypeScript type assertion after array check
+  const workspacesList = newWorkspaces as Workspace[];
+  
+  console.log('[workspaces.vue] workspaces changed:', {
+    count: workspacesList.length,
+    workspaces: workspacesList.map((w: Workspace) => ({ id: w.id, name: w.name }))
+  });
+  
+  // Fetch environments for all workspaces in parallel
+  console.log('[workspaces.vue] Fetching environments for all workspaces...');
+  await Promise.all(
+    workspacesList.map((ws: Workspace) => fetchEnvsForWorkspace(ws.id))
+  );
+  console.log('[workspaces.vue] All environments fetched:', environmentsByWorkspace.value);
+  
+  // Auto-select first workspace and environment after environments are loaded
+  await autoSelectFirstWorkspaceAndEnvironment();
+}, { immediate: true });
+
+// Also watch environmentsByWorkspace to trigger auto-select when environments are loaded
+watch(environmentsByWorkspace, async () => {
+  console.log('[workspaces.vue] environmentsByWorkspace changed');
+  await autoSelectFirstWorkspaceAndEnvironment();
+}, { deep: true });
 </script>
 
 <template>
@@ -99,7 +199,7 @@ const dropdownLabel = computed(() => {
               <!-- Workspace Items -->
               <DropdownMenuItem 
                 v-else
-                v-for="ws in workspaces" 
+                v-for="ws in workspacesList" 
                 :key="ws.id" 
                 @click="handleWorkspaceSelect(ws.id)"
               >

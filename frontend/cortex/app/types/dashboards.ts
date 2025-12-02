@@ -36,7 +36,8 @@ export interface DashboardSection {
 export interface DashboardWidget {
   alias: string
   section_alias: string
-  metric_id: string
+  metric_id?: string  // Optional - either metric_id or metric should be provided
+  metric?: any  // Embedded metric object (when not using metric_id)
   position: number
   grid_config: WidgetGridConfig
   title: string

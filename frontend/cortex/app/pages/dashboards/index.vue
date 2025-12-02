@@ -8,7 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '~/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '~/components/ui/dialog'
 import { TagsInput, TagsInputInput, TagsInputItem, TagsInputItemDelete, TagsInputItemText } from '~/components/ui/tags-input'
-import { Search, Filter, Plus, MoreHorizontal, Eye, Edit, Trash2, BarChart3, Gauge, TrendingUp, Calendar, Clock } from 'lucide-vue-next'
+import { Filter, Plus, MoreHorizontal, Eye, Edit, Trash2, BarChart3, Gauge, TrendingUp, Calendar, Clock, ChevronDown } from 'lucide-vue-next'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '~/components/ui/collapsible'
+import ExpandableSearch from '~/components/ExpandableSearch.vue'
 import { toast } from 'vue-sonner'
 import { useDateFormat, useTimeAgo } from '@vueuse/core'
 import type { Dashboard, DashboardType } from '~/types/dashboards'
@@ -49,7 +51,7 @@ const createForm = reactive({
   name: '',
   alias: '',
   description: '',
-  type: 'executive' as string,
+  type: 'analytical' as string,
   tags: [] as string[]
 })
 
@@ -162,19 +164,20 @@ function viewDashboard(dashboard: Dashboard) {
   router.push(`/dashboards/${dashboard.id}`)
 }
 
-const formatUpdatedAt = (iso?: string) => {
-  if (!iso) return '-'
-  try {
-    return useTimeAgo(iso).value
-  } catch {
-    return '-'
-  }
+const convertUTCToLocal = (dateString: string): Date => {
+  // Parse the UTC date string and convert to local timezone
+  const utcDate = new Date(dateString)
+  return new Date(utcDate.getTime() - (utcDate.getTimezoneOffset() * 60000))
 }
 
-function editDashboard(dashboard: Dashboard) {
-  // TODO: Implement edit functionality
-  toast.info('Edit functionality coming soon')
+const formatRelativeTime = (date: string | Date) => {
+  // Convert UTC to local timezone before passing to useTimeAgo
+  const localDate = typeof date === 'string' ? convertUTCToLocal(date) : date
+  return useTimeAgo(localDate, { 
+    updateInterval: 1000 // Update every second for real-time updates
+  })
 }
+
 
 function confirmDeleteDashboard(dashboard: Dashboard) {
   dashboardToDelete.value = dashboard
@@ -235,7 +238,7 @@ async function handleCreateDashboard() {
     createForm.name = ''
     createForm.alias = ''
     createForm.description = ''
-    createForm.type = 'executive'
+    createForm.type = 'analytical'
     createForm.tags = []
     resetManualEditFlag()
 
@@ -269,30 +272,21 @@ onMounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-3xl font-bold tracking-tight">Dashboards</h1>
-        <p class="text-muted-foreground">
-          Manage and view your analytics dashboards
-        </p>
+        <h1 class="text-5xl font-bold tracking-tight">Dashboards</h1>
       </div>
-      <Button @click="createDashboard">
-        <Plus class="w-4 h-4 mr-2" />
-        Create Dashboard
-      </Button>
-    </div>
-
-    <!-- Filters -->
-    <Card>
-      <CardContent class="p-6">
+     <!-- Actions -->
+    <Card class="bg-transparent border-none shadow-none p-0">
+      <CardContent class="p-0">
         <div class="flex flex-col gap-4 md:flex-row md:items-center">
           <!-- Search -->
-          <div class="relative flex-1">
-            <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              v-model="searchQuery"
-              placeholder="Search dashboards..."
-              class="pl-10"
-            />
-          </div>
+          <ExpandableSearch
+            v-model="searchQuery"
+            :placeholder="['Search dashboards...', 'Search by name...', 'Search by tag...']"
+            default-mode="minimal"
+            full-width="350px"
+            :expand-on-focus="true"
+            expand-to="full"
+          />
 
           <!-- Type Filter -->
           <Select v-model="selectedType">
@@ -340,9 +334,17 @@ onMounted(() => {
               <SelectItem value="asc">Oldest</SelectItem>
             </SelectContent>
           </Select>
+
+          <Button @click="createDashboard">
+          <Plus class="w-4 h-4 mr-2" />
+            Add
+          </Button>
         </div>
       </CardContent>
     </Card>
+    </div>
+
+    
 
     <!-- Dashboard Grid -->
     <div v-if="loading" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -364,11 +366,11 @@ onMounted(() => {
       <BarChart3 class="w-12 h-12 mx-auto text-muted-foreground mb-4" />
       <h3 class="text-lg font-semibold mb-2">No dashboards found</h3>
       <p class="text-muted-foreground mb-4">
-        {{ searchQuery || selectedType ? 'Try adjusting your filters' : 'Create your first dashboard to get started' }}
+        {{ searchQuery || selectedType ? 'Try adjusting your filters' : 'Add your first dashboard to get started' }}
       </p>
       <Button v-if="!searchQuery && !selectedType" @click="createDashboard">
         <Plus class="w-4 h-4 mr-2" />
-        Create Dashboard
+        Add
       </Button>
     </div>
 
@@ -379,13 +381,13 @@ onMounted(() => {
         class="cursor-pointer hover:shadow-md transition-shadow"
         @click="viewDashboard(dashboard)"
       >
-        <CardHeader class="pb-3">
+        <CardHeader class="">
           <div class="flex items-start justify-between">
             <div class="flex-1">
               <CardTitle class="text-lg mb-1">{{ dashboard.name }}</CardTitle>
-              <p v-if="dashboard.description" class="text-sm text-muted-foreground line-clamp-2">
+              <!-- <p v-if="dashboard.description" class="text-sm text-muted-foreground line-clamp-2">
                 {{ dashboard.description }}
-              </p>
+              </p> -->
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger as-child @click.stop>
@@ -397,10 +399,6 @@ onMounted(() => {
                 <DropdownMenuItem @click.stop="viewDashboard(dashboard)">
                   <Eye class="w-4 h-4 mr-2" />
                   View
-                </DropdownMenuItem>
-                <DropdownMenuItem @click.stop="editDashboard(dashboard)">
-                  <Edit class="w-4 h-4 mr-2" />
-                  Edit
                 </DropdownMenuItem>
                 <DropdownMenuItem 
                   @click.stop="confirmDeleteDashboard(dashboard)"
@@ -446,7 +444,7 @@ onMounted(() => {
 
             <div class="flex items-center text-xs text-muted-foreground">
               <Clock class="w-3 h-3 mr-1" />
-              <span>{{ formatUpdatedAt(dashboard.updated_at) }}</span>
+              <span>{{ formatRelativeTime(dashboard.updated_at) }}</span>
             </div>
           </div>
         </CardContent>
@@ -457,54 +455,61 @@ onMounted(() => {
     <Dialog v-model:open="showCreateDialog">
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create Dashboard</DialogTitle>
-          <DialogDescription>
-            Provide basic details. You can add views and widgets later.
-          </DialogDescription>
+          <DialogTitle>New Dashboard</DialogTitle>
         </DialogHeader>
         <div class="space-y-4 py-2">
-          <div class="space-y-2">
+          <div class="flex flex-col gap-2">
             <label class="text-sm font-medium">Name</label>
             <Input v-model="createForm.name" placeholder="Sales Dashboard" />
           </div>
-          <div class="space-y-2">
-            <label class="text-sm font-medium">Alias</label>
-            <Input v-model="createForm.alias" placeholder="Auto-generated from name" />
-            <p class="text-xs text-muted-foreground">Only lowercase letters, numbers, and underscores allowed</p>
-          </div>
-          <div class="space-y-2">
-            <label class="text-sm font-medium">Description</label>
-            <Input v-model="createForm.description" placeholder="Optional description" />
-          </div>
-          <div class="space-y-2">
-            <label class="text-sm font-medium">Type</label>
-            <Select v-model="createForm.type">
-              <SelectTrigger>
-                <SelectValue placeholder="Select a type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="option in dashboardTypeOptions" :key="option.value" :value="option.value">
-                  {{ option.label }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div class="space-y-2">
-            <label class="text-sm font-medium">Tags</label>
-            <TagsInput v-model="createForm.tags">
-              <TagsInputItem v-for="tag in createForm.tags" :key="tag" :value="tag">
-                <TagsInputItemText />
-                <TagsInputItemDelete />
-              </TagsInputItem>
-              <TagsInputInput placeholder="Type and press enter" />
-            </TagsInput>
-          </div>
+
+          <!-- Advanced Options Collapsible -->
+          <Collapsible v-slot="{ open: isAdvancedOpen }">
+            <CollapsibleTrigger class="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors w-full">
+              <ChevronDown :class="['w-4 h-4 transition-transform duration-200', { 'rotate-180': isAdvancedOpen }]" />
+              <span>Advanced</span>
+            </CollapsibleTrigger>
+            <CollapsibleContent class="space-y-4 pt-4">
+              <div class="space-y-2">
+                <label class="text-sm font-medium">Alias</label>
+                <Input v-model="createForm.alias" placeholder="Auto-generated from name" />
+                <p class="text-xs text-muted-foreground">Only lowercase letters, numbers, and underscores allowed</p>
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-medium">Description</label>
+                <Input v-model="createForm.description" placeholder="Optional description" />
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-medium">Type</label>
+                <Select v-model="createForm.type">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="option in dashboardTypeOptions" :key="option.value" :value="option.value">
+                      {{ option.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-medium">Tags</label>
+                <TagsInput v-model="createForm.tags">
+                  <TagsInputItem v-for="tag in createForm.tags" :key="tag" :value="tag">
+                    <TagsInputItemText />
+                    <TagsInputItemDelete />
+                  </TagsInputItem>
+                  <TagsInputInput placeholder="Type and press enter" />
+                </TagsInput>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
         <DialogFooter>
           <Button variant="outline" @click="showCreateDialog = false">Cancel</Button>
           <Button :disabled="creating" @click="handleCreateDashboard">
             <span v-if="creating">Creating...</span>
-            <span v-else>Create</span>
+            <span v-else>Add</span>
           </Button>
         </DialogFooter>
       </DialogContent>

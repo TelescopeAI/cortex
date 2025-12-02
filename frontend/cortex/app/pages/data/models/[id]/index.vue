@@ -292,6 +292,7 @@ import { Textarea } from '~/components/ui/textarea'
 import { Switch } from '~/components/ui/switch'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { useDataModels } from '~/composables/useDataModels'
+import { useEnvironments } from '~/composables/useEnvironments'
 
 // Route and Router
 const route = useRoute()
@@ -303,6 +304,7 @@ const {
   getModel, loading: isLoading, error, 
   updateModel: updateDataModel, validateModel: validateModelAction
 } = useDataModels()
+const { selectedEnvironmentId } = useEnvironments()
 
 // State
 const model = ref<any>(null)
@@ -343,7 +345,9 @@ const formatDate = (dateString: string) => {
 
 const loadModelData = async () => {
   try {
-    model.value = await getModel(modelId.value)
+    if (!selectedEnvironmentId.value) return
+    
+    model.value = await getModel(modelId.value, selectedEnvironmentId.value)
     if (model.value) {
       editableModel.value = { ...model.value }
       schemaJson.value = JSON.stringify(model.value.semantic_model || {}, null, 2)
@@ -375,7 +379,7 @@ const validateSchema = async () => {
     JSON.parse(schemaJson.value)
     
     // Call API validation if needed
-    if (model.value) {
+    if (model.value && selectedEnvironmentId.value) {
       const result = await validateModelAction(model.value.id) as any
       if (!result.is_valid) {
         validationErrors.value = result.errors || []
@@ -387,7 +391,7 @@ const validateSchema = async () => {
 }
 
 const saveChanges = async () => {
-  if (!model.value) return
+  if (!model.value || !selectedEnvironmentId.value) return
 
   try {
     // Parse JSON fields
@@ -407,7 +411,7 @@ const saveChanges = async () => {
     }
 
     // Update model
-    await updateDataModel(model.value.id, {
+    await updateDataModel(model.value.id, selectedEnvironmentId.value, {
       name: editableModel.value.name,
       alias: editableModel.value.alias,
       description: editableModel.value.description,

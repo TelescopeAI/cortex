@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useDataSources } from '~/composables/useDataSources';
 import { useApi } from '~/composables/useApi';
@@ -11,8 +12,9 @@ import {
 } from '~/components/ui/card';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
-import { ArrowLeft, Calendar, Edit, Trash2, Database, Globe, FileText, Settings, Activity, Server, Cloud, Zap } from 'lucide-vue-next';
+import { ArrowLeft, Calendar, Edit, Trash2, Database, Globe, FileText, Settings, Activity, Server, Cloud, Zap, CheckCircle2, XCircle, Loader2 } from 'lucide-vue-next';
 import EditDataSourceDialog from '~/components/EditDataSourceDialog.vue';
+import SourceSchemaViewer from '~/components/SourceSchemaViewer.vue';
 import { toast } from 'vue-sonner';
 
 // Import database configuration components
@@ -42,6 +44,44 @@ const currentDataSource = computed<DataSource | undefined>(() => {
   // Fall back to the list data if fetched data is not available
   return dataSources.value?.find((ds) => ds.id === route.params.id);
 });
+
+// State for Quick Actions results
+const connectionTestResult = ref<{
+  status: 'success' | 'failed' | null
+  message: string
+  timestamp: Date | null
+}>({
+  status: null,
+  message: '',
+  timestamp: null
+});
+
+const schemaResult = ref<{
+  tables: Array<{
+    name: string
+    columns: Array<{
+      name: string
+      type: string
+      max_length?: number
+      precision?: number
+      scale?: number
+      nullable?: boolean
+      default_value?: string
+    }>
+    primary_keys: string[]
+    foreign_keys: Array<{
+      table: string
+      relations: Array<{
+        column: string
+        referenced_table: string
+        referenced_column: string
+      }>
+    }>
+  }>
+} | null>(null);
+
+const isLoadingConnection = ref(false);
+const isLoadingSchema = ref(false);
 
 // Get catalog icon based on source catalog
 function getCatalogIcon(catalog: string) {
@@ -150,35 +190,96 @@ async function handleDelete() {
 async function testConnection() {
   if (!currentDataSource.value) return;
   
+  isLoadingConnection.value = true;
+  connectionTestResult.value = {
+    status: null,
+    message: '',
+    timestamp: null
+  };
+  
   try {
-    toast.info('Testing connection...');
-    const response = await $fetch(apiUrl(`/api/v1/data/sources/${currentDataSource.value.id}/ping`), {
+    const response = await $fetch<{
+      status: 'success' | 'failed'
+      message: string
+      data_source_id: string
+      data_source_name: string
+      source_type: string
+      error?: string
+    }>(apiUrl(`/api/v1/data/sources/${currentDataSource.value.id}/ping`), {
       method: 'POST'
     });
     
-    // The ping endpoint returns an empty object on success
+    connectionTestResult.value = {
+      status: response.status || 'success',
+      message: response.message || 'Connection test successful!',
+      timestamp: new Date()
+    };
+    
+    if (response.status === 'success') {
     toast.success('Connection test successful!');
+    } else {
+      toast.error(response.message || 'Connection test failed');
+    }
   } catch (error: any) {
     console.error('Error testing connection:', error);
-    toast.error(error?.data?.detail || 'Failed to test connection');
+    const errorMessage = error?.data?.detail || error?.message || 'Failed to test connection';
+    connectionTestResult.value = {
+      status: 'failed',
+      message: errorMessage,
+      timestamp: new Date()
+    };
+    toast.error(errorMessage);
+  } finally {
+    isLoadingConnection.value = false;
   }
 }
 
 async function viewSchema() {
   if (!currentDataSource.value) return;
   
+  isLoadingSchema.value = true;
+  schemaResult.value = null;
+  
   try {
-    toast.info('Fetching schema...');
-    const response = await $fetch(apiUrl(`/api/v1/data/sources/${currentDataSource.value.id}/schema`), {
+    const response = await $fetch<{
+      data_source_id: string
+      data_source_name: string
+      source_type: string
+      schema: {
+        tables: Array<{
+          name: string
+          columns: Array<{
+            name: string
+            type: string
+            max_length?: number
+            precision?: number
+            scale?: number
+            nullable?: boolean
+            default_value?: string
+          }>
+          primary_keys: string[]
+          foreign_keys: Array<{
+            table: string
+            relations: Array<{
+              column: string
+              referenced_table: string
+              referenced_column: string
+            }>
+          }>
+        }>
+      }
+    }>(apiUrl(`/api/v1/data/sources/${currentDataSource.value.id}/schema`), {
       method: 'GET'
     });
     
-    // The schema endpoint returns schema information
-    console.log('Schema:', response);
-    toast.success('Schema fetched successfully! Check console for details.');
+    schemaResult.value = response.schema;
+    toast.success('Schema fetched successfully!');
   } catch (error: any) {
     console.error('Error fetching schema:', error);
     toast.error(error?.data?.detail || 'Failed to fetch schema');
+    schemaResult.value = null;
+  } finally {
+    isLoadingSchema.value = false;
   }
 }
 
@@ -273,7 +374,7 @@ function goBack() {
       <!-- Configuration Card -->
       <Card>
         <CardHeader>
-          <CardTitle class="text-lg">Configuration</CardTitle>
+          <CardTitle class="text-lg">Credentials</CardTitle>
         </CardHeader>
         <CardContent>
           <div v-if="currentDataSource.source_type" class="border rounded-lg p-4 bg-muted/50">
@@ -318,17 +419,51 @@ function goBack() {
         <CardHeader>
           <CardTitle class="text-lg">Quick Actions</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent class="space-y-6">
+          <!-- Action Buttons -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Button variant="outline" class="justify-start" @click="testConnection">
-              <Activity class="w-4 h-4 mr-2" />
+            <Button 
+              variant="outline" 
+              class="justify-start" 
+              @click="testConnection"
+              :disabled="isLoadingConnection"
+            >
+              <Loader2 v-if="isLoadingConnection" class="w-4 h-4 mr-2 animate-spin" />
+              <Activity v-else class="w-4 h-4 mr-2" />
               Test Connection
             </Button>
-            <Button variant="outline" class="justify-start" @click="viewSchema">
-              <Settings class="w-4 h-4 mr-2" />
+            <Button 
+              variant="outline" 
+              class="justify-start" 
+              @click="viewSchema"
+              :disabled="isLoadingSchema"
+            >
+              <Loader2 v-if="isLoadingSchema" class="w-4 h-4 mr-2 animate-spin" />
+              <Settings v-else class="w-4 h-4 mr-2" />
               View Schema
             </Button>
           </div>
+
+          <!-- Connection Test Result -->
+          <div v-if="connectionTestResult.status" class="border rounded-lg p-4 space-y-2">
+            <div class="flex items-center gap-2">
+              <CheckCircle2 v-if="connectionTestResult.status === 'success'" class="w-5 h-5 text-green-600" />
+              <XCircle v-else class="w-5 h-5 text-red-600" />
+              <h3 class="font-semibold">Connection Test Result</h3>
+              <span v-if="connectionTestResult.timestamp" class="text-xs text-muted-foreground ml-auto">
+                {{ connectionTestResult.timestamp.toLocaleTimeString() }}
+              </span>
+            </div>
+            <p :class="[
+              'text-sm',
+              connectionTestResult.status === 'success' ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'
+            ]">
+              {{ connectionTestResult.message }}
+            </p>
+          </div>
+
+          <!-- Schema Result -->
+          <SourceSchemaViewer v-if="schemaResult" :schema="schemaResult" />
         </CardContent>
       </Card>
     </div>

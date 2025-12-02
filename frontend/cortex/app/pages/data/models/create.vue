@@ -201,6 +201,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDataModels } from '~/composables/useDataModels'
 import { useDataSources } from '~/composables/useDataSources'
+import { useEnvironments } from '~/composables/useEnvironments'
 import { Database, AlertCircle, CheckCircle, Loader2 } from 'lucide-vue-next'
 
 import { Button } from '~/components/ui/button'
@@ -220,6 +221,7 @@ import {
 const router = useRouter()
 const { createModel } = useDataModels()
 const { dataSources } = useDataSources()
+const { selectedEnvironmentId } = useEnvironments()
 
 // Form state
 const form = ref({
@@ -385,6 +387,7 @@ const handleSubmit = async () => {
 
     // Create the data model
     const newModel = await createModel({
+      environment_id: selectedEnvironmentId.value,
       name: form.value.name,
       alias: form.value.alias || undefined,
       description: form.value.description || undefined,

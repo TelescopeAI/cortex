@@ -16,14 +16,14 @@
 
     <!-- Search and Filters -->
     <div class="flex items-center space-x-4">
-      <div class="flex-1 max-w-sm">
-        <Input
-          v-model="searchQuery"
-          placeholder="Search models..."
-          class="w-full"
-        />
-      </div>
-      
+      <ExpandableSearch
+        v-model="searchQuery"
+        :placeholder="['Search models...', 'Search by name...', 'Search by alias...']"
+        default-mode="minimal"
+        full-width="350px"
+        :expand-on-focus="true"
+        expand-to="full"
+      />
 
       <Select v-model="statusFilter">
         <SelectTrigger class="w-[150px]">
@@ -264,10 +264,12 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDataModels } from '~/composables/useDataModels'
 import { useDataSources } from '~/composables/useDataSources'
+import { useEnvironments } from '~/composables/useEnvironments'
 import { 
   Plus, Grid3x3, List, Database, Hash, Clock, CheckCircle, XCircle, 
   MoreHorizontal, Copy, Trash2, AlertCircle 
 } from 'lucide-vue-next'
+import ExpandableSearch from '~/components/ExpandableSearch.vue'
 
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
@@ -296,6 +298,7 @@ const {
   models: dataModels, loading: isLoading, error, fetchModels: fetchDataModels, deleteModel: deleteDataModel, 
   validateModel: validateModelAction, executeModel: executeModelAction
 } = useDataModels()
+const { selectedEnvironmentId } = useEnvironments()
 
 // Reactive state
 const searchQuery = ref('')
@@ -380,7 +383,9 @@ const validateModel = async (id: string) => {
   try {
     await validateModelAction(id)
     // Refresh the model data
-    await fetchDataModels()
+    if (selectedEnvironmentId.value) {
+      await fetchDataModels(selectedEnvironmentId.value)
+    }
   } catch (err) {
     console.error('Failed to validate model:', err)
   }
@@ -399,7 +404,7 @@ const confirmDelete = (id: string) => {
 const handleDelete = async () => {
   if (modelToDelete.value) {
     try {
-      await deleteDataModel(modelToDelete.value)
+      await deleteDataModel(modelToDelete.value, selectedEnvironmentId.value || '')
       showDeleteDialog.value = false
       modelToDelete.value = null
     } catch (err) {
@@ -410,6 +415,8 @@ const handleDelete = async () => {
 
 // Lifecycle
 onMounted(async () => {
-  await fetchDataModels()
+  if (selectedEnvironmentId.value) {
+    await fetchDataModels(selectedEnvironmentId.value)
+  }
 })
 </script> 

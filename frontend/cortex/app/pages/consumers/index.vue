@@ -11,7 +11,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '~/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Separator } from '~/components/ui/separator'
-import { Search, Filter, Plus, MoreHorizontal, Edit, Settings, Users, UserPlus, ChevronDown, Loader2 } from 'lucide-vue-next'
+import { Filter, Plus, MoreHorizontal, Edit, Settings, Users, UserPlus, ChevronDown, Loader2 } from 'lucide-vue-next'
+import ExpandableSearch from '~/components/ExpandableSearch.vue'
 import { toast } from 'vue-sonner'
 import { useDateFormat, useTimeAgo, useNavigatorLanguage } from '@vueuse/core'
 
@@ -133,28 +134,30 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="container mx-auto py-6 space-y-6">
+  <div class="space-y-6">
     <!-- Page Header -->
     <div class="flex items-center justify-between">
-      <div class="space-y-1">
-        <h2 class="text-2xl font-semibold tracking-tight">👥 Consumers Management</h2>
-        <p class="text-sm text-muted-foreground">
-          Manage your consumers and consumer groups
-        </p>
+      <div>
+        <h1 class="text-5xl font-bold tracking-tight">Consumers</h1>
       </div>
       
-      <div class="flex items-center space-x-2">
-        <Button variant="outline" size="sm">
-          <Filter class="h-4 w-4 mr-2" />
-          Export
-        </Button>
+      <div class="flex items-center gap-4">
+        <!-- Search -->
+        <ExpandableSearch
+          v-model="searchQuery"
+          :placeholder="['Search by name', 'Search by email', 'Search by organization']"
+          default-mode="minimal"
+          full-width="350px"
+          :expand-on-focus="true"
+          expand-to="full"
+        />
         
         <!-- Create New Dropdown -->
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
-            <Button size="sm">
+            <Button>
               <Plus class="h-4 w-4 mr-2" />
-              Create New
+              Add
               <ChevronDown class="h-4 w-4 ml-2" />
             </Button>
           </DropdownMenuTrigger>
@@ -171,27 +174,6 @@ onMounted(() => {
         </DropdownMenu>
       </div>
     </div>
-
-    <!-- Filters and Search -->
-    <Card>
-      <CardContent class="pt-6">
-        <div class="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
-          <!-- Search -->
-          <div class="flex-1">
-            <div class="relative">
-              <Search class="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                v-model="searchQuery"
-                placeholder="Search consumers and groups..."
-                class="pl-8"
-              />
-            </div>
-          </div>
-          
-
-        </div>
-      </CardContent>
-    </Card>
 
     <!-- View Toggle -->
     <Tabs :value="currentView" @update:value="onViewChange" default-value="consumers" class="w-full">
@@ -210,99 +192,92 @@ onMounted(() => {
 
       <!-- Consumers View -->
       <TabsContent value="consumers" class="space-y-4">
-        <div v-if="consumersLoading" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div v-if="consumersLoading" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <Card v-for="i in 6" :key="i" class="animate-pulse">
-            <CardHeader class="space-y-2">
+            <CardHeader>
               <div class="h-4 bg-muted rounded w-3/4"></div>
               <div class="h-3 bg-muted rounded w-1/2"></div>
             </CardHeader>
             <CardContent>
               <div class="space-y-2">
                 <div class="h-3 bg-muted rounded"></div>
-                <div class="h-8 bg-muted rounded"></div>
+                <div class="h-3 bg-muted rounded w-2/3"></div>
               </div>
             </CardContent>
           </Card>
         </div>
 
         <div v-else-if="!consumers || consumers.length === 0" class="text-center py-12">
-          <UserPlus class="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h3 class="text-lg font-medium text-muted-foreground mb-2">No consumers found</h3>
-          <p class="text-sm text-muted-foreground mb-4">
+          <UserPlus class="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+          <h3 class="text-lg font-semibold mb-2">No consumers found</h3>
+          <p class="text-muted-foreground mb-4">
             Create your first consumer to get started
           </p>
           <Button @click="onCreateConsumer">
-            <Plus class="h-4 w-4 mr-2" />
-            Create Consumer
+            <Plus class="w-4 h-4 mr-2" />
+            Add
           </Button>
         </div>
 
         <div v-else-if="filteredConsumers.length === 0" class="text-center py-12">
-          <UserPlus class="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h3 class="text-lg font-medium text-muted-foreground mb-2">No consumers match your filters</h3>
-          <p class="text-sm text-muted-foreground mb-4">
-            Try adjusting your search or filter criteria
+          <UserPlus class="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+          <h3 class="text-lg font-semibold mb-2">No consumers match your filters</h3>
+          <p class="text-muted-foreground mb-4">
+            Try adjusting your search criteria
           </p>
           <Button variant="outline" @click="searchQuery = ''">
             Clear Filters
           </Button>
         </div>
 
-        <div v-else class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div v-else class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <Card 
             v-for="consumer in filteredConsumers" 
             :key="consumer.id" 
-            class="hover:shadow-md transition-shadow cursor-pointer"
+            class="cursor-pointer hover:shadow-md transition-shadow"
             @click="onConsumerClick(consumer.id)"
           >
             <CardHeader class="pb-3">
               <div class="flex items-start justify-between">
-                <div class="space-y-1 flex-1">
-                  <CardTitle class="text-base font-medium">
+                <div class="flex-1">
+                  <CardTitle class="text-lg mb-1">
                     {{ consumer.first_name }} {{ consumer.last_name }}
                   </CardTitle>
                   <p class="text-sm text-muted-foreground">
                     {{ consumer.email }}
                   </p>
                 </div>
-                <Badge variant="outline" class="ml-2">
-                  Active
-                </Badge>
+                <DropdownMenu>
+                  <DropdownMenuTrigger as-child @click.stop>
+                    <Button variant="ghost" size="icon" class="h-8 w-8">
+                      <MoreHorizontal class="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem @click.stop="onConsumerClick(consumer.id)">
+                      <Edit class="w-4 h-4 mr-2" />
+                      Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem @click.stop>
+                      <Settings class="w-4 h-4 mr-2" />
+                      Settings
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </CardHeader>
             
             <CardContent class="pt-0">
               <div class="space-y-3">
-                <!-- Consumer Info -->
-                <div class="flex items-center justify-between text-sm">
-                  <div class="flex items-center space-x-2 text-muted-foreground">
-                    <span>🏢</span>
-                    <span>{{ consumer.organization || 'No organization' }}</span>
-                  </div>
+                <div class="flex items-center gap-2">
+                  <Badge variant="outline">Active</Badge>
+                  <Badge v-if="consumer.organization" variant="secondary">
+                    {{ consumer.organization }}
+                  </Badge>
                 </div>
                 
-                <div class="flex items-center justify-between">
-                  <span class="text-xs text-muted-foreground">
-                    {{ formatRelativeTime(consumer.updated_at) }}
-                  </span>
-                </div>
-                
-                <Separator />
-                
-                <!-- Actions -->
-                <div class="flex items-center justify-between">
-                  <div class="flex space-x-1">
-                    <Button variant="ghost" size="sm" @click.stop="onConsumerClick(consumer.id)">
-                      <Edit class="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="sm">
-                      <Settings class="h-3 w-3" />
-                    </Button>
-                  </div>
-                  
-                  <Button variant="ghost" size="sm">
-                    <MoreHorizontal class="h-3 w-3" />
-                  </Button>
+                <div class="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>Updated {{ formatRelativeTime(consumer.updated_at) }}</span>
                 </div>
               </div>
             </CardContent>
@@ -312,98 +287,91 @@ onMounted(() => {
 
       <!-- Groups View -->
       <TabsContent value="groups" class="space-y-4">
-        <div v-if="groupsLoading" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div v-if="groupsLoading" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <Card v-for="i in 6" :key="i" class="animate-pulse">
-            <CardHeader class="space-y-2">
+            <CardHeader>
               <div class="h-4 bg-muted rounded w-3/4"></div>
               <div class="h-3 bg-muted rounded w-1/2"></div>
             </CardHeader>
             <CardContent>
               <div class="space-y-2">
                 <div class="h-3 bg-muted rounded"></div>
-                <div class="h-8 bg-muted rounded"></div>
+                <div class="h-3 bg-muted rounded w-2/3"></div>
               </div>
             </CardContent>
           </Card>
         </div>
 
         <div v-else-if="!consumerGroups || consumerGroups.length === 0" class="text-center py-12">
-          <Users class="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h3 class="text-lg font-medium text-muted-foreground mb-2">No consumer groups found</h3>
-          <p class="text-sm text-muted-foreground mb-4">
+          <Users class="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+          <h3 class="text-lg font-semibold mb-2">No consumer groups found</h3>
+          <p class="text-muted-foreground mb-4">
             Create your first consumer group to get started
           </p>
           <Button @click="onCreateGroup">
-            <Plus class="h-4 w-4 mr-2" />
-            Create Group
+            <Plus class="w-4 h-4 mr-2" />
+            Add
           </Button>
         </div>
 
         <div v-else-if="filteredGroups.length === 0" class="text-center py-12">
-          <Users class="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h3 class="text-lg font-medium text-muted-foreground mb-2">No groups match your filters</h3>
-          <p class="text-sm text-muted-foreground mb-4">
-            Try adjusting your search or filter criteria
+          <Users class="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+          <h3 class="text-lg font-semibold mb-2">No groups match your filters</h3>
+          <p class="text-muted-foreground mb-4">
+            Try adjusting your search criteria
           </p>
           <Button variant="outline" @click="searchQuery = ''">
             Clear Filters
           </Button>
         </div>
 
-        <div v-else class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div v-else class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <Card 
             v-for="group in filteredGroups" 
             :key="group.id" 
-            class="hover:shadow-md transition-shadow cursor-pointer"
+            class="cursor-pointer hover:shadow-md transition-shadow"
             @click="onGroupClick(group.id)"
           >
             <CardHeader class="pb-3">
               <div class="flex items-start justify-between">
-                <div class="space-y-1 flex-1">
-                  <CardTitle class="text-base font-medium">{{ group.name }}</CardTitle>
-                  <p class="text-sm text-muted-foreground line-clamp-2">
-                    {{ group.description || 'No description available' }}
+                <div class="flex-1">
+                  <CardTitle class="text-lg mb-1">{{ group.name }}</CardTitle>
+                  <p v-if="group.description" class="text-sm text-muted-foreground line-clamp-2">
+                    {{ group.description }}
                   </p>
                 </div>
-                <Badge variant="outline" class="ml-2">
-                  Active
-                </Badge>
+                <DropdownMenu>
+                  <DropdownMenuTrigger as-child @click.stop>
+                    <Button variant="ghost" size="icon" class="h-8 w-8">
+                      <MoreHorizontal class="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem @click.stop="onGroupClick(group.id)">
+                      <Edit class="w-4 h-4 mr-2" />
+                      Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem @click.stop>
+                      <Settings class="w-4 h-4 mr-2" />
+                      Settings
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </CardHeader>
             
             <CardContent class="pt-0">
               <div class="space-y-3">
-                <!-- Group Info -->
-                <div class="flex items-center justify-between text-sm">
-                  <div class="flex items-center space-x-2 text-muted-foreground">
-                    <span>👥</span>
-                    <span>{{ group.consumers?.length || 0 }} members</span>
-                  </div>
-                  <span class="text-muted-foreground">{{ group.alias || group.name }}</span>
+                <div class="flex items-center gap-2">
+                  <Badge variant="outline">Active</Badge>
+                  <Badge variant="secondary">
+                    {{ group.consumers?.length || 0 }} members
+                  </Badge>
+                  <Badge v-if="group.alias" variant="outline">#{{ group.alias }}</Badge>
                 </div>
                 
-                <div class="flex items-center justify-between">
-                  <span class="text-xs text-muted-foreground">
-                    {{ formatRelativeTime(group.updated_at) }}
-                  </span>
-                </div>
-                
-                <Separator />
-                
-                <!-- Actions -->
-                <div class="flex items-center justify-between">
-                  <div class="flex space-x-1">
-                    <Button variant="ghost" size="sm" @click.stop="onGroupClick(group.id)">
-                      <Edit class="h-3 w-3" />
-                    </Button>
-                    <Button variant="ghost" size="sm">
-                      <Settings class="h-3 w-3" />
-                    </Button>
-                  </div>
-                  
-                  <Button variant="ghost" size="sm">
-                    <MoreHorizontal class="h-3 w-3" />
-                  </Button>
+                <div class="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>Updated {{ formatRelativeTime(group.updated_at) }}</span>
                 </div>
               </div>
             </CardContent>

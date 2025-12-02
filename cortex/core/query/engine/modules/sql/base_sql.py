@@ -205,6 +205,12 @@ class SQLQueryGenerator(BaseQueryGenerator):
             return f'SUM({formatted_query}) AS "{measure.name}"'
         elif measure.type == SemanticMeasureType.AVG:
             return f'AVG({formatted_query}) AS "{measure.name}"'
+        elif measure.type == SemanticMeasureType.MIN:
+            return f'MIN({formatted_query}) AS "{measure.name}"'
+        elif measure.type == SemanticMeasureType.MAX:
+            return f'MAX({formatted_query}) AS "{measure.name}"'
+        elif measure.type == SemanticMeasureType.COUNT_DISTINCT:
+            return f'COUNT(DISTINCT {formatted_query}) AS "{measure.name}"'
         # Default case
         return f'{formatted_query} AS "{measure.name}"'
 

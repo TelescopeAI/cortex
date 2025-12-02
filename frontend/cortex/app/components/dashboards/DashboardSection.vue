@@ -5,26 +5,28 @@ import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '~/components/ui/dropdown-menu'
 import { 
-  Plus, MoreHorizontal, GripVertical, Edit, Trash2, Move, 
-  ChevronDown, ChevronUp, Eye, EyeOff 
+  Plus, MoreHorizontal, Edit, Trash2, 
+  ChevronDown, ChevronUp, EyeOff 
 } from 'lucide-vue-next'
 import type { DashboardSection, DashboardWidget } from '~/types/dashboards'
-import DashboardWidgetComponent from '~/components/dashboards/DashboardWidget.vue'
 import ViewWidget from '~/components/dashboards/ViewWidget.vue'
+import SkeletonWidget from '~/components/dashboards/SkeletonWidget.vue'
+import InlineWidgetEditor from '~/components/dashboards/InlineWidgetEditor.vue'
 import { toast } from 'vue-sonner'
 import { twMerge } from 'tailwind-merge'
-// @ts-ignore - types not included by package
-import { useDragAndDrop } from '@formkit/drag-and-drop/vue'
+import { useDashboards } from '~/composables/useDashboards'
+import { useAliasGenerator } from '~/composables/useAliasGenerator'
 
 interface Props {
   section: DashboardSection
   executionResults?: any
-  draggable?: boolean
   collapsible?: boolean
   defaultCollapsed?: boolean
   dashboardId?: string
   viewAlias?: string
   refreshKey?: number
+  metricsCount?: number
+  dashboard?: any  // Pass the full dashboard object
 }
 
 interface Emits {
@@ -32,23 +34,27 @@ interface Emits {
   (e: 'widget-updated'): void
   (e: 'section-updated'): void
   (e: 'add-widget', sectionId: string): void
-  (e: 'drag-start'): void
-  (e: 'drag-end'): void
-  (e: 'drop'): void
   (e: 'edit-widget', widget: DashboardWidget): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  draggable: false,
   collapsible: true,
-  defaultCollapsed: false
+  defaultCollapsed: false,
+  metricsCount: 0
 })
 
 const emit = defineEmits<Emits>()
 
+// Composables
+const { updateDashboard } = useDashboards()
+const { generateAlias } = useAliasGenerator()
+
 // State
 const isCollapsed = ref(props.defaultCollapsed)
-const isDragging = ref(false)
+
+// Inline editor state
+const isAddingWidget = ref(false)
+const editingWidgetAlias = ref<string | null>(null)
 
 // Computed
 const sortedWidgets = computed(() => {
@@ -69,69 +75,6 @@ const getWidgetGridStyle = (widget: DashboardWidget) => {
   }
 }
 
-// Drag & Drop
-// Keep a local reactive list for DnD that mirrors the section widgets order
-const localWidgets = ref<DashboardWidget[]>([...props.section.widgets].sort((a,b) => a.position - b.position))
-
-watch(() => props.section.widgets, (val) => {
-  localWidgets.value = [...val].sort((a,b) => a.position - b.position)
-}, { deep: true })
-
-// Type helper so template has correct types
-const dndState = useDragAndDrop<DashboardWidget>(localWidgets.value, { sortable: true })
-const gridRef = dndState[0]
-const dndWidgets = dndState[1]
-
-// When DnD list changes order, update widget positions and notify parent
-watch(dndWidgets, (arr: DashboardWidget[]) => {
-  // Update positions based on the new order
-  arr.forEach((w, idx) => { w.position = idx })
-  // Reflect change back to localWidgets (already refers to dndWidgets)
-  localWidgets.value = [...arr]
-  emit('section-updated')
-})
-
-// Keep DnD list in sync when parent updates widgets (e.g., on edit)
-watch(() => props.section.widgets, (val) => {
-  const sorted = [...val].sort((a,b) => a.position - b.position)
-  // mutate the dndWidgets array in-place to preserve ref
-  if (Array.isArray(dndWidgets.value)) {
-    dndWidgets.value.splice(0, dndWidgets.value.length, ...sorted)
-  } else {
-    dndWidgets.value = [...sorted]
-  }
-  localWidgets.value = [...sorted]
-}, { deep: true })
-
-// Helper to get the underlying array from the DnD reactive value
-const dndArray = computed<DashboardWidget[]>(() => {
-  return dndWidgets.value
-})
-
-// Keep dndArray's items up to date with latest widget objects (title, grid_config, etc.)
-watch(() => props.section.widgets, (val) => {
-  const latest = [...val]
-  const arr = dndArray.value
-  // add or update
-  latest.forEach((w) => {
-    const idx = arr.findIndex(x => x.alias === w.alias)
-    if (idx >= 0) {
-      const target = arr[idx]
-      if (target) Object.assign(target as any, w)
-    } else {
-      arr.push({ ...(w as any) })
-    }
-  })
-  // remove stale
-  for (let i = arr.length - 1; i >= 0; i--) {
-    const item = arr[i]
-    if (!item) continue
-    if (!latest.find(w => w.alias === item.alias)) arr.splice(i, 1)
-  }
-}, { deep: true })
-
-// Default DnD: no handle, drag anywhere on the draggable item
-
 // Methods
 function toggleCollapse() {
   if (props.collapsible) {
@@ -140,7 +83,9 @@ function toggleCollapse() {
 }
 
 function addWidget() {
-  emit('add-widget', props.section.alias)
+  // Use inline editor instead of emitting event
+  isAddingWidget.value = true
+  editingWidgetAlias.value = null
 }
 
 function editSection() {
@@ -151,39 +96,6 @@ function editSection() {
 function deleteSection() {
   // TODO: Implement delete section functionality
   toast.info('Delete section functionality coming soon')
-}
-
-function reorderWidgets() {
-  // TODO: Implement widget reordering
-  toast.info('Widget reordering functionality coming soon')
-}
-
-function onDragStart(event: DragEvent) {
-  if (!props.draggable) return
-  isDragging.value = true
-  emit('drag-start')
-  
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', props.section.alias)
-  }
-}
-
-function onDragEnd() {
-  isDragging.value = false
-  emit('drag-end')
-}
-
-function onDrop(event: DragEvent) {
-  event.preventDefault()
-  emit('drop')
-}
-
-function onDragOver(event: DragEvent) {
-  if (props.draggable) {
-    event.preventDefault()
-    event.dataTransfer!.dropEffect = 'move'
-  }
 }
 
 function handleWidgetUpdate() {
@@ -198,6 +110,111 @@ function getWidgetExecutionResult(widgetId: string) {
   if (!props.executionResults?.view_execution?.widgets) return null
   return props.executionResults.view_execution.widgets.find((w: any) => w.widget_id === widgetId)
 }
+
+// Skeleton widget activation
+function handleSkeletonActivate() {
+  isAddingWidget.value = true
+  editingWidgetAlias.value = null
+}
+
+// Handle inline edit from ViewWidget
+function handleEditWidget(widget: DashboardWidget) {
+  editingWidgetAlias.value = widget.alias
+  isAddingWidget.value = false
+}
+
+// Cancel inline editor
+function handleEditorCancel() {
+  isAddingWidget.value = false
+  editingWidgetAlias.value = null
+}
+
+// Save widget from inline editor
+async function handleEditorSave(widgetData: Partial<DashboardWidget>) {
+  if (!props.dashboardId || !props.viewAlias) {
+    toast.error('Dashboard or view not found')
+    return
+  }
+
+  try {
+    const dashboard = props.dashboard
+    if (!dashboard) {
+      toast.error('Dashboard not loaded')
+      return
+    }
+
+    // Find the view and section
+    const view = dashboard.views.find((v: any) => v.alias === props.viewAlias)
+    if (!view) {
+      toast.error('View not found')
+      return
+    }
+
+    const section = view.sections.find((s: any) => s.alias === props.section.alias)
+    if (!section) {
+      toast.error('Section not found')
+      return
+    }
+
+    if (editingWidgetAlias.value) {
+      // Editing existing widget
+      const widgetIndex = section.widgets.findIndex((w: any) => w.alias === editingWidgetAlias.value)
+      if (widgetIndex === -1) {
+        toast.error('Widget not found')
+        return
+      }
+
+      // Update the widget
+      const updatedWidget = {
+        ...section.widgets[widgetIndex],
+        ...widgetData
+      }
+      section.widgets[widgetIndex] = updatedWidget as DashboardWidget
+
+      // Update dashboard
+      await updateDashboard(props.dashboardId, {
+        views: dashboard.views
+      })
+
+      toast.success('Widget updated successfully')
+    } else {
+      // Creating new widget
+      const newWidget: any = {
+        alias: generateAlias(widgetData.title || 'widget'),
+        section_alias: props.section.alias,
+        metric_id: widgetData.metric_id || (widgetData as any).metric ? undefined : '',
+        metric: (widgetData as any).metric || undefined,
+        title: widgetData.title || 'New Widget',
+        description: widgetData.description || '',
+        position: section.widgets.length,
+        grid_config: widgetData.grid_config || { columns: 12, rows: 3 },
+        visualization: widgetData.visualization || { type: 'single_value' as const, data_mapping: {} }
+      }
+
+      section.widgets.push(newWidget)
+
+      // Update dashboard
+      await updateDashboard(props.dashboardId, {
+        views: dashboard.views
+      })
+
+      toast.success('Widget created successfully')
+    }
+
+    // Close editor and refresh
+    isAddingWidget.value = false
+    editingWidgetAlias.value = null
+    emit('widget-updated')
+  } catch (err: any) {
+    console.error('Failed to save widget:', err)
+    toast.error(err?.data?.detail || err.message || 'Failed to save widget')
+  }
+}
+
+// Check if a widget is being edited inline
+function isWidgetBeingEdited(widgetAlias: string): boolean {
+  return editingWidgetAlias.value === widgetAlias
+}
 </script>
 
 <template>
@@ -211,10 +228,6 @@ function getWidgetExecutionResult(widgetId: string) {
     >
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <GripVertical 
-            v-if="draggable" 
-            class="w-4 h-4 text-muted-foreground cursor-move" 
-          />
           <div class="flex-1">
             <CardTitle v-if="section.title" class="text-lg">
               {{ section.title }}
@@ -257,10 +270,6 @@ function getWidgetExecutionResult(widgetId: string) {
                   <Edit class="w-4 h-4 mr-2" />
                   Edit Section
                 </DropdownMenuItem>
-                <DropdownMenuItem @click="reorderWidgets">
-                  <Move class="w-4 h-4 mr-2" />
-                  Reorder Widgets
-                </DropdownMenuItem>
                 <DropdownMenuItem @click="deleteSection" class="text-destructive">
                   <Trash2 class="w-4 h-4 mr-2" />
                   Delete Section
@@ -277,51 +286,92 @@ function getWidgetExecutionResult(widgetId: string) {
       v-show="!isCollapsed"
       :class="{ 'pt-6': !hasTitle }"
     >
-      <!-- Empty State -->
-      <div v-if="sortedWidgets.length === 0" class="text-center py-8">
-        <div class="w-10 h-10 mx-auto bg-muted rounded-lg flex items-center justify-center mb-3">
-          <Plus class="w-5 h-5 text-muted-foreground" />
-        </div>
-        <h4 class="font-medium mb-1">No widgets in this section</h4>
-        <p class="text-sm text-muted-foreground mb-3">
-          Add widgets to visualize your metrics and data.
-        </p>
-        <Button size="sm" @click="addWidget">
-          <Plus class="w-4 h-4 mr-1" />
-          Add Widget
-        </Button>
+      <!-- Empty State with Skeleton -->
+      <div v-if="sortedWidgets.length === 0 && !isAddingWidget" class="text-center py-8">
+        <SkeletonWidget 
+          :columns="12" 
+          :rows="6" 
+          @activate="handleSkeletonActivate" 
+        />
+      </div>
+
+      <!-- Inline Editor for New Widget (when section is empty) -->
+      <div v-if="sortedWidgets.length === 0 && isAddingWidget" class="py-4">
+        <InlineWidgetEditor
+          :dashboard-id="dashboardId || ''"
+          :section-alias="section.alias"
+          :view-alias="viewAlias || ''"
+          mode="create"
+          :metrics-count="metricsCount"
+          @cancel="handleEditorCancel"
+          @save="handleEditorSave"
+        />
       </div>
 
       <!-- Widgets Grid -->
       <div 
-        v-else
-        ref="gridRef"
+        v-if="sortedWidgets.length > 0"
         :class="gridClass"
         style="grid-auto-rows: minmax(6rem, auto)"
         class="relative z-0"
       >
-        <div
-          v-for="widget in dndArray"
-          :key="widget.alias"
-          :style="getWidgetGridStyle(widget)"
+        <template v-for="widget in sortedWidgets" :key="widget.alias">
+          <!-- Show InlineWidgetEditor if this widget is being edited -->
+          <div 
+            v-if="isWidgetBeingEdited(widget.alias)"
+            :style="{ gridColumn: 'span 12' }"
+          >
+            <InlineWidgetEditor
+              :dashboard-id="dashboardId || ''"
+              :section-alias="section.alias"
+              :view-alias="viewAlias || ''"
+              mode="edit"
+              :widget="widget"
+              :metrics-count="metricsCount"
+              @cancel="handleEditorCancel"
+              @save="handleEditorSave"
+            />
+          </div>
+          
+          <!-- Show ViewWidget otherwise -->
+          <div
+            v-else
+            :style="getWidgetGridStyle(widget)"
+          >
+            <ViewWidget 
+              :dashboard-id="dashboardId || ''" 
+              :view-alias="viewAlias || ''" 
+              :widget="widget"
+              :refresh-key="refreshKey"
+              @edit="handleEditWidget"
+              @deleted="() => emit('widget-updated')"
+            />
+          </div>
+        </template>
+
+        <!-- Skeleton Widget at the end of the grid (when not adding) -->
+        <SkeletonWidget 
+          v-if="!isAddingWidget && !editingWidgetAlias"
+          :columns="12" 
+          :rows="3" 
+          @activate="handleSkeletonActivate" 
+        />
+
+        <!-- Inline Editor for New Widget (at the end of grid) -->
+        <div 
+          v-if="isAddingWidget && sortedWidgets.length > 0"
+          :style="{ gridColumn: 'span 12' }"
         >
-          <ViewWidget 
-            :dashboard-id="(props as any).dashboardId" 
-            :view-alias="(props as any).viewAlias" 
-            :widget="widget"
-            :refresh-key="(props as any).refreshKey"
-            @edit="(widget) => emit('edit-widget', widget)"
-            @deleted="() => emit('widget-updated')"
+          <InlineWidgetEditor
+            :dashboard-id="dashboardId || ''"
+            :section-alias="section.alias"
+            :view-alias="viewAlias || ''"
+            mode="create"
+            :metrics-count="metricsCount"
+            @cancel="handleEditorCancel"
+            @save="handleEditorSave"
           />
         </div>
-      </div>
-
-      <!-- Add Widget Button (when widgets exist) -->
-      <div v-if="sortedWidgets.length > 0" class="mt-4 pt-4 border-t border-dashed">
-        <Button variant="outline" size="sm" @click="addWidget" class="w-full">
-          <Plus class="w-4 h-4 mr-2" />
-          Add Widget
-        </Button>
       </div>
     </CardContent>
 

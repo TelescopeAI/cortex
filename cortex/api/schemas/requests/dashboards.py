@@ -1,5 +1,7 @@
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any
 from uuid import UUID
+
+from pydantic import field_validator, model_validator
 
 from cortex.core.types.telescope import TSModel
 from cortex.core.types.dashboards import (
@@ -10,6 +12,8 @@ from cortex.core.types.dashboards import (
     ValueSelectionMode,
     ValueSelectionConfig,
 )
+
+from cortex.api.schemas.requests.metrics import MetricCreateRequest
 
 
 class DashboardLayoutRequest(TSModel):
@@ -58,7 +62,7 @@ class DataMappingRequest(TSModel):
 
 class SingleValueConfigRequest(TSModel):
     """Request model for single value configuration."""
-    number_format: NumberFormat
+    number_format: Optional[NumberFormat] = NumberFormat.DECIMAL  # Default to decimal format
     prefix: Optional[str] = None
     suffix: Optional[str] = None
     show_comparison: bool = True
@@ -68,18 +72,18 @@ class SingleValueConfigRequest(TSModel):
     show_title: bool = True
     show_description: bool = False
     compact_mode: bool = False
-    # Value selection
-    selection_mode: Optional[ValueSelectionMode] = None
+    # Value selection - default to FIRST row when multiple rows exist
+    selection_mode: Optional[ValueSelectionMode] = ValueSelectionMode.FIRST
     selection_config: Optional[ValueSelectionConfig] = None
 
 
 class ChartConfigRequest(TSModel):
     """Request model for chart configuration."""
-    show_points: Optional[bool] = None
-    line_width: Optional[int] = None
+    show_points: Optional[bool] = True
+    line_width: Optional[int] = 2
     bar_width: Optional[float] = None
-    stack_bars: Optional[bool] = None
-    smooth_lines: Optional[bool] = None
+    stack_bars: bool = False
+    smooth_lines: bool = False
     area_stacking_type: Optional[str] = None
 
 
@@ -93,8 +97,8 @@ class GaugeConfigRequest(TSModel):
     show_target: bool = True
     gauge_type: str = "arc"
     thickness: int = 10
-    # Optional value selection as in single value
-    selection_mode: Optional[ValueSelectionMode] = None
+    # Value selection - default to FIRST row when multiple rows exist
+    selection_mode: Optional[ValueSelectionMode] = ValueSelectionMode.FIRST
     selection_config: Optional[ValueSelectionConfig] = None
 
 
@@ -121,16 +125,30 @@ class MetricExecutionOverridesRequest(TSModel):
 
 
 class DashboardWidgetRequest(TSModel):
-    """Request model for dashboard widget creation/update."""
+    """Request model for dashboard widget creation/update.
+    
+    Metric can be specified either by metric_id (reference to stored metric) or
+    by providing a metric object directly (inline metric definition via MetricCreateRequest).
+    """
     alias: str
     section_alias: str
-    metric_id: UUID
+    metric_id: Optional[UUID] = None  # Reference to stored metric (mutually exclusive with metric)
+    metric: Optional[MetricCreateRequest] = None  # Inline metric definition (mutually exclusive with metric_id)
     position: int
     grid_config: WidgetGridConfigRequest
     title: str  # Required widget title
     description: Optional[str] = None
     visualization: VisualizationConfigRequest
     metric_overrides: Optional[MetricExecutionOverridesRequest] = None
+    
+    @model_validator(mode='after')
+    def validate_metric_specification(self):
+        """Ensure exactly one of metric_id or metric is provided."""
+        if self.metric_id is not None and self.metric is not None:
+            raise ValueError("Cannot provide both metric_id and metric; provide exactly one")
+        if self.metric_id is None and self.metric is None:
+            raise ValueError("Must provide either metric_id or metric")
+        return self
 
 
 class DashboardSectionRequest(TSModel):
@@ -150,6 +168,21 @@ class DashboardViewRequest(TSModel):
     sections: Optional[List[DashboardSectionRequest]] = None
     context_id: Optional[str] = None
     layout: Optional[DashboardLayoutRequest] = None
+    
+    @model_validator(mode='after')
+    def ensure_default_section(self):
+        """Ensure view has at least one section, create a default if none provided."""
+        if self.sections is None or len(self.sections) == 0:
+            self.sections = [
+                DashboardSectionRequest(
+                    alias='default',
+                    title='Default',
+                    description=None,
+                    position=0,
+                    widgets=[]
+                )
+            ]
+        return self
 
 
 class DashboardCreateRequest(TSModel):
@@ -159,9 +192,25 @@ class DashboardCreateRequest(TSModel):
     name: str
     description: Optional[str] = None
     type: DashboardType
-    views: List[DashboardViewRequest]
+    views: Optional[List[DashboardViewRequest]] = None
     default_view_index: int = 0  # Index in views list to set as default
     tags: Optional[List[str]] = None
+    
+    @model_validator(mode='after')
+    def ensure_default_view(self):
+        """Ensure dashboard has at least one view, create a default if none provided."""
+        if self.views is None or len(self.views) == 0:
+            self.views = [
+                DashboardViewRequest(
+                    alias='default',
+                    title='Default',
+                    description=None,
+                    sections=None,  # Will be populated by DashboardViewRequest validator
+                    context_id=None,
+                    layout=None
+                )
+            ]
+        return self
 
 
 class DashboardUpdateRequest(TSModel):
@@ -199,3 +248,6 @@ class SetDefaultViewRequest(TSModel):
     """Request model for setting default view."""
     # Reference view by alias string
     view_alias: str
+
+
+DashboardWidgetRequest.model_rebuild()

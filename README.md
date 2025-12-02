@@ -17,6 +17,8 @@ This platform is designed to abstract complex data sources into a business-frien
   - Conditional logic support for dynamic column combinations
   - Versioning and audit trails for metrics and data models
   - Parameter system for dynamic query generation
+  - Automated metric discovery and recommendations from database schemas
+  - Metric preview mode for validation before saving
   - Metric extension and inheritance support (Coming Soon)
 
 - **Query Engine**
@@ -39,6 +41,8 @@ This platform is designed to abstract complex data sources into a business-frien
   - Advanced chart features with ECharts integration
   - Field mapping and data transformation for visualizations
   - Widget-level metric execution with override support
+  - Embedded metrics: Define metrics directly within dashboard widgets without saving them first
+  - Dashboard preview with real-time metric execution
 
 - **Multi-Tenancy**
   - Hierarchical organization: Workspaces → Environments → Consumers
@@ -140,15 +144,21 @@ export CORTEX_AUTO_APPLY_DB_MIGRATIONS=true
 poetry run uvicorn cortex.api.main:app --reload --host 0.0.0.0 --port 9002
 ```
 
-#### Database Migrations
+#### Database Migrations & Onboarding
 
-The platform supports automatic database migrations on startup. Set the following environment variable to enable:
+The platform includes an automated onboarding system that handles initial setup:
+
+- **Automatic Migrations**: Database migrations are automatically applied on startup (when enabled)
+- **Default Workspace & Environment**: Creates default workspace and test environment if none exist
+- **Default Data Model**: Automatically creates a default data model in the first available environment
+
+Set the following environment variable to enable auto-migration:
 
 ```bash
 export CORTEX_AUTO_APPLY_DB_MIGRATIONS=true
 ```
 
-For more information on running migrations manually or troubleshooting migration issues, see the [Migration Guide](migrations/MIGRATION_GUIDE.md).
+For more information on running migrations manually or troubleshooting migration issues, see the [Migration Guide](cortex/migrations/MIGRATION_GUIDE.md).
 
 #### Environment Configuration
 
@@ -251,7 +261,10 @@ The platform includes a modern Vue.js frontend built with Nuxt 4 and TypeScript 
 - **Data Source Configuration**: Visual interface for connecting and configuring data sources
 - **Data Model Builder**: Create and manage data models with schema introspection
 - **Metric Builder**: Visual interface for creating semantic metrics with measures, dimensions, filters, and aggregations
+  - Metric preview mode to validate definitions before saving
+  - Automated metric recommendations from database schemas
 - **Dashboard Builder**: Create multi-view dashboards with drag-and-drop widget placement
+  - Embedded metrics: Define metrics directly in dashboard widgets
 - **Visualization Editor**: Configure 10+ chart types with advanced field mapping
 - **Consumer & Group Management**: Manage end users and consumer groups
 - **Query History**: View and analyze query execution history and performance
@@ -293,6 +306,7 @@ The platform provides a comprehensive REST API for all operations. Access the in
 | **Data Sources** | `/api/v1/data/sources` | Database connection management |
 | **Data Models** | `/api/v1/data/models` | Business data model definitions |
 | **Metrics** | `/api/v1/metrics` | Semantic metric creation and execution |
+| **Metric Recommendations** | `/api/v1/metrics/recommendations` | Automated metric suggestions from schemas |
 | **Dashboards** | `/api/v1/dashboards` | Dashboard and widget management |
 | **Consumers** | `/api/v1/consumers` | End user management |
 | **Consumer Groups** | `/api/v1/consumers/groups` | User group management |
@@ -358,9 +372,11 @@ cortex/
 │   │   ├── consumers/        # User management
 │   │   ├── dashboards/       # Dashboard engine
 │   │   ├── data/             # Data models and sources
+│   │   ├── onboarding/       # Onboarding and setup automation
 │   │   ├── preaggregations/  # Pre-aggregation system
 │   │   ├── query/            # Query engine
 │   │   ├── semantics/        # Semantic layer
+│   │   ├── services/         # Business logic services
 │   │   ├── storage/          # Database storage
 │   │   └── workspaces/       # Multi-tenancy
 ├── frontend/cortex/          # Nuxt admin interface
@@ -458,12 +474,8 @@ Upcoming features:
 - [ ] File-based data sources (CSV, Excel, Google Sheets)
 - [ ] Advanced AI agent integration
 - [ ] Natural language query interface
-- [ ] Automated metric recommendations
-- [ ] Multi-database joins
-- [ ] Real-time streaming analytics
 - [ ] User authentication and authorization system
-- [ ] Advanced access control and row-level security
 - [ ] Embedded analytics SDK
 - [ ] Mobile-responsive dashboard views
-- [ ] MongoDB and DuckDB support
+- [ ] Multi-database joins
 

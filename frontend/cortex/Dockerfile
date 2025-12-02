@@ -23,7 +23,12 @@ COPY . .
 ENV API_BASE_URL=${API_BASE_URL}
 ENV NODE_ENV=production
 
+# Increase Node.js heap size to prevent out-of-memory errors during build
+# 4096 = 4GB, adjust based on your needs (can go up to 8GB or more if needed)
+ENV NODE_OPTIONS=--max-old-space-size=4096
+
 # Generate static files
+# Using NODE_OPTIONS from ENV to ensure sufficient memory
 RUN yarn generate || (echo "Build failed. See error above." && exit 1)
 
 # Serving stage

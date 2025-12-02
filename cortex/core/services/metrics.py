@@ -1,6 +1,7 @@
 """
 Metric execution service for shared metric execution logic.
 """
+import logging
 from typing import Dict, Any, Optional, List
 from uuid import UUID
 from datetime import datetime, timedelta
@@ -98,6 +99,18 @@ class MetricExecutionService:
             # Convert ORM to Pydantic using automatic conversion
             data_model = DataModel.model_validate(data_model)
             
+            # Infer source_type from data_source_id if available
+            effective_source_type = source_type
+            if resolved_metric.data_source_id:
+                try:
+                    data_source = DataSourceCRUD.get_data_source(resolved_metric.data_source_id)
+                    # Convert to DataSourceTypes enum (handles both string and enum values)
+                    effective_source_type = DataSourceTypes(data_source.source_type)
+                except Exception as e:
+                    # If data source lookup fails, fall back to provided source_type
+                    # Log the error but don't fail the execution
+                    logging.warning(f"Failed to fetch data source {resolved_metric.data_source_id}: {e}. Using provided source_type: {source_type}")
+            
             # Validate metric before execution
             validation_result = ValidationService.validate_metric_execution(resolved_metric, data_model)
             
@@ -122,7 +135,7 @@ class MetricExecutionService:
                 parameters=parameters or {},
                 limit=limit,
                 offset=offset,
-                source_type=source_type,
+                source_type=effective_source_type,
                 context_id=context_id,
                 grouped=grouped,
                 cache_preference=cache_preference,

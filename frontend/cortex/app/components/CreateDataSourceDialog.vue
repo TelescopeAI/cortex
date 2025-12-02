@@ -201,7 +201,7 @@ import { ChevronDown } from 'lucide-vue-next'
 
 // Define emits
 const emit = defineEmits<{
-  dataSourceCreated: []
+  dataSourceCreated: [dataSource: import('~/types').DataSource]
 }>()
 import { toast } from 'vue-sonner'
 import { useDataSources } from '~/composables/useDataSources'
@@ -543,8 +543,8 @@ async function handleSubmit() {
     
     toast.success('Data source created successfully')
     
-    // Emit event to notify parent component to refresh
-    emit('dataSourceCreated')
+    // Emit event to notify parent component with the created data source
+    emit('dataSourceCreated', result)
     
     // Close dialog
     resetAndClose()

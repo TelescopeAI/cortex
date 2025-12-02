@@ -40,8 +40,9 @@ watch(selectedEnvironmentId, (newEnvironmentId) => {
 }, { immediate: true });
 
 // Handle data source creation event
-function handleDataSourceCreated() {
-  refresh();
+function handleDataSourceCreated(dataSource: import('~/types').DataSource) {
+  // Redirect to the newly created data source page
+  router.push(`/data/sources/${dataSource.id}`)
 }
 
 // Get catalog icon based on source catalog

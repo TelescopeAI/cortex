@@ -97,7 +97,18 @@ class MetricVersionCreateRequest(BaseModel):
 
 
 class MetricRecommendationsRequest(BaseModel):
-    """Request schema for generating metric recommendations"""
+    """
+    Request schema for generating metric recommendations.
+    Optional filters allow callers to scope tables/columns, restrict metric
+    templates, and control time windows/grains for temporal outputs.
+    """
     environment_id: UUID
     data_source_id: UUID
-    data_model_id: UUID 
+    data_model_id: UUID
+    include_tables: Optional[List[str]] = None
+    exclude_tables: Optional[List[str]] = None
+    include_columns: Optional[List[str]] = None
+    exclude_columns: Optional[List[str]] = None
+    metric_types: Optional[List[str]] = None
+    time_windows: Optional[List[int]] = None
+    grains: Optional[List[str]] = None

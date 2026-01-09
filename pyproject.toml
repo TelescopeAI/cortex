@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "telescope-cortex"
-version = "0.0.1a5"
+version = "0.0.1a6"
 description = "Minimal Headless BI for perfectionists with deadline"
 authors = ["Nilotpal Roychowdhury <nilotpal@jointelescope.com>"]
 license = "MIT"
@@ -25,6 +25,10 @@ fastapi = {extras = ["standard"], version = "^0.115.8", optional = true}
 scalar-fastapi = {version = "^1.0.3", optional = true}
 secweb = {version = "^1.25.2", optional = true}
 uvicorn = {version = "^0.36.1", optional = true}
+# Optional PostgreSQL driver (installed with telescope-cortex[postgres-pg8000])
+pg8000 = {version = "^1.30.0", optional = true}
+python-dotenv = "^1.2.1"
+rich = "^14.2.0"
 
 [tool.poetry.group.api]
 optional = true
@@ -37,6 +41,7 @@ uvicorn = "^0.36.1"
 
 [tool.poetry.extras]
 api = ["fastapi", "scalar-fastapi", "secweb", "uvicorn"]
+postgres-pg8000 = ["pg8000"]
 
 [build-system]
 requires = ["poetry-core"]

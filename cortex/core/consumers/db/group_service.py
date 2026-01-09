@@ -19,8 +19,23 @@ from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
 class ConsumerGroupCRUD:
 
     @staticmethod
-    def get_consumer_group_by_name_and_environment(name: str, environment_id: UUID) -> Optional[ConsumerGroup]:
-        db_session = CortexStorage().get_session()
+    def get_consumer_group_by_name_and_environment(
+        name: str,
+        environment_id: UUID,
+        storage: Optional[CortexStorage] = None
+    ) -> Optional[ConsumerGroup]:
+        """
+        Get consumer group by name and environment ID.
+        
+        Args:
+            name: Consumer group name to search for
+            environment_id: Environment ID to filter by
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            ConsumerGroup object or None if not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_group = db_session.query(ConsumerGroupORM).filter(
                 ConsumerGroupORM.name == name,
@@ -33,16 +48,30 @@ class ConsumerGroupCRUD:
             db_session.close()
 
     @staticmethod
-    def add_consumer_group(group: ConsumerGroup) -> ConsumerGroup:
-        db_session = CortexStorage().get_session()
+    def add_consumer_group(group: ConsumerGroup, storage: Optional[CortexStorage] = None) -> ConsumerGroup:
+        """
+        Add a new consumer group to an environment.
+        
+        Args:
+            group: ConsumerGroup object to create
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Created consumer group object
+            
+        Raises:
+            ConsumerGroupAlreadyExistsError: If group already exists
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             # Check if environment exists
-            EnvironmentCRUD.get_environment(group.environment_id)
+            EnvironmentCRUD.get_environment(group.environment_id, storage=storage)
 
             # Check if group with same name exists in the environment
             existing_group = ConsumerGroupCRUD.get_consumer_group_by_name_and_environment(
                 group.name,
-                group.environment_id
+                group.environment_id,
+                storage=storage
             )
             if existing_group:
                 raise ConsumerGroupAlreadyExistsError(group.name, group.environment_id)
@@ -74,8 +103,21 @@ class ConsumerGroupCRUD:
             db_session.close()
 
     @staticmethod
-    def get_consumer_group(group_id: UUID) -> ConsumerGroup:
-        db_session = CortexStorage().get_session()
+    def get_consumer_group(group_id: UUID, storage: Optional[CortexStorage] = None) -> ConsumerGroup:
+        """
+        Get consumer group by ID.
+        
+        Args:
+            group_id: Consumer group ID to retrieve
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            ConsumerGroup object
+            
+        Raises:
+            ConsumerGroupDoesNotExistError: If group not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_group = db_session.query(ConsumerGroupORM).filter(
                 ConsumerGroupORM.id == group_id
@@ -87,8 +129,24 @@ class ConsumerGroupCRUD:
             db_session.close()
 
     @staticmethod
-    def get_consumer_group_with_consumers(group_id: UUID) -> tuple[ConsumerGroup, List[Consumer]]:
-        db_session = CortexStorage().get_session()
+    def get_consumer_group_with_consumers(
+        group_id: UUID,
+        storage: Optional[CortexStorage] = None
+    ) -> tuple[ConsumerGroup, List[Consumer]]:
+        """
+        Get consumer group with all its members.
+        
+        Args:
+            group_id: Consumer group ID to retrieve
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Tuple of (ConsumerGroup, list of Consumer objects)
+            
+        Raises:
+            ConsumerGroupDoesNotExistError: If group not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_group = db_session.query(ConsumerGroupORM).filter(
                 ConsumerGroupORM.id == group_id
@@ -103,11 +161,24 @@ class ConsumerGroupCRUD:
             db_session.close()
 
     @staticmethod
-    def get_consumer_groups_by_environment(environment_id: UUID) -> List[ConsumerGroup]:
-        db_session = CortexStorage().get_session()
+    def get_consumer_groups_by_environment(
+        environment_id: UUID,
+        storage: Optional[CortexStorage] = None
+    ) -> List[ConsumerGroup]:
+        """
+        Get all consumer groups for an environment.
+        
+        Args:
+            environment_id: Environment ID to get groups for
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            List of consumer group objects
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             # Verify environment exists
-            EnvironmentCRUD.get_environment(environment_id)
+            EnvironmentCRUD.get_environment(environment_id, storage=storage)
 
             db_groups = db_session.query(ConsumerGroupORM).filter(
                 ConsumerGroupORM.environment_id == environment_id
@@ -117,8 +188,21 @@ class ConsumerGroupCRUD:
             db_session.close()
 
     @staticmethod
-    def get_groups_for_consumer(consumer_id: UUID) -> List[ConsumerGroup]:
-        db_session = CortexStorage().get_session()
+    def get_groups_for_consumer(consumer_id: UUID, storage: Optional[CortexStorage] = None) -> List[ConsumerGroup]:
+        """
+        Get all groups that a consumer belongs to.
+        
+        Args:
+            consumer_id: Consumer ID to get groups for
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            List of consumer group objects
+            
+        Raises:
+            ConsumerDoesNotExistError: If consumer not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             # Check if consumer exists
             db_consumer = db_session.query(ConsumerORM).filter(
@@ -139,8 +223,24 @@ class ConsumerGroupCRUD:
             db_session.close()
 
     @staticmethod
-    def update_consumer_group(group: ConsumerGroup) -> ConsumerGroup:
-        db_session = CortexStorage().get_session()
+    def update_consumer_group(
+        group: ConsumerGroup,
+        storage: Optional[CortexStorage] = None
+    ) -> ConsumerGroup:
+        """
+        Update an existing consumer group.
+        
+        Args:
+            group: ConsumerGroup object with updated values
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Updated consumer group object
+            
+        Raises:
+            ConsumerGroupDoesNotExistError: If group not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_group = db_session.query(ConsumerGroupORM).filter(
                 ConsumerGroupORM.id == group.id
@@ -182,8 +282,18 @@ class ConsumerGroupCRUD:
             db_session.close()
 
     @staticmethod
-    def delete_consumer_group(group_id: UUID) -> bool:
-        db_session = CortexStorage().get_session()
+    def delete_consumer_group(group_id: UUID, storage: Optional[CortexStorage] = None) -> bool:
+        """
+        Delete a consumer group.
+        
+        Args:
+            group_id: Consumer group ID to delete
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            True if group was deleted, False otherwise
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             result = db_session.query(ConsumerGroupORM).filter(
                 ConsumerGroupORM.id == group_id
@@ -197,8 +307,28 @@ class ConsumerGroupCRUD:
             db_session.close()
 
     @staticmethod
-    def add_consumer_to_group(group_id: UUID, consumer_id: UUID) -> bool:
-        db_session = CortexStorage().get_session()
+    def add_consumer_to_group(
+        group_id: UUID,
+        consumer_id: UUID,
+        storage: Optional[CortexStorage] = None
+    ) -> bool:
+        """
+        Add a consumer to a group.
+        
+        Args:
+            group_id: Consumer group ID
+            consumer_id: Consumer ID to add
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            True if consumer was added to group
+            
+        Raises:
+            ConsumerGroupDoesNotExistError: If group not found
+            ConsumerDoesNotExistError: If consumer not found
+            ValueError: If consumer and group are in different environments
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             # Check if group exists
             db_group = db_session.query(ConsumerGroupORM).filter(
@@ -242,8 +372,27 @@ class ConsumerGroupCRUD:
             db_session.close()
 
     @staticmethod
-    def remove_consumer_from_group(group_id: UUID, consumer_id: UUID) -> bool:
-        db_session = CortexStorage().get_session()
+    def remove_consumer_from_group(
+        group_id: UUID,
+        consumer_id: UUID,
+        storage: Optional[CortexStorage] = None
+    ) -> bool:
+        """
+        Remove a consumer from a group.
+        
+        Args:
+            group_id: Consumer group ID
+            consumer_id: Consumer ID to remove
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            True if consumer was removed from group
+            
+        Raises:
+            ConsumerGroupDoesNotExistError: If group not found
+            ConsumerDoesNotExistError: If consumer not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             # Check if group exists
             if not db_session.query(ConsumerGroupORM).filter(ConsumerGroupORM.id == group_id).first():
@@ -270,8 +419,27 @@ class ConsumerGroupCRUD:
             db_session.close()
 
     @staticmethod
-    def is_consumer_in_group(group_id: UUID, consumer_id: UUID) -> bool:
-        db_session = CortexStorage().get_session()
+    def is_consumer_in_group(
+        group_id: UUID,
+        consumer_id: UUID,
+        storage: Optional[CortexStorage] = None
+    ) -> bool:
+        """
+        Check if a consumer is a member of a group.
+        
+        Args:
+            group_id: Consumer group ID
+            consumer_id: Consumer ID to check
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            True if consumer is in group, False otherwise
+            
+        Raises:
+            ConsumerGroupDoesNotExistError: If group not found
+            ConsumerDoesNotExistError: If consumer not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             # Check if group exists
             if not db_session.query(ConsumerGroupORM).filter(ConsumerGroupORM.id == group_id).first():

@@ -1,13 +1,18 @@
 # Onboarding Operations
 import logging
 from typing import List, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from cortex.core.data.db.model_service import DataModelService
 from cortex.core.data.modelling.model import DataModel
+from cortex.core.dashboards.dashboard import (
+    Dashboard, DashboardView, DashboardSection
+)
+from cortex.core.dashboards.db.dashboard_service import DashboardCRUD
 from cortex.core.exceptions.environments import NoEnvironmentsExistError
 from cortex.core.exceptions.workspaces import NoWorkspacesExistError
 from cortex.core.storage.migrations import auto_apply_migrations
+from cortex.core.types.dashboards import DashboardType
 from cortex.core.types.telescope import TSModel
 from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
 from cortex.core.workspaces.db.workspace_service import WorkspaceCRUD
@@ -33,6 +38,7 @@ class OnboardingManager(TSModel):
         migrations_success = False
         workspace_env_success = False
         data_model_success = False
+        dashboard_success = False
         
         # Apply database migrations
         migrations_success = self._apply_migrations()
@@ -43,8 +49,11 @@ class OnboardingManager(TSModel):
         # Create default data model if none exists
         data_model_success = self._ensure_default_data_model()
         
+        # Create default dashboard if none exists
+        dashboard_success = self._ensure_default_dashboard()
+        
         # Return True only if all operations succeeded
-        if migrations_success and workspace_env_success and data_model_success:
+        if migrations_success and workspace_env_success and data_model_success and dashboard_success:
             logger.info("All onboarding operations completed successfully.")
             return True
         else:
@@ -55,6 +64,8 @@ class OnboardingManager(TSModel):
                 failed_operations.append("workspace/environment initialization")
             if not data_model_success:
                 failed_operations.append("default data model creation")
+            if not dashboard_success:
+                failed_operations.append("default dashboard creation")
             logger.warning(f"Some onboarding operations failed: {', '.join(failed_operations)}")
             return False
     
@@ -275,4 +286,88 @@ class OnboardingManager(TSModel):
             
         except Exception as e:
             logger.error(f"Error during default data model creation: {e}")
+            return False
+    
+    def _ensure_default_dashboard(self) -> bool:
+        """
+        Ensure that at least one dashboard exists.
+        
+        - If no dashboards exist: Create a "Default Dashboard" with a default view and section in the first available environment.
+        
+        Returns:
+            bool: True if operation completed successfully, False otherwise
+        """
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # Get all workspaces and environments
+            workspaces = self._get_all_workspaces()
+            
+            if len(workspaces) == 0:
+                # No workspaces exist, skip dashboard creation
+                logger.info("No workspaces found. Skipping default dashboard creation.")
+                return True
+            
+            # Get the first environment from the first workspace
+            first_workspace = workspaces[0]
+            environments = self._get_environments_for_workspace(first_workspace.id)
+            
+            if len(environments) == 0:
+                # No environments exist, skip dashboard creation
+                logger.info("No environments found. Skipping default dashboard creation.")
+                return True
+            
+            first_environment = environments[0]
+            
+            # Check if any dashboards already exist in this environment
+            existing_dashboards = DashboardCRUD.get_dashboards_by_environment(first_environment.id)
+            
+            if len(existing_dashboards) > 0:
+                logger.info(f"Dashboard(s) already exist in environment '{first_environment.name}'. Skipping default dashboard creation.")
+                return True
+            
+            # Create default dashboard with default view and section
+            logger.info(f"No dashboards found. Creating default dashboard in environment '{first_environment.name}'...")
+            
+            # Create default section
+            default_section = DashboardSection(
+                alias="overview",
+                title="Overview",
+                description="Default overview section",
+                position=0,
+                widgets=[]  # Empty section initially; widgets can be added later
+            )
+            
+            # Create default view with the default section
+            default_view = DashboardView(
+                alias="overview",
+                title="Overview",
+                description="Default overview view",
+                sections=[default_section],
+                context_id=None,
+                layout=None
+            )
+            
+            # Create default dashboard with the default view
+            default_dashboard = Dashboard(
+                id=uuid4(),
+                alias="default",
+                environment_id=first_environment.id,
+                name="Default Dashboard",
+                description="Default dashboard created during onboarding",
+                type=DashboardType.OPERATIONAL,
+                views=[default_view],
+                default_view="overview",  # Reference the view by its alias
+                tags=["default", "onboarding"],
+                created_by=uuid4()  # Use a generated UUID for system-created dashboards
+            )
+            
+            # Save the dashboard to the database
+            created_dashboard = DashboardCRUD.add_dashboard(default_dashboard)
+            
+            logger.info(f"Created default dashboard: {created_dashboard.name} (ID: {created_dashboard.id}) in environment {first_environment.id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error during default dashboard creation: {e}")
             return False

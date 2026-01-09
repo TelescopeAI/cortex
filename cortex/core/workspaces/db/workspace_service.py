@@ -15,8 +15,18 @@ from cortex.core.workspaces.db.workspace import WorkspaceORM
 class WorkspaceCRUD(TSModel):
 
     @staticmethod
-    def get_workspace_by_name(name: str) -> Optional[Workspace]:
-        db_session = CortexStorage().get_session()
+    def get_workspace_by_name(name: str, storage: Optional[CortexStorage] = None) -> Optional[Workspace]:
+        """
+        Get workspace by name.
+        
+        Args:
+            name: Workspace name to search for
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Workspace object or None if not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_workspace = db_session.query(WorkspaceORM).filter(
                 WorkspaceORM.name == name
@@ -30,11 +40,21 @@ class WorkspaceCRUD(TSModel):
             db_session.close()
 
     @staticmethod
-    def add_workspace(workspace: Workspace) -> Workspace:
-        db_session = CortexStorage().get_session()
+    def add_workspace(workspace: Workspace, storage: Optional[CortexStorage] = None) -> Workspace:
+        """
+        Add a new workspace.
+        
+        Args:
+            workspace: Workspace object to create
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Created workspace object
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             # Check if workspace with same name exists
-            existing_workspace = WorkspaceCRUD.get_workspace_by_name(workspace.name)
+            existing_workspace = WorkspaceCRUD.get_workspace_by_name(workspace.name, storage=storage)
             if existing_workspace:
                 raise WorkspaceAlreadyExistsError(workspace.name)
 
@@ -65,8 +85,21 @@ class WorkspaceCRUD(TSModel):
             db_session.close()
 
     @staticmethod
-    def get_workspace(workspace_id: UUID) -> Workspace:
-        db_session = CortexStorage().get_session()
+    def get_workspace(workspace_id: UUID, storage: Optional[CortexStorage] = None) -> Workspace:
+        """
+        Get workspace by ID.
+        
+        Args:
+            workspace_id: Workspace ID to retrieve
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Workspace object
+            
+        Raises:
+            WorkspaceDoesNotExistError: If workspace not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_workspace = db_session.query(WorkspaceORM).filter(
                 WorkspaceORM.id == workspace_id
@@ -80,8 +113,20 @@ class WorkspaceCRUD(TSModel):
             db_session.close()
 
     @staticmethod
-    def get_all_workspaces() -> List[Workspace]:
-        db_session = CortexStorage().get_session()
+    def get_all_workspaces(storage: Optional[CortexStorage] = None) -> List[Workspace]:
+        """
+        Get all workspaces.
+        
+        Args:
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            List of workspace objects
+            
+        Raises:
+            NoWorkspacesExistError: If no workspaces found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_workspaces = db_session.query(WorkspaceORM).all()
             if not db_workspaces:
@@ -93,8 +138,21 @@ class WorkspaceCRUD(TSModel):
             db_session.close()
 
     @staticmethod
-    def update_workspace(workspace: Workspace) -> Workspace:
-        db_session = CortexStorage().get_session()
+    def update_workspace(workspace: Workspace, storage: Optional[CortexStorage] = None) -> Workspace:
+        """
+        Update an existing workspace.
+        
+        Args:
+            workspace: Workspace object with updated values
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Updated workspace object
+            
+        Raises:
+            WorkspaceDoesNotExistError: If workspace not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_workspace = db_session.query(WorkspaceORM).filter(
                 WorkspaceORM.id == workspace.id
@@ -117,8 +175,18 @@ class WorkspaceCRUD(TSModel):
             db_session.close()
 
     @staticmethod
-    def delete_workspace(workspace: Workspace) -> bool:
-        db_session = CortexStorage().get_session()
+    def delete_workspace(workspace: Workspace, storage: Optional[CortexStorage] = None) -> bool:
+        """
+        Delete a workspace.
+        
+        Args:
+            workspace: Workspace object to delete
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            True if workspace was deleted, False otherwise
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             result = db_session.query(WorkspaceORM).filter(
                 WorkspaceORM.id == workspace.id
@@ -127,21 +195,6 @@ class WorkspaceCRUD(TSModel):
             return result > 0
         except Exception as e:
             db_session.rollback()
-            raise e
-        finally:
-            db_session.close()
-
-    @staticmethod
-    def get_workspace_by_name(name: str) -> Optional[Workspace]:
-        db_session = CortexStorage().get_session()
-        try:
-            db_workspace = db_session.query(WorkspaceORM).filter(
-                WorkspaceORM.name == name
-            ).first()
-            if db_workspace is None:
-                return None
-            return Workspace.model_validate(db_workspace, from_attributes=True)
-        except Exception as e:
             raise e
         finally:
             db_session.close()

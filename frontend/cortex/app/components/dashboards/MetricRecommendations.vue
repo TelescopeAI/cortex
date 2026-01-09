@@ -76,7 +76,7 @@ async function handleGenerate() {
   error.value = null
   
   try {
-    const metrics = await recommendMetrics(
+    const { metrics } = await recommendMetrics(
       selectedEnvironmentId.value,
       selectedDataSource.value,
       selectedDataModel.value

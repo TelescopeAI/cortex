@@ -28,10 +28,20 @@ const step = ref<'select' | 'review' | 'creating'>('select')
 const selectedDataSource = ref<string>('')
 const selectedDataModel = ref<string>('')
 const recommendedMetrics = ref<SemanticMetric[]>([])
+const recommendationsMeta = ref<any>(null)
 const selectedMetricIds = ref<Set<string>>(new Set())
 const isGenerating = ref(false)
 const isCreating = ref(false)
 const creationProgress = ref({ current: 0, total: 0, errors: [] as string[] })
+
+// Filters / options
+const includeTablesInput = ref<string>('')
+const excludeTablesInput = ref<string>('')
+const includeColumnsInput = ref<string>('')
+const excludeColumnsInput = ref<string>('')
+const metricTypesSelected = ref<Set<string>>(new Set(['count', 'sum', 'avg', 'min', 'max', 'count_distinct', 'boolean']))
+const timeWindowsInput = ref<string>('30')
+const grainsInput = ref<string>('day,week,month,quarter,year')
 
 // Scroll detection for sticky header
 const scrollSentinel = ref<HTMLElement | null>(null)
@@ -54,6 +64,14 @@ const selectedMetrics = computed(() => {
   return recommendedMetrics.value.filter(m => selectedMetricIds.value.has(m.name))
 })
 
+const includeTables = computed(() => parseCsv(includeTablesInput.value))
+const excludeTables = computed(() => parseCsv(excludeTablesInput.value))
+const includeColumns = computed(() => parseCsv(includeColumnsInput.value))
+const excludeColumns = computed(() => parseCsv(excludeColumnsInput.value))
+const timeWindows = computed(() => parseNumberCsv(timeWindowsInput.value))
+const grains = computed(() => parseCsv(grainsInput.value))
+const metricTypes = computed(() => Array.from(metricTypesSelected.value))
+
 const allSelected = computed(() => {
   return recommendedMetrics.value.length > 0 && 
          selectedMetricIds.value.size === recommendedMetrics.value.length
@@ -73,13 +91,22 @@ const handleGenerate = async () => {
 
   isGenerating.value = true
   try {
-    const metrics = await recommendMetrics(
+    const { metrics, metadata } = await recommendMetrics(
       selectedEnvironmentId.value,
       selectedDataSource.value,
-      selectedDataModel.value
+      selectedDataModel.value,
+      {
+        includeTables: includeTables.value,
+        excludeTables: excludeTables.value,
+        includeColumns: includeColumns.value,
+        excludeColumns: excludeColumns.value,
+        metricTypes: metricTypes.value,
+        timeWindows: timeWindows.value,
+        grains: grains.value
+      }
     )
-    
     recommendedMetrics.value = metrics
+    recommendationsMeta.value = metadata || null
     
     // Start with none selected (user must select which ones they want)
     selectedMetricIds.value = new Set()
@@ -189,6 +216,34 @@ const handleBackToMetrics = () => {
   navigateTo('/metrics')
 }
 
+// Helpers
+function parseCsv(value: string): string[] | undefined {
+  if (!value) return undefined
+  const parts = value.split(',').map(v => v.trim()).filter(Boolean)
+  return parts.length ? parts : undefined
+}
+
+function parseNumberCsv(value: string): number[] | undefined {
+  if (!value) return undefined
+  const parts = value
+    .split(',')
+    .map(v => v.trim())
+    .filter(Boolean)
+    .map(v => Number(v))
+    .filter(v => !Number.isNaN(v) && v > 0)
+  return parts.length ? parts : undefined
+}
+
+function toggleMetricType(type: string, checked: boolean | 'indeterminate') {
+  const next = new Set(metricTypesSelected.value)
+  if (checked === true) {
+    next.add(type)
+  } else {
+    next.delete(type)
+  }
+  metricTypesSelected.value = next
+}
+
 // Initialize data
 onMounted(() => {
   if (selectedEnvironmentId.value) {
@@ -277,6 +332,49 @@ onMounted(() => {
 
         <Separator />
 
+        <!-- Filters -->
+        <div class="grid gap-4 md:grid-cols-2">
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Include Tables (comma-separated)</label>
+            <input v-model="includeTablesInput" class="input" placeholder="orders, customers" />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Exclude Tables (comma-separated)</label>
+            <input v-model="excludeTablesInput" class="input" placeholder="tmp_logs" />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Include Columns (comma-separated)</label>
+            <input v-model="includeColumnsInput" class="input" placeholder="orders.amount, status" />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Exclude Columns (comma-separated)</label>
+            <input v-model="excludeColumnsInput" class="input" placeholder="orders.debug_flag" />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Metric Types</label>
+            <div class="flex flex-wrap gap-2">
+              <label v-for="type in ['count','sum','avg','min','max','count_distinct','boolean']" :key="type" class="flex items-center space-x-1 text-sm">
+                <input
+                  type="checkbox"
+                  :checked="metricTypesSelected.has(type)"
+                  @change="(e: any) => toggleMetricType(type, e.target.checked)"
+                />
+                <span>{{ type }}</span>
+              </label>
+            </div>
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Time Windows (days, comma-separated)</label>
+            <input v-model="timeWindowsInput" class="input" placeholder="30,90" />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium">Time Grains (comma-separated)</label>
+            <input v-model="grainsInput" class="input" placeholder="day,week,month,quarter,year" />
+          </div>
+        </div>
+
+        <Separator />
+
         <!-- Generate Button -->
         <div class="flex justify-end">
           <Button 
@@ -318,6 +416,7 @@ onMounted(() => {
               </div>
               <p class="text-sm text-muted-foreground">
                 {{ recommendedMetrics.length }} metrics recommended • {{ selectedMetricIds.size }} selected
+                <span v-if="recommendationsMeta?.table_preview"> • {{ Object.keys(recommendationsMeta.table_preview).length }} tables</span>
               </p>
             </div>
 

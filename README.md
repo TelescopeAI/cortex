@@ -4,6 +4,8 @@
 
 A modular, lightweight analytics engine built in Python to power customer-facing analytics applications. The platform provides a unified semantic layer for defining business data models, a dynamic query engine that integrates with heterogeneous data sources, and a robust user management and authorization system—all accessible via a FastAPI-powered REST API. The semantic layer is designed to support advanced AI agent integration for intelligent analytics, natural language querying, and automated insights generation.
 
+![Cortex Dashboard](cortex/docs/assets/cortex_hero.png)
+
 ## Overview
 
 This platform is designed to abstract complex data sources into a business-friendly semantic layer. It enables developers to define data models in JSON (with YAML support planned), dynamically generate queries across multiple data sources, and securely expose analytics functionality to both admin/developer users and end users.
@@ -120,7 +122,7 @@ Set the following environment variable to enable auto-migration:
 export CORTEX_AUTO_APPLY_DB_MIGRATIONS=true
 ```
 
-For more information on running migrations manually or troubleshooting migration issues, see the [Migration Guide](cortex/migrations/MIGRATION_GUIDE.md).
+For more information on running migrations manually or troubleshooting migration issues, see the [Database Migrations Guide](cortex/migrations/MIGRATION_GUIDE.md).
 
 #### Environment Configuration
 
@@ -176,8 +178,7 @@ export CORTEX_ENV_FILE_PATH="$HOME/.cortex/dev.env"
 poetry run uvicorn cortex.api.main:app --reload
 ```
 
-**Docker users:**
-Docker's `env_file` directive continues to work as before:
+**Using Docker:**
 ```yaml
 # docker-compose.yml
 services:
@@ -194,6 +195,88 @@ services:
 - `CORTEX_DB_USERNAME` - Database username (unless using SQLite)
 - `CORTEX_DB_PASSWORD` - Database password (unless using SQLite)
 - `EXECUTION_ENV` - Execution environment (local, dev, staging, production)
+
+#### Database Migrations
+
+Cortex uses **Alembic** for database schema management with support for multiple databases (PostgreSQL, MySQL, SQLite).
+
+**Key Features:**
+- **Database-Specific Migrations**: Each database type maintains its own migration chain for optimal compatibility
+- **Automatic Initialization**: Generates initial migration if none exist for the database type
+- **Interactive Safety**: Shows migration plan with confirmation before applying
+- **Environment Variable Control**: Full customization via `CORTEX_*` environment variables
+- **Custom Directories**: Support for application-specific migration folders
+
+**Migration Architecture**
+
+Migrations are organized by database type to avoid compatibility issues:
+
+```
+cortex/migrations/alembic/versions/
+├── sqlite/
+│   └── [migration files for SQLite]
+├── postgresql/
+│   └── [migration files for PostgreSQL]
+└── mysql/
+    └── [migration files for MySQL]
+```
+
+**Quick Start**
+
+Enable automatic migrations on startup:
+
+```bash
+export CORTEX_AUTO_APPLY_DB_MIGRATIONS=true
+python -m cortex.api
+```
+
+You'll see an interactive plan and confirmation before migrations are applied.
+
+**Environment Variables**
+
+```bash
+# Enable/disable automatic migration on startup (default: true)
+export CORTEX_AUTO_APPLY_DB_MIGRATIONS="true"
+
+# Interactive confirmation before applying (default: true on TTY)
+export CORTEX_DB_MIGRATIONS_IS_INTERACTIVE="true"
+
+# Custom migration directory (optional)
+export CORTEX_MIGRATIONS_VERSIONS_DIRECTORY="/path/to/migrations"
+
+# Custom environment file (optional)
+export CORTEX_ENV_FILE_PATH="/path/to/.env.custom"
+```
+
+**Manual Migration**
+
+Run Alembic commands directly:
+
+```bash
+cd cortex
+
+# Ensure database type is set
+export CORTEX_DB_TYPE=sqlite
+
+# Apply all pending migrations
+alembic upgrade head
+
+# View migration history
+alembic history --verbose
+
+# Get current revision
+alembic current
+```
+
+**For Complete Documentation**
+
+See the [Database Migrations Guide](cortex/migrations/MIGRATION_GUIDE.md) for:
+- Detailed configuration and usage
+- Auto-generation of initial migrations
+- Custom migration directories
+- Migration file format and best practices
+- Troubleshooting and performance considerations
+- Security and audit considerations
 
 ### Quick Start - Creating Your First Semantic Model
 
@@ -414,13 +497,22 @@ cortex/
 │   │   ├── services/         # Business logic services
 │   │   ├── storage/          # Database storage
 │   │   └── workspaces/       # Multi-tenancy
+│   └── migrations/           # Alembic database migrations
+│       ├── alembic/          # Alembic configuration
+│       │   ├── versions/     # Migration files
+│       │   │   ├── sqlite/   # SQLite-specific migrations
+│       │   │   ├── postgresql/ # PostgreSQL-specific migrations
+│       │   │   └── mysql/    # MySQL-specific migrations
+│       │   ├── env.py        # Alembic environment configuration
+│       │   └── script.py.mako # Migration script template
+│       ├── alembic.ini       # Alembic configuration file
+│       └── MIGRATION_GUIDE.md # Database migrations guide
 ├── frontend/cortex/          # Nuxt admin interface
 │   ├── app/                  # Application code
 │   │   ├── components/       # Vue components
 │   │   ├── composables/      # Composable functions
 │   │   ├── pages/            # Page components
 │   │   └── types/            # TypeScript types
-├── migrations/               # Alembic database migrations
 └── pyproject.toml            # Poetry configuration
 ```
 
@@ -460,9 +552,9 @@ Contributions are welcome! Please feel free to submit a [Pull Request](https://g
 
 For questions and support:
 - [Open an issue on GitHub](https://github.com/TelescopeAI/cortex/issues)
-- Email: [support@jointelescope.com](mailto:support@jointelescope.com)
+- Email: [help@jointelescope.com](mailto:help@jointelescope.com)
 - Documentation: [docs.jointelescope.com](https://docs.jointelescope.com)
-- [Migration Guide](cortex/migrations/MIGRATION_GUIDE.md)
+- [Database Migrations Guide](cortex/migrations/MIGRATION_GUIDE.md)
 
 ## Roadmap
 

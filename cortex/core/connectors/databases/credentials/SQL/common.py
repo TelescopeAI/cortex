@@ -14,6 +14,7 @@ class CommonProtocolSQLCredentials(TSModel):
     password: str
     database: str
     dialect: DataSourceTypes
+    schema: Optional[str] = None  # Optional schema name for PostgreSQL tenant isolation
 
     @model_validator(mode="after")
     def validate_dialect(self) -> "CommonProtocolSQLCredentials":

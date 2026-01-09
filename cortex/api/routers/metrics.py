@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status, Query
@@ -15,7 +15,6 @@ from cortex.api.schemas.responses.metrics import (
     MetricResponse,
     MetricListResponse,
     MetricExecutionResponse,
-    MetricValidationResponse,
     MetricVersionResponse,
     MetricVersionListResponse,
     MetricRecommendationsResponse
@@ -27,7 +26,7 @@ from cortex.core.semantics.filters import SemanticFilter
 from cortex.core.data.db.metric_service import MetricService
 from cortex.core.data.db.model_service import DataModelService
 from cortex.core.data.db.source_service import DataSourceCRUD
-from cortex.core.services.metrics import MetricExecutionService, MetricsGenerationService
+from cortex.core.services.metrics.execution import MetricExecutionService, MetricsGenerationService
 from cortex.core.data.modelling.model import DataModel
 from cortex.core.connectors.databases.clients.service import DBClientService
 from cortex.core.types.databases import DataSourceTypes
@@ -634,11 +633,19 @@ async def generate_metric_recommendations(request: MetricRecommendationsRequest)
         generated_metrics = MetricsGenerationService.generate_metrics(
             environment_id=request.environment_id,
             data_source_id=request.data_source_id,
-            data_model_id=request.data_model_id
+            data_model_id=request.data_model_id,
+            include_tables=request.include_tables,
+            exclude_tables=request.exclude_tables,
+            include_columns=request.include_columns,
+            exclude_columns=request.exclude_columns,
+            metric_types=request.metric_types,
+            time_windows=request.time_windows,
+            grains=request.grains,
         )
         
         # Convert to response format
         metric_responses = []
+        table_preview = {}
         model_service = DataModelService()
         try:
             data_model = model_service.get_data_model_by_id(request.data_model_id)
@@ -649,6 +656,11 @@ async def generate_metric_recommendations(request: MetricRecommendationsRequest)
                     **metric.model_dump(),
                     data_model_name=data_model_name
                 ))
+                table_key = getattr(metric, "table_name", None)
+                if table_key:
+                    entry = table_preview.setdefault(table_key, {"count": 0, "metric_names": []})
+                    entry["count"] += 1
+                    entry["metric_names"].append(metric.name)
         finally:
             model_service.close()
         
@@ -658,7 +670,15 @@ async def generate_metric_recommendations(request: MetricRecommendationsRequest)
             metadata={
                 "environment_id": str(request.environment_id),
                 "data_source_id": str(request.data_source_id),
-                "data_model_id": str(request.data_model_id)
+                "data_model_id": str(request.data_model_id),
+                "include_tables": request.include_tables,
+                "exclude_tables": request.exclude_tables,
+                "include_columns": request.include_columns,
+                "exclude_columns": request.exclude_columns,
+                "metric_types": request.metric_types,
+                "time_windows": request.time_windows,
+                "grains": request.grains,
+                "table_preview": table_preview,
             }
         )
         

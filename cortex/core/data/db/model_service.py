@@ -16,12 +16,15 @@ from cortex.core.storage.store import CortexStorage
 class DataModelService:
     """Service class for managing data models in the database"""
     
-    def __init__(self, session: Optional[Session] = None):
-        if session:
-            self.session = session
-        else:
-            self.local_session = CortexStorage()
-            self.session = self.local_session.get_session()
+    def __init__(self, storage: Optional[CortexStorage] = None):
+        """
+        Initialize DataModelService.
+        
+        Args:
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+        """
+        self.storage = storage or CortexStorage()
+        self.session = self.storage.get_session()
     
     def create_data_model(self, data_model: DataModel) -> DataModelORM:
         """Create a new data model in the database"""
@@ -196,5 +199,5 @@ class DataModelService:
     
     def close(self):
         """Close the database session"""
-        if hasattr(self, 'local_session'):
-            self.local_session.close_session(self.session)
+        if self.session:
+            self.session.close()

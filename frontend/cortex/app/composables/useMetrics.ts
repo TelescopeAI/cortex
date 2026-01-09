@@ -202,11 +202,28 @@ export const useMetrics = () => {
     }
   }
 
+  type RecommendOptions = {
+    includeTables?: string[]
+    excludeTables?: string[]
+    includeColumns?: string[]
+    excludeColumns?: string[]
+    metricTypes?: string[]
+    timeWindows?: number[]
+    grains?: string[]
+  }
+
+  type RecommendResult = {
+    metrics: SemanticMetric[]
+    total_count?: number
+    metadata?: any
+  }
+
   const recommendMetrics = async (
     environmentId: string,
     dataSourceId: string,
-    dataModelId: string
-  ): Promise<SemanticMetric[]> => {
+    dataModelId: string,
+    options: RecommendOptions = {}
+  ): Promise<RecommendResult> => {
     try {
       const response = await $fetch<{ metrics: SemanticMetric[], total_count: number, metadata?: any }>(
         apiUrl('/api/v1/metrics/recommendations'),
@@ -215,11 +232,22 @@ export const useMetrics = () => {
           body: {
             environment_id: environmentId,
             data_source_id: dataSourceId,
-            data_model_id: dataModelId
+            data_model_id: dataModelId,
+            include_tables: options.includeTables,
+            exclude_tables: options.excludeTables,
+            include_columns: options.includeColumns,
+            exclude_columns: options.excludeColumns,
+            metric_types: options.metricTypes,
+            time_windows: options.timeWindows,
+            grains: options.grains,
           }
         }
       )
-      return response.metrics || []
+      return {
+        metrics: response.metrics || [],
+        total_count: response.total_count,
+        metadata: response.metadata
+      }
     } catch (err) {
       console.error('Failed to generate metric recommendations:', err)
       throw err

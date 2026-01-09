@@ -17,8 +17,23 @@ from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
 class ConsumerCRUD(TSModel):
 
     @staticmethod
-    def get_consumer_by_email_and_environment(email: str, environment_id: UUID) -> Optional[Consumer]:
-        db_session = CortexStorage().get_session()
+    def get_consumer_by_email_and_environment(
+        email: str,
+        environment_id: UUID,
+        storage: Optional[CortexStorage] = None
+    ) -> Optional[Consumer]:
+        """
+        Get consumer by email and environment ID.
+        
+        Args:
+            email: Consumer email to search for
+            environment_id: Environment ID to filter by
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Consumer object or None if not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_consumer = db_session.query(ConsumerORM).filter(
                 ConsumerORM.email == email,
@@ -33,16 +48,31 @@ class ConsumerCRUD(TSModel):
             db_session.close()
 
     @staticmethod
-    def add_consumer(consumer: Consumer) -> Consumer:
-        db_session = CortexStorage().get_session()
+    def add_consumer(consumer: Consumer, storage: Optional[CortexStorage] = None) -> Consumer:
+        """
+        Add a new consumer to an environment.
+        
+        Args:
+            consumer: Consumer object to create
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Created consumer object
+            
+        Raises:
+            EnvironmentDoesNotExistError: If environment not found
+            ConsumerAlreadyExistsError: If consumer already exists
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             # Check if environment exists
-            EnvironmentCRUD.get_environment(consumer.environment_id)
+            EnvironmentCRUD.get_environment(consumer.environment_id, storage=storage)
             
             # Check if consumer with same email exists in the environment
             existing_consumer = ConsumerCRUD.get_consumer_by_email_and_environment(
                 consumer.email, 
-                consumer.environment_id
+                consumer.environment_id,
+                storage=storage
             )
             if existing_consumer:
                 raise ConsumerAlreadyExistsError(consumer.email, consumer.environment_id)
@@ -77,8 +107,21 @@ class ConsumerCRUD(TSModel):
             db_session.close()
 
     @staticmethod
-    def get_consumer(consumer_id: UUID) -> Consumer:
-        db_session = CortexStorage().get_session()
+    def get_consumer(consumer_id: UUID, storage: Optional[CortexStorage] = None) -> Consumer:
+        """
+        Get consumer by ID.
+        
+        Args:
+            consumer_id: Consumer ID to retrieve
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Consumer object
+            
+        Raises:
+            ConsumerDoesNotExistError: If consumer not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_consumer = db_session.query(ConsumerORM).filter(
                 ConsumerORM.id == consumer_id
@@ -93,11 +136,24 @@ class ConsumerCRUD(TSModel):
             db_session.close()
 
     @staticmethod
-    def get_consumers_by_environment(environment_id: UUID) -> List[Consumer]:
-        db_session = CortexStorage().get_session()
+    def get_consumers_by_environment(
+        environment_id: UUID,
+        storage: Optional[CortexStorage] = None
+    ) -> List[Consumer]:
+        """
+        Get all consumers for an environment.
+        
+        Args:
+            environment_id: Environment ID to get consumers for
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            List of consumer objects
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             # Verify environment exists
-            EnvironmentCRUD.get_environment(environment_id)
+            EnvironmentCRUD.get_environment(environment_id, storage=storage)
             
             db_consumers = db_session.query(ConsumerORM).filter(
                 ConsumerORM.environment_id == environment_id
@@ -110,8 +166,24 @@ class ConsumerCRUD(TSModel):
             db_session.close()
 
     @staticmethod
-    def update_consumer(consumer: Consumer) -> Consumer:
-        db_session = CortexStorage().get_session()
+    def update_consumer(
+        consumer: Consumer,
+        storage: Optional[CortexStorage] = None
+    ) -> Consumer:
+        """
+        Update an existing consumer.
+        
+        Args:
+            consumer: Consumer object with updated values
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Updated consumer object
+            
+        Raises:
+            ConsumerDoesNotExistError: If consumer not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             # Get existing consumer
             db_consumer = db_session.query(ConsumerORM).filter(
@@ -158,8 +230,18 @@ class ConsumerCRUD(TSModel):
             db_session.close()
 
     @staticmethod
-    def delete_consumer(consumer_id: UUID) -> bool:
-        db_session = CortexStorage().get_session()
+    def delete_consumer(consumer_id: UUID, storage: Optional[CortexStorage] = None) -> bool:
+        """
+        Delete a consumer.
+        
+        Args:
+            consumer_id: Consumer ID to delete
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            True if consumer was deleted, False otherwise
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             result = db_session.query(ConsumerORM).filter(
                 ConsumerORM.id == consumer_id

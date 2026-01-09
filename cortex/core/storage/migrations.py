@@ -10,9 +10,11 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 from cortex import migrations
+from sqlalchemy import text
 
 from cortex.core.config.execution_env import ExecutionEnv
 from cortex.core.storage.store import CortexStorage
+from cortex.core.types.databases import DataSourceTypes
 
 logger = logging.getLogger(__name__)
 
@@ -67,11 +69,36 @@ class MigrationManager:
         # Create Alembic config
         config = Config(str(alembic_ini_path))
         
-        # Set the database URL from storage
-        config.set_main_option('sqlalchemy.url', self.storage.db_url)
+        # Get database URL from storage
+        db_url = self.storage.db_url
+        
+        # ConfigParser uses % for interpolation, so we need to escape it by doubling %%
+        # This is required when URL contains URL-encoded special chars like %40 for @
+        db_url_escaped = db_url.replace('%', '%%')
+        
+        # Log the URL (without password) for debugging
+        if '@' in db_url:
+            parts = db_url.split('@')
+            safe_url = parts[0].split('://')[0] + '://***:***@' + '@'.join(parts[1:])
+        else:
+            safe_url = db_url
+        logger.info(f"MigrationManager: Using database URL: {safe_url}")
+        
+        # Use custom config key 'tenant_db_url' instead of 'sqlalchemy.url' to avoid Alembic's sanitization
+        # Alembic sanitizes 'sqlalchemy.url' which replaces passwords with ***
+        config.set_main_option('tenant_db_url', db_url_escaped)
+        
+        # Still set sqlalchemy.url for backward compatibility, but env.py will use tenant_db_url if available
+        config.set_main_option('sqlalchemy.url', db_url_escaped)
         
         # Set the script location to the alembic subdirectory
         config.set_main_option('script_location', str(migrations_dir / "alembic"))
+        
+        # If storage has a schema, configure Alembic to use schema-specific version table
+        if hasattr(self.storage, '_env') and hasattr(self.storage._env, '_schema') and self.storage._env._schema:
+            schema_name = self.storage._env._schema
+            # Set version table schema so Alembic uses the tenant schema for version tracking
+            config.set_main_option('version_table_schema', schema_name)
         
         return config
     
@@ -83,10 +110,24 @@ class MigrationManager:
     def get_current_revision(self) -> Optional[str]:
         """Get the current database revision."""
         try:
+            # Get version table schema if storage has a schema
+            version_table_schema = None
+            connect_args = {}
+            
+            if hasattr(self.storage, '_env') and hasattr(self.storage._env, '_schema') and self.storage._env._schema:
+                version_table_schema = self.storage._env._schema
+                # Set search_path in connect_args so it's applied at connection time
+                # This ensures Alembic reads from the correct schema's version table
+                if self.storage._env.db_type == DataSourceTypes.POSTGRESQL:
+                    connect_args["options"] = f"-csearch_path={version_table_schema},public"
+            
             # Always create a fresh connection to avoid caching issues
-            engine = create_engine(self.storage.db_url)
+            engine = create_engine(self.storage.db_url, connect_args=connect_args)
             with engine.connect() as connection:
-                context = MigrationContext.configure(connection)
+                context = MigrationContext.configure(
+                    connection=connection,
+                    opts={"version_table_schema": version_table_schema} if version_table_schema else {}
+                )
                 current_rev = context.get_current_revision()
             engine.dispose()  # Clean up the engine
             return current_rev

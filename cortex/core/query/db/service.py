@@ -13,9 +13,18 @@ from cortex.core.query.db.models import QueryHistoryORM
 class QueryHistoryCRUD(TSModel):
     
     @staticmethod
-    def get_query_log_by_id(query_id: UUID) -> Optional[QueryLog]:
-        """Get query log entry by ID."""
-        db_session = CortexStorage().get_session()
+    def get_query_log_by_id(query_id: UUID, storage: Optional[CortexStorage] = None) -> Optional[QueryLog]:
+        """
+        Get query log entry by ID.
+        
+        Args:
+            query_id: Query ID to retrieve
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            QueryLog object or None if not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_query_log = db_session.query(QueryHistoryORM).filter(
                 QueryHistoryORM.id == query_id
@@ -37,10 +46,26 @@ class QueryHistoryCRUD(TSModel):
         success: Optional[bool] = None,
         cache_mode: Optional[QueryCacheMode] = None,
         executed_after: Optional[datetime] = None,
-        executed_before: Optional[datetime] = None
+        executed_before: Optional[datetime] = None,
+        storage: Optional[CortexStorage] = None
     ) -> List[QueryLog]:
-        """Get recent query logs with optional filtering."""
-        db_session = CortexStorage().get_session()
+        """
+        Get recent query logs with optional filtering.
+        
+        Args:
+            limit: Maximum number of results to return
+            metric_id: Filter by metric ID
+            data_model_id: Filter by data model ID
+            success: Filter by success status
+            cache_mode: Filter by cache mode
+            executed_after: Filter by execution time (after)
+            executed_before: Filter by execution time (before)
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            List of QueryLog objects
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             query = db_session.query(QueryHistoryORM)
             
@@ -78,9 +103,18 @@ class QueryHistoryCRUD(TSModel):
             db_session.close()
 
     @staticmethod
-    def add_query_log(query_log: QueryLog) -> QueryLog:
-        """Create a new query log entry."""
-        db_session = CortexStorage().get_session()
+    def add_query_log(query_log: QueryLog, storage: Optional[CortexStorage] = None) -> QueryLog:
+        """
+        Create a new query log entry.
+        
+        Args:
+            query_log: QueryLog object to create
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Created QueryLog object
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_query_log = QueryHistoryORM(
                 id=query_log.id,
@@ -114,10 +148,22 @@ class QueryHistoryCRUD(TSModel):
     def get_execution_stats(
         metric_id: Optional[UUID] = None,
         data_model_id: Optional[UUID] = None,
-        time_range: Optional[str] = None
+        time_range: Optional[str] = None,
+        storage: Optional[CortexStorage] = None
     ) -> Dict[str, Any]:
-        """Get aggregated execution statistics."""
-        db_session = CortexStorage().get_session()
+        """
+        Get aggregated execution statistics.
+        
+        Args:
+            metric_id: Filter by metric ID
+            data_model_id: Filter by data model ID
+            time_range: Time range for filtering (1h, 24h, 7d, 30d)
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Dictionary of execution statistics
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             query = db_session.query(QueryHistoryORM)
             
@@ -185,10 +231,22 @@ class QueryHistoryCRUD(TSModel):
     def get_slow_queries(
         limit: Optional[int] = 10,
         time_range: Optional[str] = None,
-        threshold_ms: Optional[float] = 1000.0
+        threshold_ms: Optional[float] = 1000.0,
+        storage: Optional[CortexStorage] = None
     ) -> List[QueryLog]:
-        """Get slowest queries for performance analysis."""
-        db_session = CortexStorage().get_session()
+        """
+        Get slowest queries for performance analysis.
+        
+        Args:
+            limit: Maximum number of results to return
+            time_range: Time range for filtering (1h, 24h, 7d, 30d)
+            threshold_ms: Minimum duration in milliseconds
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            List of slow QueryLog objects
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             query = db_session.query(QueryHistoryORM).filter(
                 QueryHistoryORM.duration >= threshold_ms
@@ -231,9 +289,18 @@ class QueryHistoryCRUD(TSModel):
             db_session.close()
 
     @staticmethod
-    def clear_query_history(older_than: Optional[datetime] = None) -> int:
-        """Clear query history with optional time-based filtering."""
-        db_session = CortexStorage().get_session()
+    def clear_query_history(older_than: Optional[datetime] = None, storage: Optional[CortexStorage] = None) -> int:
+        """
+        Clear query history with optional time-based filtering.
+        
+        Args:
+            older_than: Delete only entries older than this datetime
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Number of entries deleted
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             query = db_session.query(QueryHistoryORM)
             

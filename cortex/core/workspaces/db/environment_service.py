@@ -17,8 +17,23 @@ from cortex.core.storage.store import CortexStorage
 class EnvironmentCRUD:
 
     @staticmethod
-    def get_environment_by_name_and_workspace(name: str, workspace_id: UUID) -> Optional[WorkspaceEnvironment]:
-        db_session = CortexStorage().get_session()
+    def get_environment_by_name_and_workspace(
+        name: str, 
+        workspace_id: UUID,
+        storage: Optional[CortexStorage] = None
+    ) -> Optional[WorkspaceEnvironment]:
+        """
+        Get environment by name and workspace ID.
+        
+        Args:
+            name: Environment name to search for
+            workspace_id: Workspace ID to filter by
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            WorkspaceEnvironment object or None if not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_environment = db_session.query(WorkspaceEnvironmentORM).filter(
                 WorkspaceEnvironmentORM.name == name,
@@ -33,16 +48,34 @@ class EnvironmentCRUD:
             db_session.close()
 
     @staticmethod
-    def add_environment(environment: WorkspaceEnvironment) -> WorkspaceEnvironment:
-        db_session = CortexStorage().get_session()
+    def add_environment(
+        environment: WorkspaceEnvironment,
+        storage: Optional[CortexStorage] = None
+    ) -> WorkspaceEnvironment:
+        """
+        Add a new environment to a workspace.
+        
+        Args:
+            environment: WorkspaceEnvironment object to create
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Created environment object
+            
+        Raises:
+            WorkspaceDoesNotExistError: If workspace not found
+            EnvironmentAlreadyExistsError: If environment already exists
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             # Check if workspace exists
-            WorkspaceCRUD.get_workspace(environment.workspace_id)
+            WorkspaceCRUD.get_workspace(environment.workspace_id, storage=storage)
 
             # Check if environment with same name exists in the workspace
             existing_environment = EnvironmentCRUD.get_environment_by_name_and_workspace(
                 environment.name,
-                environment.workspace_id
+                environment.workspace_id,
+                storage=storage
             )
             if existing_environment:
                 raise EnvironmentAlreadyExistsError(environment.name, environment.workspace_id)
@@ -74,11 +107,28 @@ class EnvironmentCRUD:
             db_session.close()
 
     @staticmethod
-    def get_environments_by_workspace(workspace_id: UUID) -> List[WorkspaceEnvironment]:
-        db_session = CortexStorage().get_session()
+    def get_environments_by_workspace(
+        workspace_id: UUID,
+        storage: Optional[CortexStorage] = None
+    ) -> List[WorkspaceEnvironment]:
+        """
+        Get all environments for a workspace.
+        
+        Args:
+            workspace_id: Workspace ID to get environments for
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            List of environment objects
+            
+        Raises:
+            WorkspaceDoesNotExistError: If workspace not found
+            NoEnvironmentsExistError: If no environments found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             # Check if workspace exists
-            WorkspaceCRUD.get_workspace(workspace_id)
+            WorkspaceCRUD.get_workspace(workspace_id, storage=storage)
 
             db_environments = db_session.query(WorkspaceEnvironmentORM).filter(
                 WorkspaceEnvironmentORM.workspace_id == workspace_id
@@ -92,8 +142,24 @@ class EnvironmentCRUD:
             db_session.close()
 
     @staticmethod
-    def get_environment(environment_id: UUID) -> WorkspaceEnvironment:
-        db_session = CortexStorage().get_session()
+    def get_environment(
+        environment_id: UUID,
+        storage: Optional[CortexStorage] = None
+    ) -> WorkspaceEnvironment:
+        """
+        Get environment by ID.
+        
+        Args:
+            environment_id: Environment ID to retrieve
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            WorkspaceEnvironment object
+            
+        Raises:
+            EnvironmentDoesNotExistError: If environment not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_environment = db_session.query(WorkspaceEnvironmentORM).filter(
                 WorkspaceEnvironmentORM.id == environment_id
@@ -107,8 +173,24 @@ class EnvironmentCRUD:
             db_session.close()
 
     @staticmethod
-    def update_environment(environment: WorkspaceEnvironment) -> WorkspaceEnvironment:
-        db_session = CortexStorage().get_session()
+    def update_environment(
+        environment: WorkspaceEnvironment,
+        storage: Optional[CortexStorage] = None
+    ) -> WorkspaceEnvironment:
+        """
+        Update an existing environment.
+        
+        Args:
+            environment: WorkspaceEnvironment object with updated values
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Updated environment object
+            
+        Raises:
+            EnvironmentDoesNotExistError: If environment not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_environment = db_session.query(WorkspaceEnvironmentORM).filter(
                 WorkspaceEnvironmentORM.id == environment.id
@@ -130,8 +212,21 @@ class EnvironmentCRUD:
             db_session.close()
 
     @staticmethod
-    def delete_environment(environment: WorkspaceEnvironment) -> bool:
-        db_session = CortexStorage().get_session()
+    def delete_environment(
+        environment: WorkspaceEnvironment,
+        storage: Optional[CortexStorage] = None
+    ) -> bool:
+        """
+        Delete an environment.
+        
+        Args:
+            environment: WorkspaceEnvironment object to delete
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            True if environment was deleted, False otherwise
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             result = db_session.query(WorkspaceEnvironmentORM).filter(
                 WorkspaceEnvironmentORM.id == environment.id

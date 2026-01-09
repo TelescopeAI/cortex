@@ -124,15 +124,35 @@ For more information on running migrations manually or troubleshooting migration
 
 #### Environment Configuration
 
-Key environment variables:
+Cortex uses `python-dotenv` to automatically load environment variables from `.env` files. This means you no longer need to manually source environment variables!
+
+**How it works:**
+1. Creates `local.env` in the project root with your configuration
+2. When you run the application, the environment variables are automatically loaded from `local.env`
+3. You can also specify a custom env file path using the `CORTEX_ENV_FILE_PATH` environment variable
+
+**Example local.env file:**
 ```bash
+# CORS Configuration
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://cortex.web.local,https://cortex.web.local
+
+# Execution Environment
+EXECUTION_ENV=local
+
 # Database configuration
-CORTEX_DB_TYPE=postgresql  # postgresql, sqlite
+CORTEX_DB_TYPE=postgresql  # postgresql, mysql, sqlite
 CORTEX_DB_HOST=localhost
 CORTEX_DB_PORT=5432
 CORTEX_DB_NAME=cortex
 CORTEX_DB_USERNAME=root
 CORTEX_DB_PASSWORD=password
+
+# Auto-migrations
+CORTEX_AUTO_APPLY_DB_MIGRATIONS=true
+
+# SQLite (only if CORTEX_DB_TYPE=sqlite)
+# CORTEX_DB_FILE=./cortex.db
+# CORTEX_DB_MEMORY=false
 
 # Cache configuration
 CORTEX_CACHE_ENABLED=true
@@ -140,12 +160,40 @@ CORTEX_CACHE_BACKEND=redis  # redis or memory
 CORTEX_CACHE_REDIS_URL=redis://localhost:6379
 
 # Pre-aggregations
-CORTEX_PREAGGREGATIONS_ENABLED=true
+CORTEX_PREAGGREGATIONS_ENABLED=false
 
 # API configuration
 API_BASE_URL=http://localhost:9002
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
 ```
+
+**Using a custom env file:**
+```bash
+# Use a specific env file
+CORTEX_ENV_FILE_PATH=/path/to/custom.env poetry run uvicorn cortex.api.main:app --reload
+
+# Or export for the shell session
+export CORTEX_ENV_FILE_PATH="$HOME/.cortex/dev.env"
+poetry run uvicorn cortex.api.main:app --reload
+```
+
+**Docker users:**
+Docker's `env_file` directive continues to work as before:
+```yaml
+# docker-compose.yml
+services:
+  server:
+    env_file:
+      - ./local.docker.env
+```
+
+**Required environment variables:**
+- `CORTEX_DB_TYPE` - Database type (postgresql, mysql, sqlite, duckdb)
+- `CORTEX_DB_HOST` - Database host (unless using SQLite)
+- `CORTEX_DB_PORT` - Database port (unless using SQLite)
+- `CORTEX_DB_NAME` - Database name
+- `CORTEX_DB_USERNAME` - Database username (unless using SQLite)
+- `CORTEX_DB_PASSWORD` - Database password (unless using SQLite)
+- `EXECUTION_ENV` - Execution environment (local, dev, staging, production)
 
 ### Quick Start - Creating Your First Semantic Model
 

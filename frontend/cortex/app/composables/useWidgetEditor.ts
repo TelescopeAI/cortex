@@ -275,6 +275,7 @@ export function useWidgetEditor(options: UseWidgetEditorOptions) {
     // Load metric details - handle both metric_id and embedded metric
     if (widget.metric_id && selectedEnvironmentId.value) {
       // Referenced metric - fetch from API
+      isEmbeddedMetric.value = false // Explicitly mark as non-embedded (referenced by ID)
       getMetric(widget.metric_id, selectedEnvironmentId.value).then(m => {
         if (m) {
           selectedMetric.value = m
@@ -347,6 +348,7 @@ export function useWidgetEditor(options: UseWidgetEditorOptions) {
   function onMetricSelect(metric: SemanticMetric) {
     form.metric_id = metric.id
     selectedMetric.value = metric
+    isEmbeddedMetric.value = false // Explicitly mark as non-embedded (referenced by ID)
     buildAvailableTablesFromMetric(metric)
     isDirty.value = true
   }

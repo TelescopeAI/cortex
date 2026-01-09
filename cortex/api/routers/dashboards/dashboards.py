@@ -23,7 +23,7 @@ from cortex.core.exceptions.dashboards import (
     DashboardViewDoesNotExistError, InvalidDefaultViewError,
     DashboardExecutionError, WidgetExecutionError
 )
-from cortex.core.services.metrics import MetricExecutionService
+from cortex.core.services.metrics.execution import MetricExecutionService
 from cortex.core.semantics.metrics.metric import SemanticMetric
 from cortex.core.types.dashboards import AxisDataType
 from cortex.core.dashboards.transformers import MetricExecutionResult

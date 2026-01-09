@@ -182,7 +182,7 @@ async function handleEditorSave(widgetData: Partial<DashboardWidget>) {
       const newWidget: any = {
         alias: generateAlias(widgetData.title || 'widget'),
         section_alias: props.section.alias,
-        metric_id: widgetData.metric_id || (widgetData as any).metric ? undefined : '',
+        metric_id: widgetData.metric_id || undefined,
         metric: (widgetData as any).metric || undefined,
         title: widgetData.title || 'New Widget',
         description: widgetData.description || '',

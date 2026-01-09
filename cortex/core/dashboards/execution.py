@@ -1,5 +1,5 @@
 import time
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from uuid import UUID
 
 from cortex.core.types.telescope import TSModel
@@ -9,11 +9,11 @@ from cortex.core.exceptions.dashboards import (
 )
 from cortex.core.dashboards.db.dashboard_service import DashboardCRUD
 from cortex.core.dashboards.transformers import (
-    DataTransformationService, StandardChartData
+    StandardChartData
 )
 from cortex.core.dashboards.mapping.factory import MappingFactory
 from cortex.core.dashboards.mapping.base import MappingValidationError
-from cortex.core.services.metrics import MetricExecutionService
+from cortex.core.services.metrics.execution import MetricExecutionService
 
 
 

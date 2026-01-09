@@ -15,8 +15,23 @@ from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
 class DataSourceCRUD:
 
     @staticmethod
-    def get_data_source_by_name_and_environment(name: str, environment_id: UUID) -> Optional[DataSource]:
-        db_session = CortexStorage().get_session()
+    def get_data_source_by_name_and_environment(
+        name: str,
+        environment_id: UUID,
+        storage: Optional[CortexStorage] = None
+    ) -> Optional[DataSource]:
+        """
+        Get data source by name and environment ID.
+        
+        Args:
+            name: Data source name to search for
+            environment_id: Environment ID to filter by
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            DataSource object or None if not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_data_source = db_session.query(DataSourceORM).filter(
                 DataSourceORM.name == name,
@@ -29,16 +44,33 @@ class DataSourceCRUD:
             db_session.close()
 
     @staticmethod
-    def add_data_source(data_source: DataSource) -> DataSource:
-        db_session = CortexStorage().get_session()
+    def add_data_source(
+        data_source: DataSource,
+        storage: Optional[CortexStorage] = None
+    ) -> DataSource:
+        """
+        Add a new data source to an environment.
+        
+        Args:
+            data_source: DataSource object to create
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Created data source object
+            
+        Raises:
+            DataSourceAlreadyExistsError: If data source already exists
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             # Check if environment exists
-            EnvironmentCRUD.get_environment(data_source.environment_id)
+            EnvironmentCRUD.get_environment(data_source.environment_id, storage=storage)
 
             # Check if data source with same name exists in the environment
             existing_source = DataSourceCRUD.get_data_source_by_name_and_environment(
                 data_source.name,
-                data_source.environment_id
+                data_source.environment_id,
+                storage=storage
             )
             if existing_source:
                 raise DataSourceAlreadyExistsError(data_source.name, data_source.environment_id)
@@ -72,8 +104,24 @@ class DataSourceCRUD:
             db_session.close()
 
     @staticmethod
-    def get_data_source(data_source_id: UUID) -> DataSource:
-        db_session = CortexStorage().get_session()
+    def get_data_source(
+        data_source_id: UUID,
+        storage: Optional[CortexStorage] = None
+    ) -> DataSource:
+        """
+        Get data source by ID.
+        
+        Args:
+            data_source_id: Data source ID to retrieve
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            DataSource object
+            
+        Raises:
+            DataSourceDoesNotExistError: If data source not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_data_source = db_session.query(DataSourceORM).filter(
                 DataSourceORM.id == data_source_id
@@ -85,11 +133,24 @@ class DataSourceCRUD:
             db_session.close()
 
     @staticmethod
-    def get_data_sources_by_environment(environment_id: UUID) -> List[DataSource]:
-        db_session = CortexStorage().get_session()
+    def get_data_sources_by_environment(
+        environment_id: UUID,
+        storage: Optional[CortexStorage] = None
+    ) -> List[DataSource]:
+        """
+        Get all data sources for an environment.
+        
+        Args:
+            environment_id: Environment ID to get data sources for
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            List of data source objects
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             # Verify environment exists
-            EnvironmentCRUD.get_environment(environment_id)
+            EnvironmentCRUD.get_environment(environment_id, storage=storage)
 
             db_data_sources = db_session.query(DataSourceORM).filter(
                 DataSourceORM.environment_id == environment_id
@@ -99,8 +160,24 @@ class DataSourceCRUD:
             db_session.close()
 
     @staticmethod
-    def update_data_source(data_source: DataSource) -> DataSource:
-        db_session = CortexStorage().get_session()
+    def update_data_source(
+        data_source: DataSource,
+        storage: Optional[CortexStorage] = None
+    ) -> DataSource:
+        """
+        Update an existing data source.
+        
+        Args:
+            data_source: DataSource object with updated values
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            Updated data source object
+            
+        Raises:
+            DataSourceDoesNotExistError: If data source not found
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             db_data_source = db_session.query(DataSourceORM).filter(
                 DataSourceORM.id == data_source.id
@@ -142,8 +219,21 @@ class DataSourceCRUD:
             db_session.close()
 
     @staticmethod
-    def delete_data_source(data_source_id: UUID) -> bool:
-        db_session = CortexStorage().get_session()
+    def delete_data_source(
+        data_source_id: UUID,
+        storage: Optional[CortexStorage] = None
+    ) -> bool:
+        """
+        Delete a data source.
+        
+        Args:
+            data_source_id: Data source ID to delete
+            storage: Optional CortexStorage instance. If not provided, uses singleton.
+            
+        Returns:
+            True if data source was deleted, False otherwise
+        """
+        db_session = (storage or CortexStorage()).get_session()
         try:
             result = db_session.query(DataSourceORM).filter(
                 DataSourceORM.id == data_source_id

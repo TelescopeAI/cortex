@@ -27,7 +27,7 @@ def get_foreign_keys_schema(table) -> List[ForeignKeySchema]:
 
 
 def get_sql_schema(database_url: str, include_views: bool = False) -> DatabaseSchema:
-    engine = create_engine(database_url, echo=True)
+    engine = create_engine(database_url, echo=False)
     metadata = MetaData()
     # print("Starting metadata reflection")
     if include_views:

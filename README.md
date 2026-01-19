@@ -32,8 +32,16 @@ This platform is designed to abstract complex data sources into a business-frien
 - **Data Source Integration**
   - PostgreSQL, MySQL, BigQuery with persistent connectors
   - SQLite for in-memory analytics
+  - Spreadsheet support (CSV, Google Sheets) - see [Spreadsheet Configuration](cortex/core/connectors/api/sheets/README.md)
   - Extensible factory pattern for adding new data sources
   - Schema introspection and humanized schema generation
+
+- **Background Jobs & Scalable Storage**
+  - Tiered storage architecture: Local filesystem, Google Cloud Storage (GCS), S3 (planned)
+  - Automatic LRU cache management for SQLite databases (10GB default, configurable)
+  - Scheduled cache eviction every 2 hours via Plombery job scheduler
+  - Separate API and Jobs server processes for independent scaling
+  - Unified launcher or separate service deployment modes
 
 - **Dashboard & Visualization Engine**
   - Multi-view dashboard system with executive, operational, and tactical types
@@ -77,12 +85,15 @@ pip install telescope-cortex
 # Install with API extras
 pip install telescope-cortex[api]
 
+# Install with GCS support (for cloud file storage)
+pip install telescope-cortex[api,gcloud]
+
 # Set up environment variables
 export CORTEX_AUTO_APPLY_DB_MIGRATIONS=true
 # Configure your database settings (see Environment Configuration below)
 
 # Start the API server
-python -m cortex.api
+python -m cortex
 ```
 
 #### Local Development Installation
@@ -97,6 +108,9 @@ poetry install --only main
 # Install with all dependencies including FastAPI
 poetry install --with api
 
+# Install with GCS support (for cloud file storage)
+poetry install --with api --extras gcloud
+
 # Set up environment variables
 cp local.env .env
 # Edit .env with your configuration
@@ -104,8 +118,14 @@ cp local.env .env
 # Enable auto-migration for development
 export CORTEX_AUTO_APPLY_DB_MIGRATIONS=true
 
-# Start the API server
-poetry run uvicorn cortex.api.main:app --reload --host 0.0.0.0 --port 9002
+# Start the unified app launcher (API + Jobs server)
+poetry run python -m cortex
+
+# OR start just the API server
+poetry run python -m cortex.api
+
+# OR start just the Jobs server
+poetry run python -m cortex.jobs
 ```
 
 #### Database Migrations & Onboarding
@@ -166,6 +186,24 @@ CORTEX_PREAGGREGATIONS_ENABLED=false
 
 # API configuration
 API_BASE_URL=http://localhost:9002
+
+# File Storage & Spreadsheet Configuration
+CORTEX_FILE_STORAGE_TYPE=local  # or 'gcs' for Google Cloud Storage
+CORTEX_FILE_STORAGE_INPUT_DIR=./.cortex/storage/inputs
+CORTEX_FILE_STORAGE_SQLITE_DIR=./.cortex/storage/sqlite
+CORTEX_FILE_STORAGE_CACHE_DIR=./.cortex/cache/sqlite
+CORTEX_FILE_STORAGE_CACHE_MAX_SIZE_GB=10
+
+# GCS Configuration (only if CORTEX_FILE_STORAGE_TYPE=gcs)
+CORTEX_FILE_STORAGE_GCS_BUCKET=my-cortex-bucket
+CORTEX_FILE_STORAGE_GCS_PREFIX=cortex-files
+
+# Jobs Server Configuration
+CORTEX_ENABLE_JOBS=true  # Enable background jobs (auto-enabled for GCS)
+CORTEX_API_HOST=0.0.0.0
+CORTEX_API_PORT=9002
+CORTEX_JOBS_HOST=0.0.0.0
+CORTEX_JOBS_PORT=9003
 ```
 
 **Using a custom env file:**
@@ -277,6 +315,64 @@ See the [Database Migrations Guide](cortex/migrations/MIGRATION_GUIDE.md) for:
 - Migration file format and best practices
 - Troubleshooting and performance considerations
 - Security and audit considerations
+
+### Starting the Application
+
+#### Using the Unified Launcher (Recommended for Development)
+
+The unified launcher starts both the API and Jobs servers for you:
+
+```bash
+# Start both API and Jobs servers
+python -m cortex
+
+# Start only API server (default)
+python -m cortex
+
+# Start only Jobs server
+python -m cortex.jobs
+
+# Enable jobs explicitly
+CORTEX_ENABLE_JOBS=true python -m cortex
+
+# Auto-enable jobs with GCS storage
+CORTEX_FILE_STORAGE_TYPE=gcs python -m cortex
+```
+
+#### Production Deployment (Separate Services)
+
+For production, deploy each server separately for independent scaling:
+
+```bash
+# Terminal 1: Start API server
+python -m cortex.api
+
+# Terminal 2: Start Jobs server
+CORTEX_ENABLE_JOBS=true python -m cortex.jobs
+```
+
+#### File Storage Configuration
+
+Configure where uploaded files and SQLite databases are stored:
+
+```bash
+# Local storage (default)
+export CORTEX_FILE_STORAGE_TYPE=local
+export CORTEX_FILE_STORAGE_INPUT_DIR=./.cortex/storage/inputs
+export CORTEX_FILE_STORAGE_SQLITE_DIR=./.cortex/storage/sqlite
+
+# Google Cloud Storage
+export CORTEX_FILE_STORAGE_TYPE=gcs
+export CORTEX_FILE_STORAGE_GCS_BUCKET=my-cortex-bucket
+export CORTEX_FILE_STORAGE_GCS_PREFIX=cortex-files
+
+# Cache configuration
+export CORTEX_FILE_STORAGE_CACHE_DIR=./.cortex/cache/sqlite
+export CORTEX_FILE_STORAGE_CACHE_MAX_SIZE_GB=10
+export CORTEX_FILE_STORAGE_CACHE_TTL_HOURS=168
+```
+
+For more details, see [Spreadsheet Data Sources Configuration](cortex/core/connectors/api/sheets/README.md).
 
 ### Quick Start - Creating Your First Semantic Model
 
@@ -497,6 +593,16 @@ cortex/
 │   │   ├── services/         # Business logic services
 │   │   ├── storage/          # Database storage
 │   │   └── workspaces/       # Multi-tenancy
+│   ├── jobs/                 # Background jobs and task scheduling
+│   │   ├── cache/            # Cache management for file storage
+│   │   │   └── manager.py    # LRU cache manager with GCS backing
+│   │   ├── tasks/            # Scheduled tasks
+│   │   │   └── cache_eviction.py  # Cache eviction task (every 2 hours)
+│   │   ├── registry.py       # Plombery pipeline registration
+│   │   ├── server.py         # Jobs server launcher
+│   │   └── __main__.py       # Direct jobs server entry point
+│   ├── app.py                # Unified app launcher (API + Jobs)
+│   ├── __main__.py           # Top-level entry point
 │   └── migrations/           # Alembic database migrations
 │       ├── alembic/          # Alembic configuration
 │       │   ├── versions/     # Migration files
@@ -555,15 +661,23 @@ For questions and support:
 - Email: [help@jointelescope.com](mailto:help@jointelescope.com)
 - Documentation: [docs.jointelescope.com](https://docs.jointelescope.com)
 - [Database Migrations Guide](cortex/migrations/MIGRATION_GUIDE.md)
+- [Spreadsheet Data Sources Configuration](cortex/core/connectors/api/sheets/README.md)
 
 ## Roadmap
 
-Upcoming features:
-- [ ] File-based data sources (CSV, Excel, Google Sheets)
+Upcoming features and completed items:
+
+**Completed:**
+- [x] File-based data sources (CSV, Excel, Google Sheets) - [Configuration Guide](cortex/core/connectors/api/sheets/README.md)
+- [x] Tiered storage architecture (Local, GCS, S3-ready)
+- [x] Background jobs and cache management via Plombery
+
+**Planned:**
 - [ ] Advanced AI agent integration
 - [ ] Natural language query interface
 - [ ] User authentication and authorization system
 - [ ] Embedded analytics SDK
 - [ ] Mobile-responsive dashboard views
 - [ ] Multi-database joins
+- [ ] S3 storage backend support
 

@@ -7,6 +7,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DatabaseError
 from sqlalchemy.orm import sessionmaker
 
+from cortex.core.connectors.databases.SQL.Schema import get_sql_schema
 from cortex.core.connectors.databases.clients.base import DatabaseClient
 from cortex.core.connectors.databases.credentials.SQL.common import SQLiteCredentials
 from cortex.core.exceptions.SQLClients import CSQLInvalidQuery
@@ -87,12 +88,7 @@ class SQLiteClient(DatabaseClient):
             result.close()
 
     def get_schema(self):
-        inspector = inspect(self._ensure_engine())
-        tables = []
-        for table_name in inspector.get_table_names():
-            columns = inspector.get_columns(table_name)
-            tables.append({"name": table_name, "columns": columns})
-        return tables
+        return get_sql_schema(self._build_uri())
 
     def get_table_names(self, schema_name: Optional[str] = None) -> list[str]:
         inspector = inspect(self._ensure_engine())

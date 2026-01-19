@@ -20,6 +20,7 @@ class DataSourceTypes(str, Enum):
     MONGODB = "mongodb"
     DYNAMODB = "dynamodb"
     COUCHBASE = "couchbase"
+    SPREADSHEET = "spreadsheet"
 
 
 class DataSourceCatalog(str, Enum):

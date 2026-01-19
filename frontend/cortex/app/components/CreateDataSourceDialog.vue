@@ -95,6 +95,12 @@
                     <span>Redshift</span>
                   </div>
                 </SelectItem>
+                <SelectItem value="spreadsheet">
+                  <div class="flex items-center gap-2">
+                    <FileSpreadsheet class="w-4 h-4" />
+                    <span>Spreadsheet (CSV/GSheets)</span>
+                  </div>
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -102,10 +108,62 @@
         
         <!-- Dynamic Configuration Section -->
         <div v-if="form.source_type" class="space-y-2">
-          <Label class="text-base font-medium">Database Configuration</Label>
+          <Label class="text-base font-medium">
+            {{ form.source_type === 'spreadsheet' ? 'Spreadsheet Configuration' : 'Database Configuration' }}
+          </Label>
           <div class="border rounded-lg p-4 bg-muted/50">
+            <div v-if="form.source_type === 'spreadsheet'" class="space-y-4">
+              <div class="space-y-2">
+                <Label for="provider">Provider Type</Label>
+                <select 
+                  id="provider"
+                  v-model="form.config.provider_type" 
+                  class="w-full px-3 py-2 border rounded-md bg-background"
+                >
+                  <option value="csv">CSV Files (Uploaded)</option>
+                  <option value="gsheets">Google Sheets</option>
+                </select>
+              </div>
+
+              <div v-if="form.config.provider_type === 'csv'" class="space-y-2">
+                <Label for="file-select">Select File</Label>
+                <select 
+                  id="file-select"
+                  v-model="form.config.file_id" 
+                  class="w-full px-3 py-2 border rounded-md bg-background"
+                  :disabled="loadingFiles"
+                  required
+                >
+                  <option value="">
+                    {{ loadingFiles ? 'Loading files...' : 'Choose a file' }}
+                  </option>
+                  <option v-for="file in uploadedFiles" :key="file.id" :value="file.id">
+                    {{ file.name }}.{{ file.extension }}
+                  </option>
+                </select>
+                <p v-if="uploadedFiles.length === 0 && !loadingFiles" class="text-xs text-muted-foreground">
+                  No files uploaded yet. Please upload files first using the "Manage Files" option.
+                </p>
+              </div>
+
+              <div v-if="form.config.provider_type === 'gsheets'" class="space-y-4">
+                <div class="space-y-2">
+                  <Label for="spreadsheet-id">Spreadsheet ID</Label>
+                  <Input
+                    id="spreadsheet-id"
+                    v-model="form.config.spreadsheet_id"
+                    placeholder="Enter Google Sheets ID"
+                    required
+                  />
+                </div>
+                <p class="text-xs text-muted-foreground">
+                  Find it in the URL: docs.google.com/spreadsheets/d/<strong>SPREADSHEET_ID</strong>/edit
+                </p>
+              </div>
+            </div>
+
             <PostgreSQLConfig 
-              v-if="form.source_type === 'postgresql'"
+              v-else-if="form.source_type === 'postgresql'"
               v-model="form.config"
               :disabled="isLoading"
             />
@@ -197,7 +255,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
 import { useDark } from '@vueuse/core'
-import { ChevronDown } from 'lucide-vue-next'
+import { ChevronDown, FileSpreadsheet } from 'lucide-vue-next'
 
 // Define emits
 const emit = defineEmits<{
@@ -231,9 +289,11 @@ import MySQLConfig from '~/components/data-sources/MySQLConfig.vue'
 import SQLiteConfig from '~/components/data-sources/SQLiteConfig.vue'
 import BigQueryConfig from '~/components/data-sources/BigQueryConfig.vue'
 import CommonSQLConfig from '~/components/data-sources/CommonSQLConfig.vue'
+import { useSpreadsheets } from '~/composables/useSpreadsheets'
 
 const { createDataSource } = useDataSources()
 const { selectedEnvironmentId } = useEnvironments()
+const { discoverSheets, listUploadedFiles } = useSpreadsheets()
 const { 
   generateAlias, 
   validateAlias, 
@@ -255,14 +315,17 @@ const isDark = useDark({
 const open = ref(false)
 const isLoading = ref(false)
 const nameManuallyEdited = ref(false)
+const uploadedFiles = ref<Array<{ id: string; name: string; extension: string; size: number; mime_type: string }>>([])
+const loadingFiles = ref(false)
 
 const form = reactive({
   name: '',
   alias: '',
   description: '',
   source_catalog: 'DATABASE' as 'DATABASE' | 'API' | 'FILE',
-  source_type: '' as 'postgresql' | 'mysql' | 'sqlite' | 'oracle' | 'bigquery' | 'snowflake' | 'redshift',
-  config: {} as any
+  source_type: '' as 'postgresql' | 'mysql' | 'sqlite' | 'oracle' | 'bigquery' | 'snowflake' | 'redshift' | 'spreadsheet',
+  config: {} as any,
+  discoveredSheets: [] as import('~/types').SheetMetadata[],
 })
 
 // Map source types to icon names
@@ -409,9 +472,32 @@ watch(() => form.source_type, (newSourceType, oldSourceType) => {
     // For SQL databases, update dialect to match new source type
     if (['postgresql', 'mysql', 'sqlite', 'oracle', 'snowflake', 'redshift'].includes(newSourceType)) {
       form.config.dialect = newSourceType
+    } else if (newSourceType === 'spreadsheet') {
+      // For spreadsheet, remove dialect
+      delete form.config.dialect
     } else {
       // For non-SQL databases (like BigQuery), remove dialect if it exists
       delete form.config.dialect
+    }
+  }
+})
+
+// Load uploaded files when CSV provider is selected
+watch(() => form.config.provider_type, async (newProviderType) => {
+  if (newProviderType === 'csv' && selectedEnvironmentId.value) {
+    loadingFiles.value = true
+    try {
+      const files = await listUploadedFiles(selectedEnvironmentId.value)
+      uploadedFiles.value = files
+      // Clear the file_id if no files available
+      if (files.length === 0) {
+        form.config.file_id = ''
+      }
+    } catch (error) {
+      console.error('Failed to load uploaded files:', error)
+      uploadedFiles.value = []
+    } finally {
+      loadingFiles.value = false
     }
   }
 })
@@ -439,6 +525,13 @@ const isConfigValid = computed(() => {
       return config.host && config.port && config.username && config.password && config.database && config.dialect
     case 'sqlite':
       return config.database && config.dialect
+    case 'spreadsheet':
+      if (config.provider_type === 'csv') {
+        return config.file_id
+      } else if (config.provider_type === 'gsheets') {
+        return config.spreadsheet_id
+      }
+      return false
     case 'bigquery':
       return config.project_id && config.service_account_details &&
              Object.keys(config.service_account_details).length > 0
@@ -476,6 +569,12 @@ function getDefaultConfig(sourceType: string): any {
         database: '',
         dialect: 'sqlite'
       }
+    case 'spreadsheet':
+      return {
+        provider_type: 'csv',
+        file_id: '',
+        spreadsheet_id: '',
+      }
     case 'bigquery':
       return {
         project_id: '',
@@ -483,7 +582,6 @@ function getDefaultConfig(sourceType: string): any {
         service_account_details: {},
         serviceAccountJson: ''
       }
-      // Note: BigQuery doesn't need a dialect field
     case 'oracle':
       return {
         host: '',

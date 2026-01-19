@@ -15,7 +15,7 @@ import { Skeleton } from '~/components/ui/skeleton';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '~/components/ui/dropdown-menu';
 import CreateDataSourceDialog from '~/components/CreateDataSourceDialog.vue';
 import ExpandableSearch from '~/components/ExpandableSearch.vue';
-import { Calendar, Database, Globe, FileText, Settings, MoreHorizontal, Eye, Edit, Trash2 } from 'lucide-vue-next';
+import { Calendar, Database, Globe, FileText, Settings, MoreHorizontal, Eye, Edit, Trash2, FileSpreadsheet } from 'lucide-vue-next';
 import { Button } from '~/components/ui/button';
 
 const searchQuery = ref('');
@@ -105,6 +105,11 @@ const filteredDataSources = computed(() => {
           :expand-on-focus="true"
           expand-to="full"
         />
+        
+        <Button variant="outline" size="sm" @click="router.push('/data/sources/files')">
+          <FileSpreadsheet class="w-4 h-4 mr-2" />
+          Manage Files
+        </Button>
         
         <CreateDataSourceDialog 
           v-if="selectedEnvironmentId" 

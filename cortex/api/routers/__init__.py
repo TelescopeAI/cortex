@@ -2,6 +2,7 @@ from typing import List
 
 
 from cortex.api.docs.main import DocsRouter
+from cortex.api.routers.admin.cache import AdminCacheRouter
 from cortex.api.routers.consumers.consumers import ConsumersRouter
 from cortex.api.routers.consumers.groups import ConsumerGroupsRouter
 from cortex.api.routers.data.models import DataModelsRouter
@@ -25,7 +26,10 @@ ROUTES: List[dict] = [
     {"router": DashboardRouter, "enabled": True, "internal": False},
     {"router": QueryHistoryRouter, "enabled": True, "internal": False},
     {"router": PreAggregationsRouter, "enabled": True, "internal": False},
+    {"router": AdminCacheRouter, "enabled": True, "internal": True},  # Admin endpoints, hidden from public API
 ]
 
 ENABLED_ROUTES = list(filter(lambda route: route["enabled"] is True, ROUTES))
 PUBLIC_ROUTES = list(filter(lambda route: route["internal"] is False, ENABLED_ROUTES))
+# All enabled routes (includes internal ones like admin)
+ALL_ENABLED_ROUTES = ENABLED_ROUTES

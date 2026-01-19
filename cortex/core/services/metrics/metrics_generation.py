@@ -15,7 +15,7 @@ from uuid import UUID
 
 from cortex.core.data.db.model_service import DataModelService
 from cortex.core.data.db.source_service import DataSourceCRUD
-from cortex.core.services.data_sources import DataSourceSchemaService
+from cortex.core.services.data.sources.schemas import DataSourceSchemaService
 from cortex.core.semantics.conditions import ComparisonOperator, Condition, WhenClause
 from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.filters import SemanticFilter

@@ -1,6 +1,7 @@
 from cortex.core.query.engine.base import BaseQueryGenerator
 from cortex.core.query.engine.modules.sql.postgres import PostgresQueryGenerator
 from cortex.core.query.engine.modules.sql.mysql import MySQLQueryGenerator
+from cortex.core.query.engine.modules.sql.sqlite import SQLiteQueryGenerator
 from cortex.core.semantics.metrics.metric import SemanticMetric
 from cortex.core.types.databases import DataSourceTypes
 
@@ -22,6 +23,9 @@ class QueryGeneratorFactory:
             return PostgresQueryGenerator(metric=metric, source_type=source_type)
         elif source_type == DataSourceTypes.MYSQL:
             return MySQLQueryGenerator(metric=metric, source_type=source_type)
+        elif source_type in {DataSourceTypes.SQLITE, DataSourceTypes.SPREADSHEET}:
+            # SPREADSHEET type uses SQLite query generator
+            return SQLiteQueryGenerator(metric=metric, source_type=source_type)
         # elif dialect == "bigquery":
         #     return BigQueryGenerator(metric=metric, dialect=dialect)
         # Add more database types as needed

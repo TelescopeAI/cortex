@@ -98,11 +98,18 @@ if not version_locations:
         # Path is: cortex/cortex/migrations/alembic/env.py
         # parents[2] gets us to: cortex/cortex/migrations/
         migrations_root = Path(__file__).resolve().parents[2]
-        versions_dir = migrations_root / 'alembic' / 'versions' / db_type
+        versions_dir = migrations_root / 'migrations' / 'alembic' / 'versions' / db_type
     
     if versions_dir.exists():
-        config.set_main_option('version_locations', str(versions_dir))
+        version_locations_str = str(versions_dir)
+        config.set_main_option('version_locations', version_locations_str)
         print(f"Auto-detected migration location: {versions_dir}")
+        
+        # CRITICAL: Update the ScriptDirectory object's version_locations
+        # The ScriptDirectory was already created before env.py runs, so we need to
+        # update it with the database-specific path
+        if context.script is not None:
+            context.script.version_locations = [versions_dir]
     else:
         print(f"Warning: Version location does not exist: {versions_dir}")
 
@@ -174,11 +181,13 @@ def run_migrations_online():
     
     # Get the database URL from custom config key to avoid Alembic's sanitization
     # Alembic sanitizes 'sqlalchemy.url' which replaces passwords with ***
-    # Use 'tenant_db_url' if set (by MigrationManager), otherwise fall back to 'sqlalchemy.url'
+    # Use 'tenant_db_url' if set (by MigrationManager), otherwise build fresh from CortexStorage
     db_url_config = config.get_main_option('tenant_db_url', None)
     if not db_url_config:
-        # Fallback to sqlalchemy.url for backward compatibility
-        db_url_config = config.get_main_option('sqlalchemy.url')
+        # CRITICAL: Do NOT fall back to config.get_main_option('sqlalchemy.url')
+        # because Alembic automatically sanitizes passwords to '***' in the config.
+        # Instead, rebuild the URL fresh from CortexStorage() to get the real password
+        db_url_config = CortexStorage().db_url
     
     # Log the URL being used (without password) for debugging
     if db_url_config and '@' in db_url_config:

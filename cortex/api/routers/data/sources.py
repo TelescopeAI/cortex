@@ -129,8 +129,9 @@ async def create_data_source(data_source_data: DataSourceCreateRequest):
                     'sqlite_path': sqlite_path,
                 }
                 
-                # Change source_type to sqlite since we now have a SQLite DB
-                source_type = 'sqlite'
+                # Keep source_type as spreadsheet (user-facing type)
+                # Internally, SQLite is used as the storage backend
+                source_type = 'spreadsheet'
         
         data_source = DataSource(
             environment_id=data_source_data.environment_id,
@@ -285,7 +286,7 @@ async def ping_data_source(data_source_id: UUID):
         config = data_source.config
         
         # Add dialect for SQL databases if not present
-        if data_source.source_type in [DataSourceTypes.POSTGRESQL, DataSourceTypes.MYSQL, DataSourceTypes.ORACLE, DataSourceTypes.SQLITE]:
+        if data_source.source_type in [DataSourceTypes.POSTGRESQL, DataSourceTypes.MYSQL, DataSourceTypes.ORACLE, DataSourceTypes.SQLITE, DataSourceTypes.SPREADSHEET]:
             config["dialect"] = data_source.source_type
         
         # Create database client and test connection
@@ -351,7 +352,7 @@ async def get_data_source_schema_humanized(data_source_id: UUID):
         config = data_source.config.copy()
         
         # Add dialect for SQL databases if not present
-        if data_source.source_type in [DataSourceTypes.POSTGRESQL, DataSourceTypes.MYSQL, DataSourceTypes.ORACLE, DataSourceTypes.SQLITE]:
+        if data_source.source_type in [DataSourceTypes.POSTGRESQL, DataSourceTypes.MYSQL, DataSourceTypes.ORACLE, DataSourceTypes.SQLITE, DataSourceTypes.SPREADSHEET]:
             config["dialect"] = data_source.source_type
         
         # Create database client and get schema
@@ -570,10 +571,10 @@ async def refresh_spreadsheet_source(data_source_id: UUID):
         data_source = DataSourceCRUD.get_data_source(data_source_id)
         
         # Check if it's a spreadsheet type
-        if data_source.source_type != DataSourceTypes.SQLITE:
+        if data_source.source_type != DataSourceTypes.SPREADSHEET:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Data source is not a spreadsheet (must be SQLITE type)"
+                detail="Data source is not a spreadsheet (must be SPREADSHEET type)"
             )
         
         provider_type = data_source.config.get("provider_type")

@@ -120,7 +120,7 @@ async def create_metric(metric_data: MetricCreateRequest):
                 config = data_source.config
                 
                 # Add dialect for SQL databases if not present
-                if data_source.source_type in [DataSourceTypes.POSTGRESQL, DataSourceTypes.MYSQL, DataSourceTypes.ORACLE, DataSourceTypes.SQLITE]:
+                if data_source.source_type in [DataSourceTypes.POSTGRESQL, DataSourceTypes.MYSQL, DataSourceTypes.ORACLE, DataSourceTypes.SQLITE, DataSourceTypes.SPREADSHEET]:
                     config["dialect"] = data_source.source_type
                 
                 # Create database client and get schema
@@ -326,7 +326,7 @@ async def update_metric(metric_id: UUID, metric_data: MetricUpdateRequest):
                         config = data_source.config
                         
                         # Add dialect for SQL databases if not present
-                        if data_source.source_type in [DataSourceTypes.POSTGRESQL, DataSourceTypes.MYSQL, DataSourceTypes.ORACLE, DataSourceTypes.SQLITE]:
+                        if data_source.source_type in [DataSourceTypes.POSTGRESQL, DataSourceTypes.MYSQL, DataSourceTypes.ORACLE, DataSourceTypes.SQLITE, DataSourceTypes.SPREADSHEET]:
                             config["dialect"] = data_source.source_type
                         
                         # Create database client and get schema

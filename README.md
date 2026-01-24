@@ -154,7 +154,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Attribution
 
-Cortex was inspired by [Cube's Semantic Layer](https://cube.dev) and [Metabase](https://metabase.com). We built upon their work to create a lightweight, Python-focused analytics platform.
+Cortex was inspired by [Cube's Semantic Layer](https://cube.dev) and [Metabase](https://metabase.com). We built upon their work to create a lightweight analytics platform.
 
 ## Support
 

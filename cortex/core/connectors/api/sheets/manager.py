@@ -1,6 +1,6 @@
 from typing import Optional, List, Dict, Any
 from uuid import UUID
-
+from datetime import datetime
 from cortex.core.connectors.api.sheets.cache import CortexFileStorageCacheManager
 from cortex.core.connectors.api.sheets.config import get_sheets_config
 from cortex.core.connectors.api.sheets.converter import CortexSQLiteConverter
@@ -147,17 +147,21 @@ class CortexSpreadsheetManager:
         
         # Convert CSVs to SQLite tables
         table_mappings = converter.convert_from_csv_data(csv_data, sheets_to_download)
-        
+
         # Save SQLite to storage backend (uploads to GCS if using GCS backend)
         # The converter creates a local SQLite file, we need to save it to the backend storage
         saved_sqlite_path = self.storage_backend.save_sqlite(self.source_id, sqlite_path)
-        
+
         # Compute hashes for refresh tracking
         table_hashes = {}
         for original_name, safe_name in table_mappings.items():
             hash_val = converter.get_table_hash(safe_name)
             table_hashes[original_name] = hash_val
             self.refresh_tracker.update_table_hash(original_name, hash_val)
+
+        # Ensure last_synced is set even if no tables were processed
+        if self.refresh_tracker.last_synced is None:
+            self.refresh_tracker.last_synced = datetime.utcnow().isoformat()
         
         # Build updated config
         updated_config = config.copy()
@@ -250,7 +254,11 @@ class CortexSpreadsheetManager:
         
         # Get unchanged tables
         unchanged_tables = [s for s in selected_sheets if s not in tables_to_refresh]
-        
+
+        # Ensure last_synced is set
+        if self.refresh_tracker.last_synced is None:
+            self.refresh_tracker.last_synced = datetime.utcnow().isoformat()
+
         # Update config
         updated_config = config.copy()
         updated_config.update({

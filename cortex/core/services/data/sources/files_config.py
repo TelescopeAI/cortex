@@ -8,15 +8,56 @@ especially useful when Cortex is used as a library in other codebases.
 import contextvars
 import logging
 from pathlib import Path
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, Dict
 from uuid import UUID
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 
 from cortex.core.types.telescope import TSModel
 from cortex.core.connectors.api.sheets.config import get_sheets_config
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Configuration Models for Path Generators and Hooks
+# ============================================================================
+
+
+class UploadPathGeneratorConfig(TSModel):
+    """Configuration passed to upload path generators"""
+    workspace_id: UUID
+    environment_id: UUID
+    filename: str  # Without extension
+    extension: str
+    source_id: Optional[str] = None
+    base_storage_path: str  # From get_sheets_config()
+    file_size: Optional[int] = None  # Optional metadata
+    mime_type: Optional[str] = None
+
+
+class SqlitePathGeneratorConfig(TSModel):
+    """Configuration passed to SQLite path generators"""
+    workspace_id: UUID
+    environment_id: UUID
+    source_id: str
+    base_storage_path: str  # From get_sheets_config()
+
+
+class HookInvokerConfig(TSModel):
+    """Configuration passed to lifecycle hooks"""
+    workspace_id: UUID
+    environment_id: UUID
+    filename: str  # Display name with extension
+    event_type: str  # "upload_start", "upload_success", etc.
+    file_id: Optional[UUID] = None
+    file_path: Optional[str] = None
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
+    error: Optional[Exception] = None
+    meta: Optional[Dict[str, Any]] = None  # Optional metadata for custom hooks
+    
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class FileStorageConfig(TSModel):
@@ -26,17 +67,17 @@ class FileStorageConfig(TSModel):
     All fields are optional. If not provided, default behavior is used.
     """
 
-    # Path generators
-    upload_path_generator: Optional[Callable[[UUID, str, str, Optional[str]], str]] = None
-    sqlite_path_generator: Optional[Callable[[UUID, str], str]] = None
+    # Path generators - take config objects
+    upload_path_generator: Optional[Callable[[UploadPathGeneratorConfig], str]] = None
+    sqlite_path_generator: Optional[Callable[[SqlitePathGeneratorConfig], str]] = None
 
-    # Lifecycle hooks
-    on_upload_start: Optional[Callable[..., None]] = None
-    on_upload_success: Optional[Callable[..., None]] = None
-    on_upload_error: Optional[Callable[..., None]] = None
-    on_delete_start: Optional[Callable[..., None]] = None
-    on_delete_success: Optional[Callable[..., None]] = None
-    on_delete_error: Optional[Callable[..., None]] = None
+    # Lifecycle hooks - take config objects
+    on_upload_start: Optional[Callable[[HookInvokerConfig], None]] = None
+    on_upload_success: Optional[Callable[[HookInvokerConfig], None]] = None
+    on_upload_error: Optional[Callable[[HookInvokerConfig], None]] = None
+    on_delete_start: Optional[Callable[[HookInvokerConfig], None]] = None
+    on_delete_success: Optional[Callable[[HookInvokerConfig], None]] = None
+    on_delete_error: Optional[Callable[[HookInvokerConfig], None]] = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -67,57 +108,28 @@ def set_file_storage_config(config: FileStorageConfig) -> None:
     logger.info("Custom file storage config registered in context")
 
 
-def default_upload_path_generator(
-    environment_id: UUID,
-    filename: str,
-    extension: str,
-    source_id: Optional[str] = None,
-) -> str:
-    """
-    Default upload path generator that preserves current Cortex behavior.
-    """
-    config = get_sheets_config()
-    base_path = Path(config.input_storage_path)
-
-    if source_id:
-        return str(base_path / source_id / f"{filename}.{extension}")
-
-    return str(base_path / f"{filename}.{extension}")
+def default_upload_path_generator(config: UploadPathGeneratorConfig) -> str:
+    """Default upload path generator"""
+    base_path = Path(config.base_storage_path)
+    
+    if config.source_id:
+        return str(base_path / str(config.workspace_id) / str(config.environment_id) / config.source_id / f"{config.filename}.{config.extension}")
+    
+    return str(base_path / str(config.workspace_id) / str(config.environment_id) / f"{config.filename}.{config.extension}")
 
 
-def default_sqlite_path_generator(
-    environment_id: UUID,
-    source_id: str,
-) -> str:
-    """
-    Default SQLite path generator that preserves current Cortex behavior.
-    """
-    config = get_sheets_config()
-    return str(Path(config.sqlite_storage_path) / f"{source_id}.db")
+def default_sqlite_path_generator(config: SqlitePathGeneratorConfig) -> str:
+    """Default SQLite path generator"""
+    base_path = Path(config.base_storage_path)
+    return str(base_path / str(config.workspace_id) / str(config.environment_id) / f"{config.source_id}.db")
 
 
-def invoke_hook_safely(
-    hook: Optional[Callable[..., None]],
-    environment_id: UUID,
-    filename: str,
-    **context: Any,
-) -> None:
-    """
-    Safely invoke a lifecycle hook, catching and logging any errors.
-    """
+def invoke_hook_safely(hook: Optional[Callable[[HookInvokerConfig], None]], config: HookInvokerConfig) -> None:
+    """Safely invoke a lifecycle hook"""
     if hook is None:
         return
-
+    
     try:
-        hook(environment_id=environment_id, filename=filename, **context)
+        hook(config)
     except Exception as exc:
-        logger.warning(
-            "File storage hook error: %s",
-            exc,
-            exc_info=True,
-            extra={
-                "hook": getattr(hook, "__name__", str(hook)),
-                "environment_id": str(environment_id),
-                "filename": filename,
-            },
-        )
+        logger.warning("File storage hook error", exc_info=True, extra={"event_type": config.event_type})

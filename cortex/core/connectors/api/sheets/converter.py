@@ -1,9 +1,11 @@
-import io
 import re
 import sqlite3
+import tempfile
+import os
 from pathlib import Path
 from typing import Dict, List, Optional
-import pandas as pd
+import duckdb
+from cortex.core.utils.csv_parse import CSVParserUtil
 
 
 class CortexSQLiteConverter:
@@ -26,55 +28,173 @@ class CortexSQLiteConverter:
         selected_tables: Optional[List[str]] = None
     ) -> Dict[str, str]:
         """
-        Convert CSV data to SQLite tables
-        
+        Convert CSV data to SQLite tables using DuckDB
+
         Args:
             csv_data_dict: Dictionary mapping table names to CSV data (as bytes)
             selected_tables: List of table names to import (None = all)
-            
+
         Returns:
             Dictionary mapping original names to SQLite table names
         """
-        # If selected tables specified, filter the data
+        # Filter selected tables
         if selected_tables:
             csv_data_dict = {k: v for k, v in csv_data_dict.items() if k in selected_tables}
-        
+
         table_mappings = {}
-        
-        # Create or connect to SQLite database
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
+        tmp_dir = self._ensure_tmp_directory()
+
+        # Create and setup DuckDB connection with SQLite extension
+        duckdb_conn = self._setup_duckdb_connection()
+
         try:
+            # Process each CSV file
             for table_name, csv_data in csv_data_dict.items():
-                # Convert table name to valid SQL identifier
-                safe_table_name = self._sanitize_table_name(table_name)
-                
-                # Parse CSV data
                 try:
-                    df = pd.read_csv(io.BytesIO(csv_data))
+                    safe_table_name = self._process_csv_to_sqlite(
+                        duckdb_conn,
+                        table_name,
+                        csv_data,
+                        tmp_dir
+                    )
+                    table_mappings[table_name] = safe_table_name
+                    print(f"Created table: {safe_table_name} from {table_name}")
                 except Exception as e:
                     print(f"Error parsing CSV {table_name}: {e}")
                     continue
-                
-                # Infer column types from data
-                df = self._infer_and_cast_types(df)
-                
-                # Drop existing table if it exists (for refresh operations)
-                cursor.execute(f"DROP TABLE IF EXISTS [{safe_table_name}]")
-                
-                # Create table from DataFrame
-                df.to_sql(safe_table_name, conn, if_exists='replace', index=False)
-                
-                table_mappings[table_name] = safe_table_name
-                print(f"Created table: {safe_table_name} from {table_name}")
-            
-            conn.commit()
+
+            # Detach SQLite database
+            duckdb_conn.execute("DETACH sqlite_db")
+
         finally:
-            conn.close()
-        
+            duckdb_conn.close()
+
         return table_mappings
-    
+
+    def _ensure_tmp_directory(self) -> Path:
+        """
+        Ensure .cortex/tmp directory exists and return its path
+
+        Returns:
+            Path to .cortex/tmp directory
+        """
+        project_root = Path(__file__).resolve().parent.parent.parent.parent.parent.parent
+        tmp_dir = project_root / ".cortex" / "tmp"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        return tmp_dir
+
+    def _setup_duckdb_connection(self):
+        """
+        Create DuckDB connection and setup SQLite extension
+
+        Returns:
+            DuckDB connection with SQLite extension loaded and attached
+        """
+        # Create in-memory DuckDB connection
+        duckdb_conn = duckdb.connect(database=':memory:')
+
+        # Load SQLite extension
+        duckdb_conn.execute("INSTALL sqlite")
+        duckdb_conn.execute("LOAD sqlite")
+
+        # Attach SQLite database
+        duckdb_conn.execute(f"ATTACH '{self.db_path}' AS sqlite_db (TYPE SQLITE)")
+
+        return duckdb_conn
+
+    def _process_csv_to_sqlite(
+        self,
+        duckdb_conn,
+        table_name: str,
+        csv_data: bytes,
+        tmp_dir: Path
+    ) -> str:
+        """
+        Process a single CSV file and write to SQLite
+
+        Args:
+            duckdb_conn: DuckDB connection
+            table_name: Original table name
+            csv_data: CSV data as bytes
+            tmp_dir: Directory for temporary files
+
+        Returns:
+            Sanitized table name
+
+        Raises:
+            Exception: If CSV processing or SQLite writing fails
+        """
+        safe_table_name = self._sanitize_table_name(table_name)
+        temp_csv_path = None
+
+        try:
+            # Write CSV to temporary file
+            temp_csv_path = self._write_csv_to_temp_file(csv_data, tmp_dir)
+
+            # Convert CSV to SQLite table using DuckDB
+            self._create_sqlite_table_from_csv(duckdb_conn, safe_table_name, temp_csv_path)
+
+            return safe_table_name
+
+        finally:
+            # Always clean up temp file
+            if temp_csv_path and os.path.exists(temp_csv_path):
+                os.unlink(temp_csv_path)
+
+    def _write_csv_to_temp_file(self, csv_data: bytes, tmp_dir: Path) -> str:
+        """
+        Write CSV bytes to a temporary file
+
+        Args:
+            csv_data: CSV data as bytes
+            tmp_dir: Directory for temporary files
+
+        Returns:
+            Path to the temporary CSV file
+        """
+        with tempfile.NamedTemporaryFile(
+            mode='wb',
+            suffix='.csv',
+            delete=False,
+            dir=tmp_dir
+        ) as temp_file:
+            temp_file.write(csv_data)
+            return temp_file.name
+
+    def _create_sqlite_table_from_csv(
+        self,
+        duckdb_conn,
+        table_name: str,
+        csv_path: str
+    ) -> None:
+        """
+        Create SQLite table from CSV file using DuckDB with explicit type inference
+
+        Args:
+            duckdb_conn: DuckDB connection with SQLite extension
+            table_name: Target table name (already sanitized)
+            csv_path: Path to temporary CSV file
+        """
+        # Infer column types using CSV parser utility
+        type_inference = CSVParserUtil.infer_types(csv_path, sample_size=2)
+        types_dict = type_inference.to_duckdb_types_dict()
+
+        # Build columns parameter for DuckDB
+        columns_param = ", ".join([f"'{k}': '{v}'" for k, v in types_dict.items()])
+
+        # Drop existing table if it exists
+        # Use double quotes for DuckDB identifier quoting
+        duckdb_conn.execute(f'DROP TABLE IF EXISTS sqlite_db."{table_name}"')
+
+        # Create table with explicit column types
+        duckdb_conn.execute(f'''
+            CREATE TABLE sqlite_db."{table_name}" AS
+            SELECT * FROM read_csv('{csv_path}',
+                columns = {{{columns_param}}},
+                header = true
+            )
+        ''')
+
     def get_table_hash(self, table_name: str) -> str:
         """
         Compute hash of table contents for refresh detection
@@ -187,93 +307,3 @@ class CortexSQLiteConverter:
             sanitized = sanitized[:64]
         
         return sanitized
-    
-    def _infer_and_cast_types(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Infer and cast column types for better SQLite storage
-        Handles: INTEGER, REAL, BOOLEAN, TEXT, TIMESTAMP
-        
-        Args:
-            df: DataFrame to process
-            
-        Returns:
-            DataFrame with inferred types
-        """
-        for col in df.columns:
-            try:
-                # Skip if column has all NaN values
-                if df[col].isna().all():
-                    continue
-                
-                # Skip if not object type (already typed)
-                if df[col].dtype != 'object':
-                    continue
-                
-                # Get non-null values to analyze
-                non_null_values = df[col].dropna()
-                if len(non_null_values) == 0:
-                    continue
-                
-                # Try numeric conversion first
-                numeric_col = pd.to_numeric(df[col], errors='coerce')
-                numeric_ratio = numeric_col.notna().sum() / len(df)
-                
-                if numeric_ratio > 0.8:  # >80% numeric
-                    # Check if all numeric values are integers
-                    numeric_non_null = numeric_col.dropna()
-                    if (numeric_non_null == numeric_non_null.astype(int)).all():
-                        df[col] = numeric_col.astype('Int64')  # Nullable integer
-                    else:
-                        df[col] = numeric_col.astype('float64')
-                    continue
-                
-                # Try boolean conversion
-                if self._is_boolean(non_null_values):
-                    df[col] = df[col].map(lambda x: self._to_bool(x) if pd.notna(x) else None)
-                    continue
-                
-                # Try datetime conversion
-                datetime_col = pd.to_datetime(df[col], errors='coerce')
-                datetime_ratio = datetime_col.notna().sum() / len(df)
-                
-                if datetime_ratio > 0.8:  # >80% are valid dates
-                    df[col] = datetime_col
-                    continue
-                
-                # Default: keep as string/TEXT (no conversion needed)
-                # pandas will store as object type, SQLite will map to TEXT
-                
-            except Exception as e:
-                print(f"Error inferring type for column {col}: {e}")
-                continue
-        
-        return df
-    
-    def _is_boolean(self, series: pd.Series) -> bool:
-        """
-        Check if a series contains boolean-like values
-        
-        Args:
-            series: Pandas series to check
-            
-        Returns:
-            True if series is boolean-like
-        """
-        bool_values = {'true', 'false', 'yes', 'no', '1', '0', 't', 'f', 'y', 'n'}
-        unique_lower = set(str(v).strip().lower() for v in series.unique() if pd.notna(v))
-        return unique_lower.issubset(bool_values) and len(unique_lower) <= 2
-    
-    def _to_bool(self, val) -> Optional[bool]:
-        """
-        Convert a value to boolean
-        
-        Args:
-            val: Value to convert
-            
-        Returns:
-            Boolean value or None
-        """
-        if pd.isna(val):
-            return None
-        str_val = str(val).strip().lower()
-        return str_val in {'true', 'yes', '1', 't', 'y'}

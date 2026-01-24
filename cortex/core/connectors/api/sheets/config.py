@@ -41,22 +41,28 @@ class CortexSheetsConfig:
         project_root = current_file.parent.parent.parent.parent.parent.parent
         
         # Input storage path (for uploaded files)
-        self.input_storage_path = ExecutionEnv.get_key(
+        input_dir = ExecutionEnv.get_key(
             "CORTEX_FILE_STORAGE_INPUT_DIR",
             str(project_root / ".cortex" / "storage" / "inputs")
         )
+        # Convert relative paths to absolute paths based on project root
+        self.input_storage_path = str(project_root / input_dir) if not Path(input_dir).is_absolute() else input_dir
         
         # SQLite storage path
-        self.sqlite_storage_path = ExecutionEnv.get_key(
+        sqlite_dir = ExecutionEnv.get_key(
             "CORTEX_FILE_STORAGE_SQLITE_DIR",
             str(project_root / ".cortex" / "storage" / "sqlite")
         )
+        # Convert relative paths to absolute paths based on project root
+        self.sqlite_storage_path = str(project_root / sqlite_dir) if not Path(sqlite_dir).is_absolute() else sqlite_dir
         
         # Cache configuration
-        self.cache_dir = ExecutionEnv.get_key(
+        cache_dir_env = ExecutionEnv.get_key(
             "CORTEX_FILE_STORAGE_CACHE_DIR",
-            str(project_root / ".cortex" / "cache" / "sqlite")
+            str(project_root / ".cortex" / "storage" / "sqlite")
         )
+        # Convert relative paths to absolute paths based on project root
+        self.cache_dir = str(project_root / cache_dir_env) if not Path(cache_dir_env).is_absolute() else cache_dir_env
         self.cache_max_size_gb = float(ExecutionEnv.get_key(
             "CORTEX_FILE_STORAGE_CACHE_MAX_SIZE_GB",
             "10"  # 10GB default

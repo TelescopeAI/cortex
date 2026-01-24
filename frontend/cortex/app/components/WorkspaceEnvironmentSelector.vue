@@ -36,80 +36,37 @@ function handleWorkspaceSelect(id: string) {
 }
 
 async function handleEnvironmentSelect(id: string, workspaceId: string) {
-  console.log('[WorkspaceEnvironmentSelector] handleEnvironmentSelect called:', { id, workspaceId });
-  console.log('[WorkspaceEnvironmentSelector] Current state before selection:', {
-    currentWorkspaceId: selectedWorkspaceId.value,
-    currentEnvironmentId: selectedEnvironmentId.value,
-    environmentsByWorkspace: environmentsByWorkspace.value
-  });
-  
   // Always select the workspace first
-  console.log('[WorkspaceEnvironmentSelector] Selecting workspace:', workspaceId);
   selectWorkspace(workspaceId);
-  console.log('[WorkspaceEnvironmentSelector] Workspace selected, new value:', selectedWorkspaceId.value);
-  
+
   // Ensure environments for this workspace are loaded
-  console.log('[WorkspaceEnvironmentSelector] Fetching environments for workspace:', workspaceId);
-  const envs = await fetchEnvsForWorkspace(workspaceId);
-  console.log('[WorkspaceEnvironmentSelector] Environments fetched:', envs);
-  console.log('[WorkspaceEnvironmentSelector] Updated environmentsByWorkspace:', environmentsByWorkspace.value);
-  
+  await fetchEnvsForWorkspace(workspaceId);
+
   // Then select the environment
-  console.log('[WorkspaceEnvironmentSelector] Selecting environment:', id);
   selectEnvironment(id);
-  console.log('[WorkspaceEnvironmentSelector] Environment selected, new value:', selectedEnvironmentId.value);
-  console.log('[WorkspaceEnvironmentSelector] Final state:', {
-    selectedWorkspaceId: selectedWorkspaceId.value,
-    selectedEnvironmentId: selectedEnvironmentId.value,
-    selectedWorkspace: selectedWorkspace.value,
-    selectedEnvironment: selectedEnvironment.value
-  });
 }
 
 const selectedWorkspace = computed<Workspace | undefined>(() => {
   if (!Array.isArray(workspaces.value)) {
-    console.log('[WorkspaceEnvironmentSelector] selectedWorkspace: workspaces is not an array');
     return undefined;
   }
   const workspace = workspaces.value.find((w: Workspace) => w.id === selectedWorkspaceId.value);
-  console.log('[WorkspaceEnvironmentSelector] selectedWorkspace computed:', {
-    selectedWorkspaceId: selectedWorkspaceId.value,
-    workspace: workspace?.name || 'not found',
-    allWorkspaces: workspaces.value.map(w => ({ id: w.id, name: w.name }))
-  });
   return workspace;
 });
 
 const selectedEnvironment = computed<Environment | undefined>(() => {
-  console.log('[WorkspaceEnvironmentSelector] selectedEnvironment computed - inputs:', {
-    selectedEnvironmentId: selectedEnvironmentId.value,
-    selectedWorkspaceId: selectedWorkspaceId.value,
-    environmentsByWorkspaceKeys: Object.keys(environmentsByWorkspace.value)
-  });
-  
   if (!selectedEnvironmentId.value || !selectedWorkspaceId.value) {
-    console.log('[WorkspaceEnvironmentSelector] selectedEnvironment: missing id or workspace id');
     return undefined;
   }
-  
+
   // Look in the cached environments for the selected workspace
   const workspaceEnvs = environmentsByWorkspace.value[selectedWorkspaceId.value];
-  console.log('[WorkspaceEnvironmentSelector] selectedEnvironment - workspaceEnvs:', {
-    workspaceId: selectedWorkspaceId.value,
-    envsCount: Array.isArray(workspaceEnvs) ? workspaceEnvs.length : 'not an array',
-    envs: Array.isArray(workspaceEnvs) ? workspaceEnvs.map(e => ({ id: e.id, name: e.name })) : null
-  });
-  
+
   if (!Array.isArray(workspaceEnvs)) {
-    console.log('[WorkspaceEnvironmentSelector] selectedEnvironment: workspaceEnvs is not an array');
     return undefined;
   }
-  
+
   const environment = workspaceEnvs.find((e: Environment) => e.id === selectedEnvironmentId.value);
-  console.log('[WorkspaceEnvironmentSelector] selectedEnvironment computed result:', {
-    found: environment ? environment.name : 'not found',
-    environment
-  });
   return environment;
 });
 
@@ -117,13 +74,6 @@ const displayText = computed(() => {
   const workspaceName = selectedWorkspace.value?.name || 'Create Workspace';
   const environmentName = selectedEnvironment.value?.name || 'Select Environment';
   const text = `${workspaceName} / ${environmentName}`;
-  console.log('[WorkspaceEnvironmentSelector] displayText computed:', {
-    workspaceName,
-    environmentName,
-    displayText: text,
-    selectedWorkspaceId: selectedWorkspaceId.value,
-    selectedEnvironmentId: selectedEnvironmentId.value
-  });
   return text;
 });
 
@@ -138,17 +88,8 @@ function getEnvironmentsForWorkspace(workspaceId: string): Environment[] {
 // Auto-select first workspace and first environment if they exist and nothing is selected
 // Also validates and resets selections if they don't exist in the current backend
 async function autoSelectFirstWorkspaceAndEnvironment() {
-  console.log('[WorkspaceEnvironmentSelector] autoSelectFirstWorkspaceAndEnvironment called');
-  console.log('[WorkspaceEnvironmentSelector] Current state:', {
-    workspacesCount: Array.isArray(workspaces.value) ? workspaces.value.length : 0,
-    selectedWorkspaceId: selectedWorkspaceId.value,
-    selectedEnvironmentId: selectedEnvironmentId.value,
-    environmentsByWorkspace: environmentsByWorkspace.value
-  });
-
   // Check if we have workspaces
   if (!Array.isArray(workspaces.value) || workspaces.value.length === 0) {
-    console.log('[WorkspaceEnvironmentSelector] No workspaces available for auto-select');
     return;
   }
 
@@ -160,21 +101,19 @@ async function autoSelectFirstWorkspaceAndEnvironment() {
   if (selectedWorkspaceId.value) {
     const workspaceExists = workspaces.value.some((w: Workspace) => w.id === selectedWorkspaceId.value);
     if (!workspaceExists) {
-      console.log('[WorkspaceEnvironmentSelector] Selected workspace does not exist in current backend, will reset');
       needsWorkspaceSelection = true;
       needsEnvironmentSelection = true;
       targetWorkspaceId = null;
     } else {
       // Workspace exists, validate environment
       // Ensure environments for this workspace are loaded
-      const envs = await fetchEnvsForWorkspace(selectedWorkspaceId.value);
+      await fetchEnvsForWorkspace(selectedWorkspaceId.value);
       const workspaceEnvs = environmentsByWorkspace.value[selectedWorkspaceId.value];
-      
+
       if (selectedEnvironmentId.value) {
-        const environmentExists = Array.isArray(workspaceEnvs) && 
+        const environmentExists = Array.isArray(workspaceEnvs) &&
           workspaceEnvs.some((e: Environment) => e.id === selectedEnvironmentId.value);
         if (!environmentExists) {
-          console.log('[WorkspaceEnvironmentSelector] Selected environment does not exist in current backend, will reset');
           needsEnvironmentSelection = true;
         }
       } else {
@@ -190,7 +129,6 @@ async function autoSelectFirstWorkspaceAndEnvironment() {
 
   // If nothing needs to be changed and we have valid selections, return early
   if (!needsWorkspaceSelection && !needsEnvironmentSelection) {
-    console.log('[WorkspaceEnvironmentSelector] Current selections are valid, no changes needed');
     return;
   }
 
@@ -198,16 +136,13 @@ async function autoSelectFirstWorkspaceAndEnvironment() {
   if (needsWorkspaceSelection) {
     const firstWorkspace = workspaces.value[0];
     if (!firstWorkspace) {
-      console.log('[WorkspaceEnvironmentSelector] First workspace is undefined');
       return;
     }
 
-    console.log('[WorkspaceEnvironmentSelector] Auto-selecting first workspace:', firstWorkspace.name);
     selectWorkspace(firstWorkspace.id);
     targetWorkspaceId = firstWorkspace.id;
 
     // Ensure environments for this workspace are loaded
-    console.log('[WorkspaceEnvironmentSelector] Fetching environments for first workspace:', firstWorkspace.id);
     await fetchEnvsForWorkspace(firstWorkspace.id);
   }
 
@@ -217,44 +152,29 @@ async function autoSelectFirstWorkspaceAndEnvironment() {
     if (Array.isArray(workspaceEnvs) && workspaceEnvs.length > 0) {
       const firstEnvironment = workspaceEnvs[0];
       if (firstEnvironment) {
-        console.log('[WorkspaceEnvironmentSelector] Auto-selecting first environment:', firstEnvironment.name);
         selectEnvironment(firstEnvironment.id);
-        console.log('[WorkspaceEnvironmentSelector] Auto-selection complete:', {
-          workspaceId: selectedWorkspaceId.value,
-          environmentId: selectedEnvironmentId.value
-        });
-      } else {
-        console.log('[WorkspaceEnvironmentSelector] First environment is undefined');
       }
-    } else {
-      console.log('[WorkspaceEnvironmentSelector] No environments available for auto-select in workspace');
     }
   }
 }
 
 // Watch for changes in selected workspace and environment
-watch(selectedWorkspaceId, (newId, oldId) => {
-  console.log('[WorkspaceEnvironmentSelector] selectedWorkspaceId changed:', { oldId, newId });
+watch(selectedWorkspaceId, () => {
+  // Workspace ID changed
 }, { immediate: true });
 
-watch(selectedEnvironmentId, (newId, oldId) => {
-  console.log('[WorkspaceEnvironmentSelector] selectedEnvironmentId changed:', { oldId, newId });
+watch(selectedEnvironmentId, () => {
+  // Environment ID changed
 }, { immediate: true });
 
 // Fetch environments for all workspaces when workspaces are loaded
 watch(workspaces, async (newWorkspaces) => {
-  console.log('[WorkspaceEnvironmentSelector] workspaces changed:', {
-    count: Array.isArray(newWorkspaces) ? newWorkspaces.length : 0,
-    workspaces: Array.isArray(newWorkspaces) ? newWorkspaces.map(w => ({ id: w.id, name: w.name })) : null
-  });
   if (Array.isArray(newWorkspaces) && newWorkspaces.length > 0) {
     // Fetch environments for all workspaces in parallel
-    console.log('[WorkspaceEnvironmentSelector] Fetching environments for all workspaces...');
     await Promise.all(
       newWorkspaces.map((ws: Workspace) => fetchEnvsForWorkspace(ws.id))
     );
-    console.log('[WorkspaceEnvironmentSelector] All environments fetched:', environmentsByWorkspace.value);
-    
+
     // Auto-select first workspace and environment after environments are loaded
     await autoSelectFirstWorkspaceAndEnvironment();
   }
@@ -262,16 +182,13 @@ watch(workspaces, async (newWorkspaces) => {
 
 // Also watch environmentsByWorkspace to trigger auto-select when environments are loaded
 watch(environmentsByWorkspace, async () => {
-  console.log('[WorkspaceEnvironmentSelector] environmentsByWorkspace changed');
   await autoSelectFirstWorkspaceAndEnvironment();
 }, { deep: true });
 
 // Refresh workspaces on mount to ensure we have the latest data from the backend
 // This is especially important when switching between different backends
 onMounted(async () => {
-  console.log('[WorkspaceEnvironmentSelector] Component mounted, refreshing workspaces...');
   await refreshWorkspaces();
-  console.log('[WorkspaceEnvironmentSelector] Workspaces refreshed:', workspaces.value);
 });
 </script>
 
@@ -311,24 +228,18 @@ onMounted(async () => {
               <DropdownMenuSubContent>
                 <!-- Environments for this Workspace -->
                 <template v-if="getEnvironmentsForWorkspace(ws.id).length > 0">
-                  <DropdownMenuRadioGroup 
-                    :model-value="selectedEnvironmentId || undefined" 
-                    @update:model-value="(value: string) => {
-                      console.log('[WorkspaceEnvironmentSelector] RadioGroup update:model-value triggered:', { value, workspaceId: ws.id, workspaceName: ws.name });
-                      handleEnvironmentSelect(value, ws.id);
-                    }"
+                  <DropdownMenuRadioGroup
+                    :model-value="selectedEnvironmentId || undefined"
+                    @update:model-value="(value: string) => handleEnvironmentSelect(value, ws.id)"
                   >
-                    <DropdownMenuRadioItem 
-                      v-for="env in getEnvironmentsForWorkspace(ws.id)" 
-                      :key="env.id" 
+                    <DropdownMenuRadioItem
+                      v-for="env in getEnvironmentsForWorkspace(ws.id)"
+                      :key="env.id"
                       :value="env.id"
                       :class="[
                         env.id === selectedEnvironmentId ? 'bg-accent text-accent-foreground font-medium' : ''
                       ]"
-                      @click="() => {
-                        console.log('[WorkspaceEnvironmentSelector] RadioItem clicked:', { envId: env.id, envName: env.name, workspaceId: ws.id, workspaceName: ws.name });
-                        handleEnvironmentSelect(env.id, ws.id);
-                      }"
+                      @click="() => handleEnvironmentSelect(env.id, ws.id)"
                     >
                       <span>{{ env.name }}</span>
                     </DropdownMenuRadioItem>

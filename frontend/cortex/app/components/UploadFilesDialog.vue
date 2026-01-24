@@ -88,7 +88,7 @@ function resetDialog() {
     <DialogTrigger as-child>
       <Button variant="outline" size="sm">
         <Upload class="w-4 h-4 mr-2" />
-        Upload Files
+        Upload
       </Button>
     </DialogTrigger>
     <DialogContent class="sm:max-w-[600px]">

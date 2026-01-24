@@ -52,3 +52,39 @@ export interface SheetMetadata {
   columns: string[];
   source_type?: string;
 }
+
+export interface DependentMetricInfo {
+  id: string;
+  name: string;
+  alias?: string | null;
+  version_count: number;
+}
+
+export interface DataSourceDependencies {
+  metrics: DependentMetricInfo[];
+}
+
+export interface DataSourceDependenciesError {
+  error: 'DataSourceHasDependencies';
+  message: string;
+  data_source_id: string;
+  dependencies: DataSourceDependencies;
+}
+
+export interface DependentDataSourceInfo {
+  id: string;
+  name: string;
+  alias?: string;
+  metrics: DependentMetricInfo[];
+}
+
+export interface FileDependencies {
+  data_sources: DependentDataSourceInfo[];
+}
+
+export interface FileDependenciesError {
+  error: 'FileHasDependencies';
+  message: string;
+  file_id: string;
+  dependencies: FileDependencies;
+}

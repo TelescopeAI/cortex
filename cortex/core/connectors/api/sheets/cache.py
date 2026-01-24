@@ -101,12 +101,19 @@ class CortexFileStorageCacheManager:
         return evicted_count
     
     def _get_cache_size_gb(self) -> float:
-        """Calculate total cache size in GB"""
-        conn = sqlite3.connect(self.metadata_db)
-        cursor = conn.cursor()
-        cursor.execute("SELECT SUM(size_bytes) FROM files_cache_entries")
-        total_bytes = cursor.fetchone()[0] or 0
-        conn.close()
+        """Calculate total cache size in GB by checking actual files on disk"""
+        total_bytes = 0
+        
+        # Calculate size of all .db files in cache directory (excluding metadata DB)
+        for file_path in self.cache_dir.glob("*.db"):
+            if file_path.name != "_cache_metadata.db":
+                try:
+                    total_bytes += file_path.stat().st_size
+                except (OSError, FileNotFoundError):
+                    pass
+        
+        # Also sync metadata with actual files - remove entries for files that no longer exist
+        self._sync_metadata_with_disk()
         
         return total_bytes / (1024**3)
     
@@ -131,6 +138,21 @@ class CortexFileStorageCacheManager:
             "UPDATE files_cache_entries SET last_accessed = ? WHERE file_id = ?",
             (now.isoformat(), file_id)
         )
+        conn.commit()
+        conn.close()
+    
+    def _sync_metadata_with_disk(self):
+        """Remove metadata entries for files that no longer exist on disk"""
+        conn = sqlite3.connect(self.metadata_db)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT file_id, local_path FROM files_cache_entries")
+        entries = cursor.fetchall()
+        
+        for file_id, local_path in entries:
+            if not Path(local_path).exists():
+                conn.execute("DELETE FROM files_cache_entries WHERE file_id = ?", (file_id,))
+        
         conn.commit()
         conn.close()
     

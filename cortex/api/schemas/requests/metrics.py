@@ -2,6 +2,7 @@ from typing import Optional, Dict, Any, List
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
+from cortex.core.types.telescope import TSModel
 from cortex.core.semantics.measures import SemanticMeasure
 from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.joins import SemanticJoin
@@ -12,6 +13,24 @@ from cortex.core.semantics.refresh_keys import RefreshPolicy
 from cortex.core.semantics.cache import CachePreference
 from cortex.core.semantics.parameters import ParameterDefinition
 from cortex.core.semantics.metrics.modifiers import MetricModifiers
+
+
+class RecommendSelectionConfig(TSModel):
+    """
+    Configuration for table and column selection in metric recommendations.
+
+    Examples:
+        {} -> Select all tables and all columns
+
+        {"include": {"orders": []}} -> Select all columns from orders table
+
+        {"include": {"orders": ["total", "status"]}} -> Select specific columns from orders
+
+        {"include": {"orders": []}, "exclude": {"orders": ["email"]}} ->
+            All columns from orders except email
+    """
+    include: Optional[Dict[str, List[str]]] = None  # table_name -> column_names (empty list = all columns)
+    exclude: Optional[Dict[str, List[str]]] = None  # table_name -> column_names to exclude
 
 
 class MetricCreateRequest(BaseModel):
@@ -105,10 +124,7 @@ class MetricRecommendationsRequest(BaseModel):
     environment_id: UUID
     data_source_id: UUID
     data_model_id: UUID
-    include_tables: Optional[List[str]] = None
-    exclude_tables: Optional[List[str]] = None
-    include_columns: Optional[List[str]] = None
-    exclude_columns: Optional[List[str]] = None
+    select: RecommendSelectionConfig = Field(default_factory=RecommendSelectionConfig)
     metric_types: Optional[List[str]] = None
     time_windows: Optional[List[int]] = None
     grains: Optional[List[str]] = None

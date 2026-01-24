@@ -1,15 +1,21 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
 import pytz
 from sqlalchemy.exc import IntegrityError
 
+from cortex.core.data.db.models import MetricORM
 from cortex.core.data.db.sources import DataSourceORM
 from cortex.core.data.sources.data_sources import DataSource
-from cortex.core.exceptions.data.sources import DataSourceAlreadyExistsError, DataSourceDoesNotExistError
+from cortex.core.exceptions.data.sources import (
+    DataSourceAlreadyExistsError,
+    DataSourceDoesNotExistError,
+    DataSourceHasDependenciesError
+)
 from cortex.core.storage.store import CortexStorage
 from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
+from cortex.core.data.db.metric_service import MetricService
 
 
 class DataSourceCRUD:
@@ -219,27 +225,103 @@ class DataSourceCRUD:
             db_session.close()
 
     @staticmethod
+    def get_data_source_dependencies(
+        data_source_id: UUID,
+        storage: Optional[CortexStorage] = None
+    ) -> Dict[str, Any]:
+        """
+        Get all entities that depend on a data source.
+
+        Args:
+            data_source_id: Data source ID to check
+            storage: Optional CortexStorage instance
+
+        Returns:
+            Dictionary with dependency information:
+            {
+                "metrics": [{"id": UUID, "name": str, "alias": str, "version_count": int}, ...]
+            }
+        """
+        db_session = (storage or CortexStorage()).get_session()
+        try:
+            dependent_metrics = db_session.query(MetricORM).filter(
+                MetricORM.data_source_id == data_source_id
+            ).all()
+
+            # Create MetricService instance to get version counts
+            metric_service = MetricService(session=db_session)
+
+            return {
+                "metrics": [
+                    {
+                        "id": m.id,
+                        "name": m.name,
+                        "alias": m.alias,
+                        "version_count": metric_service.get_metric_version_count(m.id)
+                    }
+                    for m in dependent_metrics
+                ]
+            }
+        finally:
+            db_session.close()
+
+    @staticmethod
     def delete_data_source(
         data_source_id: UUID,
+        cascade: bool = False,
         storage: Optional[CortexStorage] = None
     ) -> bool:
         """
         Delete a data source.
-        
+
         Args:
             data_source_id: Data source ID to delete
-            storage: Optional CortexStorage instance. If not provided, uses singleton.
-            
+            cascade: If True, delete all dependent metrics (and their versions) first
+            storage: Optional CortexStorage instance
+
         Returns:
-            True if data source was deleted, False otherwise
+            True if data source was deleted
+
+        Raises:
+            DataSourceDoesNotExistError: If data source not found
+            DataSourceHasDependenciesError: If cascade=False and dependencies exist
         """
-        db_session = (storage or CortexStorage()).get_session()
+        storage_instance = storage or CortexStorage()
+        db_session = storage_instance.get_session()
         try:
-            result = db_session.query(DataSourceORM).filter(
+            # Verify data source exists
+            db_data_source = db_session.query(DataSourceORM).filter(
                 DataSourceORM.id == data_source_id
-            ).delete()
+            ).first()
+            if db_data_source is None:
+                raise DataSourceDoesNotExistError(data_source_id)
+
+            # Check for dependencies
+            dependent_metrics = db_session.query(MetricORM).filter(
+                MetricORM.data_source_id == data_source_id
+            ).all()
+
+            if len(dependent_metrics) > 0:
+                if not cascade:
+                    raise DataSourceHasDependenciesError(
+                        data_source_id=data_source_id,
+                        metric_ids=[m.id for m in dependent_metrics]
+                    )
+
+                # CASCADE: Delete dependent metrics and their versions using MetricService
+                # MetricService.delete_metric() properly handles cascade deletion of metric_versions
+                metric_service = MetricService(session=db_session)
+                for metric in dependent_metrics:
+                    metric_service.delete_metric(metric.id)
+
+            # Delete the data source
+            db_session.delete(db_data_source)
             db_session.commit()
-            return result > 0
+            return True
+
+        except (DataSourceDoesNotExistError, DataSourceHasDependenciesError):
+            db_session.rollback()
+            raise
         except Exception as e:
             db_session.rollback()
             raise e

@@ -17,10 +17,14 @@ from cortex.core.storage.store import CortexStorage
 from cortex.core.utils.encryption import FilePathEncryption
 from cortex.core.connectors.api.sheets.storage.local import CortexLocalFileStorage
 from cortex.core.connectors.api.sheets.exceptions import StorageFileAlreadyExists
+from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
 from cortex.core.services.data.sources.files_config import (
     get_file_storage_config,
     invoke_hook_safely,
     default_upload_path_generator,
+    UploadPathGeneratorConfig,
+    SqlitePathGeneratorConfig,
+    HookInvokerConfig,
 )
 
 
@@ -71,9 +75,19 @@ class FileStorageService:
             StorageFileAlreadyExists: If file exists and overwrite=False
         """
         config = get_file_storage_config()
+        storage_config = get_sheets_config()
         session = CortexStorage().get_session()
 
         try:
+            # Get workspace_id from environment
+            environment = EnvironmentCRUD.get_environment(
+                storage=CortexStorage(),
+                environment_id=environment_id
+            )
+            if not environment:
+                raise ValueError(f"Environment {environment_id} not found")
+            workspace_id = environment.workspace_id
+
             # Extract name and extension
             name, extension = os.path.splitext(filename)
             extension = extension.lstrip('.')
@@ -83,15 +97,17 @@ class FileStorageService:
             file_hash = hashlib.sha256(content).hexdigest()
             file_size = len(content)
 
-            invoke_hook_safely(
-                config.on_upload_start,
-                environment_id,
-                filename,
+            # Create hook config for upload_start
+            hook_config = HookInvokerConfig(
+                workspace_id=workspace_id,
+                environment_id=environment_id,
+                filename=filename,
+                event_type="upload_start",
                 file_size=file_size,
                 mime_type=mime_type,
-                hash=file_hash,
-                overwrite=overwrite,
+                meta={"hash": file_hash, "overwrite": overwrite}
             )
+            invoke_hook_safely(config.on_upload_start, hook_config)
 
             # Check for existing file
             existing = session.query(CortexFileStorageORM).filter_by(
@@ -103,18 +119,26 @@ class FileStorageService:
             if existing and not overwrite:
                 raise StorageFileAlreadyExists(filename, str(existing.id))
 
+            # Build config for path generation
+            path_config = UploadPathGeneratorConfig(
+                workspace_id=workspace_id,
+                environment_id=environment_id,
+                filename=name,
+                extension=extension,
+                source_id=None,
+                base_storage_path=storage_config.input_storage_path,
+                file_size=file_size,
+                mime_type=mime_type
+            )
+            
+            # Call path generator with config
             path_generator = config.upload_path_generator or default_upload_path_generator
             file_path = self.storage_backend.save_file(
                 source_id=str(uuid4()),
                 filename=filename,
                 data=content,
                 overwrite=overwrite,
-                path_generator=lambda source_id, _filename: path_generator(
-                    environment_id,
-                    name,
-                    extension,
-                    source_id,
-                ),
+                path_generator=lambda source_id, _filename: path_generator(path_config),
             )
 
             # Encrypt path
@@ -143,14 +167,18 @@ class FileStorageService:
             session.commit()
             session.refresh(file_record)
 
-            invoke_hook_safely(
-                config.on_upload_success,
-                environment_id,
-                filename,
-                file_id=str(file_record.id),
+            # Create hook config for upload_success
+            success_hook_config = HookInvokerConfig(
+                workspace_id=workspace_id,
+                environment_id=environment_id,
+                filename=filename,
+                event_type="upload_success",
+                file_id=file_record.id,
                 file_path=file_path,
                 file_size=file_size,
+                mime_type=mime_type,
             )
+            invoke_hook_safely(config.on_upload_success, success_hook_config)
 
             return CortexFileStorage(
                 id=file_record.id,
@@ -165,22 +193,28 @@ class FileStorageService:
                 updated_at=file_record.updated_at
             )
         except StorageFileAlreadyExists as exc:
-            invoke_hook_safely(
-                config.on_upload_error,
-                environment_id,
-                filename,
-                error=str(exc),
-                error_type=type(exc).__name__,
+            error_hook_config = HookInvokerConfig(
+                workspace_id=workspace_id,
+                environment_id=environment_id,
+                filename=filename,
+                event_type="upload_error",
+                file_size=file_size,
+                mime_type=mime_type,
+                error=exc,
+                meta={"error_type": type(exc).__name__}
             )
+            invoke_hook_safely(config.on_upload_error, error_hook_config)
             raise
         except Exception as exc:
-            invoke_hook_safely(
-                config.on_upload_error,
-                environment_id,
-                filename,
-                error=str(exc),
-                error_type=type(exc).__name__,
+            error_hook_config = HookInvokerConfig(
+                workspace_id=workspace_id,
+                environment_id=environment_id,
+                filename=filename,
+                event_type="upload_error",
+                error=exc,
+                meta={"error_type": type(exc).__name__}
             )
+            invoke_hook_safely(config.on_upload_error, error_hook_config)
             raise
         finally:
             session.close()
@@ -321,6 +355,15 @@ class FileStorageService:
         session = CortexStorage().get_session()
 
         try:
+            # Get workspace_id from environment
+            environment = EnvironmentCRUD.get_environment(
+                storage=CortexStorage(),
+                environment_id=environment_id
+            )
+            if not environment:
+                raise ValueError(f"Environment {environment_id} not found")
+            workspace_id = environment.workspace_id
+
             file_record = session.query(CortexFileStorageORM).filter_by(
                 id=file_id,
                 environment_id=environment_id
@@ -330,12 +373,16 @@ class FileStorageService:
                 return False
 
             display_name = f"{file_record.name}.{file_record.extension}"
-            invoke_hook_safely(
-                config.on_delete_start,
-                environment_id,
-                display_name,
-                file_id=str(file_id),
+            
+            # Create hook config for delete_start
+            delete_hook_config = HookInvokerConfig(
+                workspace_id=workspace_id,
+                environment_id=environment_id,
+                filename=display_name,
+                event_type="delete_start",
+                file_id=file_id,
             )
+            invoke_hook_safely(config.on_delete_start, delete_hook_config)
 
             # Decrypt path and delete physical file
             file_path = FilePathEncryption.decrypt(file_record.path)
@@ -346,24 +393,29 @@ class FileStorageService:
             session.delete(file_record)
             session.commit()
 
-            invoke_hook_safely(
-                config.on_delete_success,
-                environment_id,
-                display_name,
-                file_id=str(file_id),
+            # Create hook config for delete_success
+            success_hook_config = HookInvokerConfig(
+                workspace_id=workspace_id,
+                environment_id=environment_id,
+                filename=display_name,
+                event_type="delete_success",
+                file_id=file_id,
                 file_path=file_path,
             )
+            invoke_hook_safely(config.on_delete_success, success_hook_config)
 
             return True
         except Exception as exc:
             fallback_name = display_name if "display_name" in locals() else "unknown"
-            invoke_hook_safely(
-                config.on_delete_error,
-                environment_id,
-                fallback_name,
-                error=str(exc),
-                file_id=str(file_id),
+            error_hook_config = HookInvokerConfig(
+                workspace_id=workspace_id,
+                environment_id=environment_id,
+                filename=fallback_name,
+                event_type="delete_error",
+                file_id=file_id,
+                error=exc,
             )
+            invoke_hook_safely(config.on_delete_error, error_hook_config)
             raise
         finally:
             session.close()

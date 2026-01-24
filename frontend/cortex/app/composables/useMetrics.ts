@@ -203,10 +203,10 @@ export const useMetrics = () => {
   }
 
   type RecommendOptions = {
-    includeTables?: string[]
-    excludeTables?: string[]
-    includeColumns?: string[]
-    excludeColumns?: string[]
+    select?: {
+      include?: Record<string, string[]>
+      exclude?: Record<string, string[]>
+    }
     metricTypes?: string[]
     timeWindows?: number[]
     grains?: string[]
@@ -233,10 +233,7 @@ export const useMetrics = () => {
             environment_id: environmentId,
             data_source_id: dataSourceId,
             data_model_id: dataModelId,
-            include_tables: options.includeTables,
-            exclude_tables: options.excludeTables,
-            include_columns: options.includeColumns,
-            exclude_columns: options.excludeColumns,
+            select: options.select,
             metric_types: options.metricTypes,
             time_windows: options.timeWindows,
             grains: options.grains,

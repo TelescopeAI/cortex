@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useDataSources } from '~/composables/useDataSources';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { useWorkspaces } from '~/composables/useWorkspaces';
 import { useEnvironments } from '~/composables/useEnvironments';
 import { watch, onMounted, ref, computed } from 'vue';
@@ -24,11 +24,29 @@ const { dataSources, loading, error, selectedEnvironmentId, refresh } = useDataS
 const { selectedWorkspaceId } = useWorkspaces();
 const { selectedEnvironmentId: envId } = useEnvironments();
 const router = useRouter();
+const route = useRoute();
+
+// Dialog auto-open state from URL params
+const dialogAutoOpen = ref(false);
+const dialogInitialSourceType = ref<string>();
+const dialogInitialFileId = ref<string>();
+const dialogInitialFileName = ref<string>();
 
 // Load data sources when component mounts
 onMounted(() => {
   if (selectedEnvironmentId.value) {
     refresh();
+  }
+
+  // Check for URL query parameters to auto-open dialog
+  if (route.query.create === 'spreadsheet' && route.query.file_id) {
+    dialogAutoOpen.value = true;
+    dialogInitialSourceType.value = 'spreadsheet';
+    dialogInitialFileId.value = route.query.file_id as string;
+    dialogInitialFileName.value = route.query.file_name as string;
+
+    // Clear query params after reading them
+    router.replace({ query: {} });
   }
 });
 
@@ -111,8 +129,12 @@ const filteredDataSources = computed(() => {
           Manage Files
         </Button>
         
-        <CreateDataSourceDialog 
-          v-if="selectedEnvironmentId" 
+        <CreateDataSourceDialog
+          v-if="selectedEnvironmentId"
+          :auto-open="dialogAutoOpen"
+          :initial-source-type="dialogInitialSourceType"
+          :initial-file-id="dialogInitialFileId"
+          :initial-file-name="dialogInitialFileName"
           @data-source-created="handleDataSourceCreated"
         />
       </div>
@@ -159,7 +181,13 @@ const filteredDataSources = computed(() => {
       <Database class="w-12 h-12 mx-auto text-muted-foreground mb-4" />
       <h3 class="text-lg font-semibold mb-2">No data sources connected</h3>
       <p class="text-muted-foreground mb-4">Get started by connecting your first data source.</p>
-      <CreateDataSourceDialog @data-source-created="handleDataSourceCreated" />
+      <CreateDataSourceDialog
+        :auto-open="dialogAutoOpen"
+        :initial-source-type="dialogInitialSourceType"
+        :initial-file-id="dialogInitialFileId"
+        :initial-file-name="dialogInitialFileName"
+        @data-source-created="handleDataSourceCreated"
+      />
     </div>
 
     <div v-else-if="filteredDataSources.length === 0" class="text-center py-12">

@@ -1,19 +1,39 @@
+from datetime import datetime
+from http import HTTPStatus
 from typing import List, Dict, Any, Optional
 from uuid import UUID
+import os
+import sqlite3
 
+import pytz
 from fastapi import APIRouter, HTTPException, status, File, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from cortex.api.schemas.requests.data_sources import DataSourceCreateRequest, DataSourceUpdateRequest
-from cortex.api.schemas.responses.data_sources import DataSourceResponse
+from cortex.api.schemas.requests.data_sources import (
+    DataSourceCreateRequest,
+    DataSourceUpdateRequest,
+    DataSourceRebuildRequest
+)
+from cortex.api.schemas.responses.data_sources import (
+    DataSourceResponse,
+    DataSourceRebuildResponse
+)
 from cortex.core.connectors.api.sheets.exceptions import StorageFileAlreadyExists
 from cortex.core.connectors.api.sheets.service import CortexSpreadsheetService
 from cortex.core.connectors.api.sheets.types import CortexCSVFileConfig
 from cortex.core.connectors.databases.SQL.humanizer import SchemaHumanizer
 from cortex.core.connectors.databases.clients.service import DBClientService
 from cortex.core.data.db.source_service import DataSourceCRUD
+from cortex.core.data.db.file_storage_service import FileStorageService as FileStorageCRUD, FileDataSourceService
 from cortex.core.data.sources.data_sources import DataSource
-from cortex.core.exceptions.data.sources import DataSourceAlreadyExistsError, DataSourceDoesNotExistError
+from cortex.core.exceptions.data.sources import (
+    DataSourceAlreadyExistsError,
+    DataSourceDoesNotExistError,
+    DataSourceHasDependenciesError,
+    FileDoesNotExistError,
+    FileHasDependenciesError
+)
 from cortex.core.exceptions.environments import EnvironmentDoesNotExistError
 from cortex.core.services import DataSourceSchemaService
 from cortex.core.services.data.sources.files import FileStorageService
@@ -42,96 +62,20 @@ async def create_data_source(data_source_data: DataSourceCreateRequest):
                 file_id = config.get('file_id')
                 if not file_id:
                     raise ValueError("file_id is required for CSV provider")
-                
-                file_storage_service = FileStorageService()
-                try:
-                    from uuid import UUID
-                    file_id_uuid = UUID(file_id) if isinstance(file_id, str) else file_id
-                    file_record = file_storage_service.get_file(file_id_uuid, data_source_data.environment_id)
-                    if not file_record:
-                        raise ValueError(f"File not found: {file_id}")
-                except Exception as e:
-                    raise ValueError(f"Failed to retrieve file: {str(e)}")
-                
-                # Create CSV config from the uploaded file
-                csv_file_config = CortexCSVFileConfig(
-                    filename=f"{file_record.name}.{file_record.extension}",
-                    file_path=file_record.path,  # This is already decrypted by get_file()
-                    source_type="upload"
-                )
-                
-                # Build config for the manager
-                spreadsheet_config = {
-                    'provider_type': 'csv',
-                    'files': [csv_file_config.model_dump()],
-                }
-            
-                # Create the spreadsheet data source (converts CSV to SQLite)
-                source_id = str(data_source_data.alias)  # Use alias as source_id
-                result = CortexSpreadsheetService.create_data_source(
-                    source_id=source_id,
-                    provider_type=provider_type,
-                    config=spreadsheet_config,
+
+                # Convert file_id to UUID if needed
+                file_id_uuid = UUID(file_id) if isinstance(file_id, str) else file_id
+
+                # Build spreadsheet data source using service
+                sqlite_config = FileDataSourceService.build(
+                    file_id=file_id_uuid,
+                    environment_id=data_source_data.environment_id,
+                    source_alias=str(data_source_data.alias),
                     selected_sheets=None  # Import all sheets by default
                 )
-                
-                if not result['success']:
-                    raise Exception(f"Failed to create spreadsheet data source: {result.get('error')}")
-                
-                # Get the SQLite path from the result
-                sqlite_path = result['config'].get('sqlite_path')
-                if not sqlite_path:
-                    raise Exception("SQLite path not generated during spreadsheet conversion")
-                
-                # For query engine, we need a local file path
-                # If using GCS (gs:// path), resolve to local cache; otherwise use as-is
-                file_path_for_query = sqlite_path
-                if sqlite_path.startswith('gs://'):
-                    # For GCS, download/cache the file and get local path
-                    from cortex.core.connectors.api.sheets.cache import CortexFileStorageCacheManager
-                    from cortex.core.connectors.api.sheets.config import get_sheets_config
-                    from cortex.core.connectors.api.sheets.storage.gcs import CortexFileStorageGCSBackend
-                    
-                    sheets_config = get_sheets_config()
-                    cache_manager = CortexFileStorageCacheManager(
-                        cache_dir=sheets_config.cache_dir,
-                        max_size_gb=sheets_config.cache_max_size_gb
-                    )
-                    gcs_backend = CortexFileStorageGCSBackend(
-                        bucket_name=sheets_config.gcs_bucket,
-                        prefix=sheets_config.gcs_prefix,
-                        cache_manager=cache_manager
-                    )
-                    
-                    # Extract blob path from gs:// URI
-                    # Format: gs://bucket/prefix/sqlite/source_id.db
-                    blob_path = sqlite_path.replace(f"gs://{sheets_config.gcs_bucket}/", "")
-                    
-                    # Get local cached path (downloads if not cached)
-                    file_path_for_query = cache_manager.get_cached_path(
-                        file_id=str(data_source_data.alias),
-                        remote_path=blob_path,
-                        storage_backend=gcs_backend
-                    )
-                
-                # Transform config to SQLite format so the query engine can use it directly
-                # Since the CSV has been converted to SQLite, we change source_type to 'sqlite'
-                config = {
-                    'dialect': 'sqlite',
-                    'file_path': file_path_for_query,
-                    # Keep spreadsheet metadata for reference/refresh
-                    'provider_type': provider_type,
-                    'selected_sheets': result['config'].get('selected_sheets', []),
-                    'table_mappings': result['config'].get('table_mappings', {}),
-                    'table_hashes': result['config'].get('table_hashes', {}),
-                    'last_synced': result['config'].get('last_synced'),
-                    # Store the canonical GCS path for reference/refresh
-                    'sqlite_path': sqlite_path,
-                }
-                
-                # Keep source_type as spreadsheet (user-facing type)
-                # Internally, SQLite is used as the storage backend
-                source_type = 'spreadsheet'
+
+                # Convert Pydantic model to dict for data source config
+                config = sqlite_config.model_dump()
         
         data_source = DataSource(
             environment_id=data_source_data.environment_id,
@@ -161,6 +105,10 @@ async def create_data_source(data_source_data: DataSourceCreateRequest):
         )
 
 
+# ============================================================================
+# File Management Endpoints (must come before {data_source_id} routes)
+# ============================================================================
+
 @DataSourcesRouter.get("/data/sources/files", tags=["Spreadsheets"])
 async def list_uploaded_files(environment_id: UUID = None, limit: Optional[int] = None):
     """List all uploaded files for an environment"""
@@ -169,13 +117,13 @@ async def list_uploaded_files(environment_id: UUID = None, limit: Optional[int] 
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="environment_id query parameter is required"
         )
-    
+
     service = FileStorageService()
     files = service.list_files(
         environment_id=environment_id,
         limit=limit
     )
-    
+
     return {
         "files": [
             {
@@ -192,6 +140,75 @@ async def list_uploaded_files(environment_id: UUID = None, limit: Optional[int] 
         ]
     }
 
+
+@DataSourcesRouter.delete(
+    "/data/sources/files/{file_id}",
+    status_code=HTTPStatus.NO_CONTENT,
+    tags=["Spreadsheets"]
+)
+async def delete_file(
+    file_id: UUID,
+    environment_id: UUID,
+    cascade: bool = False
+):
+    """
+    Delete an uploaded file.
+
+    Args:
+        file_id: The ID of the file to delete
+        environment_id: Environment ID for multi-tenancy validation
+        cascade: If true, delete all dependent data sources and metrics (default: false)
+    """
+    try:
+        if FileStorageCRUD.delete_file(file_id, environment_id, cascade=cascade):
+            return None
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Failed to delete file"
+        )
+    except FileDoesNotExistError as e:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(e))
+    except FileHasDependenciesError as e:
+        dependencies = FileStorageCRUD.get_file_dependencies(file_id)
+        return JSONResponse(
+            status_code=HTTPStatus.CONFLICT,
+            content={
+                "detail": {
+                    "error": "FileHasDependencies",
+                    "message": str(e),
+                    "file_id": str(file_id),
+                    "dependencies": {
+                        "data_sources": [
+                            {
+                                "id": str(ds["id"]),
+                                "name": ds["name"],
+                                "alias": ds["alias"],
+                                "metrics": [
+                                    {
+                                        "id": str(m["id"]),
+                                        "name": m["name"],
+                                        "alias": m["alias"],
+                                        "version_count": m["version_count"]
+                                    }
+                                    for m in ds["metrics"]
+                                ]
+                            }
+                            for ds in dependencies["data_sources"]
+                        ]
+                    }
+                }
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+# ============================================================================
+# Data Source CRUD Endpoints
+# ============================================================================
 
 @DataSourcesRouter.get(
     "/data/sources/{data_source_id}",
@@ -390,28 +407,62 @@ async def get_data_source_schema_humanized(data_source_id: UUID):
 
 @DataSourcesRouter.delete(
     "/data/sources/{data_source_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    status_code=HTTPStatus.NO_CONTENT,
     tags=["Data Sources"]
 )
-async def delete_data_source(data_source_id: UUID):
-    """Delete a data source"""
+async def delete_data_source(
+    data_source_id: UUID,
+    cascade: bool = False
+):
+    """
+    Delete a data source.
+
+    Args:
+        data_source_id: The ID of the data source to delete
+        cascade: If true, delete all dependent metrics before deleting
+                 the data source. Default is false.
+    """
     try:
-        if DataSourceCRUD.delete_data_source(data_source_id):
+        if DataSourceCRUD.delete_data_source(data_source_id, cascade=cascade):
             return None
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             detail="Failed to delete data source"
         )
     except DataSourceDoesNotExistError as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=HTTPStatus.NOT_FOUND,
             detail=str(e)
+        )
+    except DataSourceHasDependenciesError as e:
+        dependencies = DataSourceCRUD.get_data_source_dependencies(data_source_id)
+        return JSONResponse(
+            status_code=HTTPStatus.CONFLICT,
+            content={
+                "detail": {
+                    "error": "DataSourceHasDependencies",
+                    "message": str(e),
+                    "data_source_id": str(data_source_id),
+                    "dependencies": {
+                        "metrics": [
+                            {
+                                "id": str(m["id"]),
+                                "name": m["name"],
+                                "alias": m["alias"],
+                                "version_count": m["version_count"]
+                            }
+                            for m in dependencies["metrics"]
+                        ]
+                    }
+                }
+            }
         )
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
 
 
 # ============================================================================
@@ -628,9 +679,9 @@ async def get_spreadsheet_status(data_source_id: UUID):
     """Get sync status and table list for a spreadsheet data source"""
     try:
         data_source = DataSourceCRUD.get_data_source(data_source_id)
-        
+
         config = data_source.config
-        
+
         return {
             "source_id": str(data_source_id),
             "source_type": data_source.source_type,
@@ -652,33 +703,176 @@ async def get_spreadsheet_status(data_source_id: UUID):
         )
 
 
-@DataSourcesRouter.get("/data/sources/files", tags=["Spreadsheets"])
-async def list_uploaded_files(environment_id: UUID = None, limit: Optional[int] = None):
-    """List all uploaded files for an environment"""
-    if not environment_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="environment_id query parameter is required"
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+
+def _clear_sqlite_cache(data_source_id: UUID, sqlite_path: str) -> None:
+    """
+    Clear SQLite cache entries and physical files.
+
+    Best-effort operation - logs errors but doesn't raise exceptions.
+
+    Args:
+        data_source_id: Data source ID (used as file_id in cache)
+        sqlite_path: Path to SQLite file (local or gs://)
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        # For local paths: delete physical file
+        if not sqlite_path.startswith('gs://'):
+            if os.path.exists(sqlite_path):
+                os.remove(sqlite_path)
+                logger.info(f"Deleted local SQLite file: {sqlite_path}")
+            return
+
+        # For GCS paths: clear cache entry
+        from cortex.core.connectors.api.sheets.cache import CortexFileStorageCacheManager
+        from cortex.core.connectors.api.sheets.config import get_sheets_config
+
+        config = get_sheets_config()
+        cache_manager = CortexFileStorageCacheManager(
+            cache_dir=config.cache_dir,
+            max_size_gb=config.cache_max_size_gb
         )
-    
-    service = FileStorageService()
-    files = service.list_files(
-        environment_id=environment_id,
-        limit=limit
-    )
-    
-    return {
-        "files": [
-            {
-                "id": str(f.id),
-                "name": f.name,
-                "extension": f.extension,
-                "size": f.size,
-                "mime_type": f.mime_type,
-                "hash": f.hash,
-                "created_at": f.created_at.isoformat(),
-                "updated_at": f.updated_at.isoformat()
-            }
-            for f in files
-        ]
-    }
+
+        # Get cached file path
+        cached_path = cache_manager._get_cache_entry(str(data_source_id))
+
+        # Delete physical cached file
+        if cached_path and os.path.exists(cached_path):
+            os.remove(cached_path)
+            logger.info(f"Deleted cached SQLite file: {cached_path}")
+
+        # Delete cache metadata entry
+        conn = sqlite3.connect(cache_manager.metadata_db)
+        conn.execute(
+            "DELETE FROM files_cache_entries WHERE file_id = ?",
+            (str(data_source_id),)
+        )
+        conn.commit()
+        conn.close()
+        logger.info(f"Cleared cache metadata for data source {data_source_id}")
+
+    except Exception as e:
+        # Log but don't fail - cache cleanup is best-effort
+        logger.warning(f"Failed to clear cache for {data_source_id}: {e}")
+
+
+# ============================================================================
+# Rebuild Endpoint
+# ============================================================================
+
+
+@DataSourcesRouter.post(
+    "/data/sources/{data_source_id}/rebuild",
+    response_model=DataSourceRebuildResponse,
+    tags=["Spreadsheets"]
+)
+async def rebuild_data_source(
+    data_source_id: UUID,
+    request: DataSourceRebuildRequest = DataSourceRebuildRequest()
+):
+    """
+    Rebuild a spreadsheet data source from its original uploaded file.
+
+    This operation:
+    - Retrieves the original uploaded file
+    - Optionally clears the SQLite cache
+    - Regenerates the SQLite database
+    - Updates the data source config with new metadata
+
+    Args:
+        data_source_id: ID of the data source to rebuild
+        request: Rebuild configuration options
+
+    Returns:
+        Rebuild results with updated metadata
+
+    Raises:
+        404: Data source not found
+        400: Data source is not a spreadsheet or missing file_id
+        404: Original file not found
+        500: Rebuild failed
+    """
+    try:
+        # 1. Get data source by ID
+        data_source = DataSourceCRUD.get_data_source(data_source_id)
+
+        # 2. Validate it's a spreadsheet type
+        if data_source.source_type != DataSourceTypes.SPREADSHEET:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Data source is not a spreadsheet type (found: {data_source.source_type})"
+            )
+
+        # 3. Extract provider_type and file_id from config
+        provider_type = data_source.config.get("provider_type")
+        if not provider_type:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Data source missing provider_type in config"
+            )
+
+        file_id = data_source.config.get("file_id")
+        if not file_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Data source missing file_id - cannot rebuild"
+            )
+
+        file_id_uuid = UUID(file_id) if isinstance(file_id, str) else file_id
+
+        # 4. Validate original file still exists
+        try:
+            FileDataSourceService.validate(file_id_uuid, data_source.environment_id)
+        except FileDoesNotExistError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Original file {file_id} not found"
+            )
+
+        # 5. Optionally clear cache
+        if request.clear_cache:
+            old_sqlite_path = data_source.config.get("sqlite_path")
+            if old_sqlite_path:
+                _clear_sqlite_cache(data_source_id, old_sqlite_path)
+
+        # 6. Rebuild using builder service
+        new_config = FileDataSourceService.build(
+            file_id=file_id_uuid,
+            environment_id=data_source.environment_id,
+            source_alias=str(data_source.alias),
+            selected_sheets=data_source.config.get("selected_sheets")
+        )
+
+        # 7. Update data source config
+        data_source.config = new_config.model_dump()
+        data_source.updated_at = datetime.now(pytz.UTC)
+        updated_source = DataSourceCRUD.update_data_source(data_source)
+
+        # 8. Return success response
+        return DataSourceRebuildResponse(
+            success=True,
+            message=f"Successfully rebuilt data source '{data_source.name}'",
+            rebuilt_tables=list(new_config.table_mappings.keys()),
+            last_synced=new_config.last_synced,
+            sqlite_path=new_config.sqlite_path
+        )
+
+    except DataSourceDoesNotExistError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to rebuild data source: {str(e)}"
+        )

@@ -3,7 +3,7 @@ import { ref, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useDataSources } from '~/composables/useDataSources';
 import { useApi } from '~/composables/useApi';
-import type { DataSource } from '~/types';
+import type { DataSource, DataSourceDependenciesError } from '~/types';
 import {
   Card,
   CardHeader,
@@ -12,7 +12,16 @@ import {
 } from '~/components/ui/card';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
-import { ArrowLeft, Calendar, Edit, Trash2, Database, Globe, FileText, Settings, Activity, Server, Cloud, Zap, CheckCircle2, XCircle, Loader2 } from 'lucide-vue-next';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+} from '~/components/ui/alert-dialog';
+import { ArrowLeft, Calendar, Edit, Trash2, Database, Globe, FileText, Settings, Activity, Server, Cloud, Zap, CheckCircle2, XCircle, Loader2, AlertTriangle } from 'lucide-vue-next';
 import EditDataSourceDialog from '~/components/EditDataSourceDialog.vue';
 import SourceSchemaViewer from '~/components/SourceSchemaViewer.vue';
 import { toast } from 'vue-sonner';
@@ -27,7 +36,7 @@ import CommonSQLConfig from '~/components/data-sources/CommonSQLConfig.vue'
 const route = useRoute();
 const router = useRouter();
 const { apiUrl } = useApi();
-const { dataSources } = useDataSources();
+const { dataSources, deleteDataSource } = useDataSources();
 
 // Fetch specific data source data
 const { data: dataSource, pending, error, refresh } = useFetch<DataSource>(
@@ -82,6 +91,12 @@ const schemaResult = ref<{
 
 const isLoadingConnection = ref(false);
 const isLoadingSchema = ref(false);
+
+// State for delete dialogs
+const showDeleteDialog = ref(false);
+const showCascadeDialog = ref(false);
+const dependenciesToDelete = ref<DataSourceDependenciesError | null>(null);
+const isDeleting = ref(false);
 
 // Get catalog icon based on source catalog
 function getCatalogIcon(catalog: string) {
@@ -166,25 +181,47 @@ async function handleDataSourceUpdated(updatedDataSource: DataSource) {
   toast.success('Data source updated successfully');
 }
 
-async function handleDelete() {
+function confirmDelete() {
+  showDeleteDialog.value = true;
+}
+
+async function handleDelete(cascade: boolean = false) {
   if (!currentDataSource.value) return;
-  
-  if (!confirm('Are you sure you want to delete this data source? This action cannot be undone.')) {
-    return;
-  }
-  
+
+  isDeleting.value = true;
+
   try {
-    await $fetch(apiUrl(`/api/v1/data/sources/${currentDataSource.value.id}`), {
-      method: 'DELETE'
-    });
-    
+    await deleteDataSource(currentDataSource.value.id, cascade);
+
     toast.success('Data source deleted successfully');
-    await refresh();
+    showDeleteDialog.value = false;
+    showCascadeDialog.value = false;
     router.push('/data/sources');
   } catch (error: any) {
     console.error('Error deleting data source:', error);
-    toast.error(error?.data?.detail || 'Failed to delete data source');
+
+    // Check if it's a dependencies error (409 Conflict)
+    if (error.error === 'DataSourceHasDependencies') {
+      dependenciesToDelete.value = error;
+      showDeleteDialog.value = false;
+      showCascadeDialog.value = true;
+    } else {
+      toast.error(error?.message || error?.data?.detail || 'Failed to delete data source');
+      showDeleteDialog.value = false;
+    }
+  } finally {
+    isDeleting.value = false;
   }
+}
+
+function handleCancelDelete() {
+  showDeleteDialog.value = false;
+  showCascadeDialog.value = false;
+  dependenciesToDelete.value = null;
+}
+
+async function handleCascadeDelete() {
+  await handleDelete(true);
 }
 
 async function testConnection() {
@@ -304,7 +341,7 @@ function goBack() {
           :data-source="currentDataSource" 
           @updated="handleDataSourceUpdated"
         />
-        <Button variant="outline" size="sm" class="text-red-600 hover:text-red-700" @click="handleDelete">
+        <Button variant="outline" size="sm" class="text-red-600 hover:text-red-700" @click="confirmDelete">
           <Trash2 class="w-4 h-4 mr-2" />
           Delete
         </Button>
@@ -473,5 +510,94 @@ function goBack() {
       <p class="text-gray-500">Data source not found</p>
       <Button @click="goBack" class="mt-4">Go Back</Button>
     </div>
+
+    <!-- Delete Confirmation Dialog -->
+    <AlertDialog :open="showDeleteDialog" @update:open="(val) => !val && handleCancelDelete()">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle class="flex items-center gap-2">
+            <AlertTriangle class="w-5 h-5 text-destructive" />
+            Delete Data Source
+          </AlertDialogTitle>
+          <AlertDialogDescription class="space-y-2">
+            <p>
+              Are you sure you want to delete the data source "<strong>{{ currentDataSource?.name }}</strong>"?
+            </p>
+            <p class="text-sm text-muted-foreground">
+              This action cannot be undone.
+            </p>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <Button
+            variant="destructive"
+            @click="() => handleDelete(false)"
+            :disabled="isDeleting"
+          >
+            {{ isDeleting ? 'Deleting...' : 'Delete Data Source' }}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <!-- Cascade Delete Confirmation Dialog -->
+    <AlertDialog :open="showCascadeDialog" @update:open="(val) => !val && handleCancelDelete()">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle class="flex items-center gap-2">
+            <AlertTriangle class="w-5 h-5 text-destructive" />
+            Warning
+          </AlertDialogTitle>
+          <AlertDialogDescription class="space-y-3">
+            <p>
+              The data source "<strong>{{ currentDataSource?.name }}</strong>" cannot be deleted because other entities depend on it.
+            </p>
+
+            <div
+              v-if="dependenciesToDelete"
+              class="p-3 bg-destructive/10 border border-destructive/30 rounded-md"
+            >
+              <p class="text-destructive font-medium mb-2">
+                ⚠️ The following will be permanently deleted:
+              </p>
+              <ul class="text-sm text-destructive space-y-1">
+                <li class="font-semibold">
+                  {{ dependenciesToDelete.dependencies.metrics.length }} metric{{ dependenciesToDelete.dependencies.metrics.length !== 1 ? 's' : '' }}:
+                </li>
+                <li
+                  v-for="metric in dependenciesToDelete.dependencies.metrics"
+                  :key="metric.id"
+                  class="ml-4 list-disc list-inside"
+                >
+                  {{ metric.name }}{{ metric.alias ? ` (${metric.alias})` : '' }}
+                  <span v-if="metric.version_count > 0" class="text-xs">
+                    - {{ metric.version_count }} version{{ metric.version_count !== 1 ? 's' : '' }}
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            <p class="text-sm font-medium">
+              Do you want to delete the data source and all its dependent metrics?
+            </p>
+
+            <p class="text-sm text-muted-foreground">
+              This action cannot be undone.
+            </p>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel @click="handleCancelDelete">Cancel</AlertDialogCancel>
+          <Button
+            variant="destructive"
+            @click="handleCascadeDelete"
+            :disabled="isDeleting"
+          >
+            {{ isDeleting ? 'Deleting...' : 'Delete All' }}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>
 </template> 

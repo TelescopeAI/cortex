@@ -3184,4 +3184,4 @@ postgres-pg8000 = ["pg8000"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.14"
-content-hash = "eff17071957f557e473a0746a3fd13f1749033876baaafa16634c9439ef091b5"
+content-hash = "6e7f92f24b347b0c74e31d33cfb383369ab9225df37afbdcb9ee2aa7ee3a8d7d"

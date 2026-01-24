@@ -37,7 +37,10 @@ class JSONType(TypeDecorator):
         if dialect.name == "postgresql":
             return dialect.type_descriptor(JSONB())
         return dialect.type_descriptor(JSON())
-    
+
+    def coerce_compared_value(self, op, value):
+        return self.impl.coerce_compared_value(op, value)
+
     def process_bind_param(self, value, dialect):
         """Serialize Pydantic models and other custom types to JSON-compatible dicts."""
         if value is None:

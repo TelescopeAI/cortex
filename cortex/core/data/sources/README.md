@@ -164,6 +164,75 @@ Cortex supports CSV files and Google Sheets as data sources with automatic SQLit
 
 ## Connection Management
 
+### Cascade Delete
+
+Cortex provides intelligent dependency tracking for data sources and files. When you attempt to delete a data source or file that has dependent metrics, Cortex returns the dependency tree and allows cascade deletion.
+
+**Delete Data Source:**
+
+```python
+import httpx
+
+# Attempt to delete data source
+response = httpx.delete(
+    f"http://localhost:9002/api/v1/data/sources/{source_id}"
+)
+
+# If 409 Conflict, dependencies exist
+if response.status_code == 409:
+    error = response.json()["detail"]
+    print(f"Error: {error['message']}")
+    print(f"Dependent metrics: {len(error['dependencies']['metrics'])}")
+
+    # Cascade delete (removes data source + all metrics + versions)
+    response = httpx.delete(
+        f"http://localhost:9002/api/v1/data/sources/{source_id}?cascade=true"
+    )
+```
+
+**Delete File:**
+
+```python
+# Attempt to delete file
+response = httpx.delete(
+    f"http://localhost:9002/api/v1/data/sources/files/{file_id}",
+    params={"environment_id": env_id}
+)
+
+# If 409 Conflict, check dependencies
+if response.status_code == 409:
+    error = response.json()["detail"]
+    data_sources = error["dependencies"]["data_sources"]
+
+    # Cascade delete (removes file + data sources + metrics)
+    response = httpx.delete(
+        f"http://localhost:9002/api/v1/data/sources/files/{file_id}?cascade=true",
+        params={"environment_id": env_id}
+    )
+```
+
+**Dependency Response Format (409 Conflict):**
+
+```json
+{
+  "detail": {
+    "error": "DataSourceHasDependencies",
+    "message": "Cannot delete data source: 3 metrics depend on it",
+    "data_source_id": "ds-uuid",
+    "dependencies": {
+      "metrics": [
+        {
+          "id": "metric-uuid",
+          "name": "Total Revenue",
+          "alias": "total_revenue",
+          "version_count": 2
+        }
+      ]
+    }
+  }
+}
+```
+
 ### Creating Data Sources
 
 **Via API:**
@@ -350,8 +419,8 @@ export CORTEX_FILE_STORAGE_TYPE=gcs
 export CORTEX_FILE_STORAGE_GCS_BUCKET=my-cortex-bucket
 export CORTEX_FILE_STORAGE_GCS_PREFIX=cortex-files
 
-# Cache settings
-export CORTEX_FILE_STORAGE_CACHE_DIR=./.cortex/cache/sqlite
+# File Storage Cache settings
+export CORTEX_FILE_STORAGE_CACHE_DIR=./.cortex/cache
 export CORTEX_FILE_STORAGE_CACHE_MAX_SIZE_GB=10
 export CORTEX_FILE_STORAGE_CACHE_TTL_HOURS=168  # 7 days
 ```

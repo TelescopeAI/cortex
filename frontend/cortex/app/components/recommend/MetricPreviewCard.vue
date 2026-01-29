@@ -44,7 +44,7 @@ const metricTitle = computed(() => {
               :id="`metric-${metric.name}`"
               :checked="selected"
               @click.stop="$emit('toggle-select', !selected)"
-              class="mt-2 h-5 w-5"
+              class="mt-2 h-5 w-5 cursor-pointer"
             />
             
             <div class="flex-1 space-y-2">

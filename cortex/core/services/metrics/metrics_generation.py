@@ -304,9 +304,8 @@ class MetricsGenerationService:
 
     @staticmethod
     def _build_metric_name_and_title(table_name: str, base: str) -> Tuple[str, str]:
-        slug = MetricsGenerationService._slugify(table_name, base)
         title = MetricsGenerationService._humanize_name(base)
-        return slug, title
+        return title, title  # Both use humanized format
 
     @staticmethod
     def _should_create(metric_key: str, selected: Set[str]) -> bool:

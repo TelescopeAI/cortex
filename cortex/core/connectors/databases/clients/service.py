@@ -37,6 +37,7 @@ class DBClientService(TSModel):
         sheets_config = get_sheets_config()
         cache_manager = CortexFileStorageCacheManager(
             cache_dir=sheets_config.cache_dir,
+            sqlite_dir=sheets_config.sqlite_storage_path,
             max_size_gb=sheets_config.cache_max_size_gb
         )
         gcs_backend = CortexFileStorageGCSBackend(

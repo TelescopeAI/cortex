@@ -11,16 +11,18 @@ from cortex.core.connectors.api.sheets.storage.base import CortexFileStorageBack
 class CortexFileStorageCacheManager:
     """Manages local SSD cache for SQLite databases with LRU eviction"""
     
-    def __init__(self, cache_dir: str, max_size_gb: float):
-        self.cache_dir = Path(cache_dir)
+    def __init__(self, cache_dir: str, sqlite_dir: str, max_size_gb: float):
+        self.cache_dir = Path(cache_dir)        # For metadata only
+        self.sqlite_dir = Path(sqlite_dir)      # For SQLite files
         self.max_size_gb = max_size_gb
-        self.metadata_db = self.cache_dir / "_cache_metadata.db"
+        self.metadata_db = self.cache_dir / "file_storage_meta.db"  # Renamed for clarity
         self._init_metadata_db()
     
     def _init_metadata_db(self):
         """Initialize SQLite metadata database for cache tracking"""
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        
+        self.sqlite_dir.mkdir(parents=True, exist_ok=True)
+
         conn = sqlite3.connect(self.metadata_db)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS files_cache_entries (
@@ -103,14 +105,14 @@ class CortexFileStorageCacheManager:
     def _get_cache_size_gb(self) -> float:
         """Calculate total cache size in GB by checking actual files on disk"""
         total_bytes = 0
-        
-        # Calculate size of all .db files in cache directory (excluding metadata DB)
-        for file_path in self.cache_dir.glob("*.db"):
-            if file_path.name != "_cache_metadata.db":
-                try:
-                    total_bytes += file_path.stat().st_size
-                except (OSError, FileNotFoundError):
-                    pass
+
+        # Calculate size of all .db files in sqlite directory
+        # No need to exclude metadata DB since it's in a different directory now
+        for file_path in self.sqlite_dir.glob("*.db"):
+            try:
+                total_bytes += file_path.stat().st_size
+            except (OSError, FileNotFoundError):
+                pass
         
         # Also sync metadata with actual files - remove entries for files that no longer exist
         self._sync_metadata_with_disk()
@@ -163,7 +165,7 @@ class CortexFileStorageCacheManager:
         storage_backend: "CortexFileStorageBackend"
     ) -> str:
         """Download file from remote storage and cache it locally"""
-        local_path = str(self.cache_dir / f"{file_id}.db")
+        local_path = str(self.sqlite_dir / f"{file_id}.db")
         
         # Download file
         storage_backend.download_file(remote_path, local_path)

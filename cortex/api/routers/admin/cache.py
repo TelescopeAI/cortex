@@ -32,6 +32,7 @@ async def evict_cache() -> CacheEvictionResponse:
     config = get_sheets_config()
     cache_manager = CortexFileStorageCacheManager(
         cache_dir=config.cache_dir,
+        sqlite_dir=config.sqlite_storage_path,
         max_size_gb=config.cache_max_size_gb
     )
     evicted_count = cache_manager.evict_lru()
@@ -53,6 +54,7 @@ async def get_cache_status() -> CacheStatusResponse:
     config = get_sheets_config()
     cache_manager = CortexFileStorageCacheManager(
         cache_dir=config.cache_dir,
+        sqlite_dir=config.sqlite_storage_path,
         max_size_gb=config.cache_max_size_gb
     )
     return CacheStatusResponse(

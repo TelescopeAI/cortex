@@ -122,7 +122,8 @@ function resetDialog() {
         <Button variant="outline" @click="open = false" :disabled="isUploading">
           Cancel
         </Button>
-        <Button @click="handleUpload(false)" :disabled="selectedFiles.length === 0 || isUploading">
+        <Button @click="handleUpload(false)" :disabled="selectedFiles.length === 0 || isUploading"
+                class="cursor-pointer">
           <span v-if="isUploading">Uploading...</span>
           <span v-else>Upload</span>
         </Button>

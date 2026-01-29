@@ -40,6 +40,7 @@ class CortexSpreadsheetManager:
                 
                 cache_manager = CortexFileStorageCacheManager(
                     cache_dir=config.cache_dir,
+                    sqlite_dir=config.sqlite_storage_path,
                     max_size_gb=config.cache_max_size_gb
                 )
                 

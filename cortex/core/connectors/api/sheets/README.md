@@ -19,18 +19,23 @@ This module provides support for spreadsheet-based data sources in Cortex, inclu
 
 ```bash
 # Storage type (local, gcs, s3)
-CORTEX_SHEETS_STORAGE_TYPE=local
+CORTEX_FILE_STORAGE_TYPE=local
 
 # Local storage paths
-CORTEX_SHEETS_INPUT_STORAGE=/path/to/uploads
-CORTEX_SHEETS_SQLITE_STORAGE=/path/to/databases
+CORTEX_FILE_STORAGE_INPUT_DIR=./.cortex/storage/inputs      # Uploaded files
+CORTEX_FILE_STORAGE_SQLITE_DIR=./.cortex/storage/sqlite     # SQLite databases
+CORTEX_FILE_STORAGE_CACHE_DIR=./.cortex/cache               # Cache metadata only (stores file_storage_meta.db)
+
+# Cache settings (for GCS backend)
+CORTEX_FILE_STORAGE_CACHE_MAX_SIZE_GB=10    # Max cache size in GB
+CORTEX_FILE_STORAGE_CACHE_TTL_HOURS=168     # 7 days
 
 # File path encryption
 CORTEX_FILE_STORAGE_ENCRYPTION_KEY=your-32-byte-base64-key
 
 # GCS (if using cloud storage)
-CORTEX_SHEETS_GCS_BUCKET=my-bucket
-CORTEX_SHEETS_GCS_PREFIX=cortex-sheets
+CORTEX_FILE_STORAGE_GCS_BUCKET=my-bucket
+CORTEX_FILE_STORAGE_GCS_PREFIX=cortex-files
 ```
 
 ### Upload a File
@@ -44,16 +49,20 @@ Response:
 
 ```json
 {
-  "file_ids": ["uuid-1", "uuid-2"],
+  "file_ids": ["uuid-1"],
   "files": [
     {
       "id": "uuid-1",
       "name": "data",
       "extension": "csv",
       "size": 1024,
-      "mime_type": "text/csv"
+      "mime_type": "text/csv",
+      "hash": "abc123def456...",
+      "created_at": "2026-01-30T10:00:00Z",
+      "updated_at": "2026-01-30T10:00:00Z"
     }
-  ]
+  ],
+  "message": "Uploaded 1 file(s)"
 }
 ```
 
@@ -182,15 +191,26 @@ The CSV converter infers column types using these rules:
 
 ### Local Storage (Default)
 
-- Files in `.cortex/storage/inputs`
-- SQLite DBs in `.cortex/storage/sqlite`
+- Uploaded files: `.cortex/storage/inputs/`
+- SQLite databases: `.cortex/storage/sqlite/`
+- No cache metadata needed (permanent storage)
 
 ### Google Cloud Storage (GCS)
 
+Files are stored in GCS with local SSD caching:
+
 ```bash
-CORTEX_SHEETS_STORAGE_TYPE=gcs
-CORTEX_SHEETS_GCS_BUCKET=my-bucket
-CORTEX_SHEETS_GCS_PREFIX=cortex-sheets
+CORTEX_FILE_STORAGE_TYPE=gcs
+CORTEX_FILE_STORAGE_GCS_BUCKET=my-bucket
+CORTEX_FILE_STORAGE_GCS_PREFIX=cortex-files
+CORTEX_FILE_STORAGE_CACHE_DIR=./.cortex/cache               # Cache metadata tracking
+CORTEX_FILE_STORAGE_SQLITE_DIR=./.cortex/storage/sqlite     # Local cache for SQLite files
+```
+
+**Directory Structure:**
+- Cache metadata: `.cortex/cache/file_storage_meta.db` (tracks LRU cache)
+- Cached SQLite files: `.cortex/storage/sqlite/{source_id}.db` (downloaded from GCS)
+- LRU eviction removes least recently used files when cache exceeds max size
 ```
 
 ### Amazon S3
@@ -199,13 +219,80 @@ CORTEX_SHEETS_GCS_PREFIX=cortex-sheets
 CORTEX_SHEETS_STORAGE_TYPE=s3
 ```
 
+### List Files
+
+```bash
+curl -X GET "http://localhost:9002/api/v1/data/sources/files?environment_id={env_id}"
+```
+
+Response:
+
+```json
+{
+  "files": [
+    {
+      "id": "uuid-1",
+      "name": "sales_data",
+      "extension": "csv",
+      "size": 2048,
+      "mime_type": "text/csv",
+      "hash": "abc123...",
+      "created_at": "2026-01-30T10:00:00Z",
+      "updated_at": "2026-01-30T10:00:00Z"
+    }
+  ]
+}
+```
+
+### Delete a File (with Cascade Support)
+
+```bash
+# Simple delete (fails if dependencies exist)
+curl -X DELETE "http://localhost:9002/api/v1/data/sources/files/{file_id}?environment_id={env_id}"
+
+# Cascade delete (removes file + dependent data sources + metrics)
+curl -X DELETE "http://localhost:9002/api/v1/data/sources/files/{file_id}?environment_id={env_id}&cascade=true"
+```
+
+If dependencies exist and `cascade=false`, returns 409 Conflict:
+
+```json
+{
+  "detail": {
+    "error": "FileHasDependencies",
+    "message": "Cannot delete file: 2 data sources depend on it",
+    "file_id": "uuid-1",
+    "dependencies": {
+      "data_sources": [
+        {
+          "id": "ds-uuid",
+          "name": "Sales Database",
+          "alias": "sales_db",
+          "metrics": [
+            {
+              "id": "metric-uuid",
+              "name": "Total Revenue",
+              "alias": "total_revenue",
+              "version_count": 1
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+```
+
 ## API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/data/sources/upload` | POST | Upload files |
-| `/data/sources/files` | GET | List uploaded files |
+| `/data/sources/upload` | POST | Upload files with duplicate detection |
+| `/data/sources/files` | GET | List uploaded files for environment |
+| `/data/sources/files/{file_id}` | DELETE | Delete file (supports cascade) |
 | `/data/sources` | POST | Create spreadsheet data source |
+| `/data/sources/discover` | POST | Discover sheets in files |
+| `/data/sources/preview` | POST | Preview sheet data |
 | `/data/sources/{id}/refresh` | POST | Refresh data from source |
 
 ## Troubleshooting

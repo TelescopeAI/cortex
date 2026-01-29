@@ -87,13 +87,32 @@ class CortexLocalFileStorage(CortexFileStorageBackend):
     def save_sqlite(self, source_id: str, db_path: str) -> str:
         """Save or copy SQLite database to storage location"""
         self.base_sqlite_path.mkdir(parents=True, exist_ok=True)
-        
+
         dest_path = self.base_sqlite_path / f"{source_id}.db"
-        
+
+        # Validate source file exists
+        if not os.path.exists(db_path):
+            raise FileNotFoundError(
+                f"SQLite database not found at {db_path}. "
+                f"DuckDB may have failed to create the database file."
+            )
+
+        # Validate source file is not empty
+        file_size = os.path.getsize(db_path)
+        if file_size == 0:
+            raise ValueError(
+                f"SQLite database at {db_path} is empty (0 bytes). "
+                f"DuckDB conversion failed to write data."
+            )
+
         # Copy the database file
-        if os.path.exists(db_path):
-            shutil.copy2(db_path, dest_path)
-        
+        shutil.copy2(db_path, dest_path)
+
+        # Verify the copy succeeded
+        if not os.path.exists(dest_path):
+            raise IOError(f"Failed to copy SQLite database to {dest_path}")
+
+        print(f"SQLite database copied successfully: {dest_path} ({file_size} bytes)")
         return str(dest_path)
     
     def get_sqlite_path(

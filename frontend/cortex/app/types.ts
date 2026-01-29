@@ -46,6 +46,47 @@ export interface SpreadsheetSourceConfig {
   table_hashes?: Record<string, string>;
 }
 
+// Database config type definitions
+export interface HostBasedSQLConfig {
+  host: string
+  port: number
+  username: string
+  password: string
+  database: string
+  dialect: string
+}
+
+export interface SQLiteConfig {
+  database: string
+  dialect: string
+}
+
+export interface BigQueryConfig {
+  project_id: string
+  dataset_id?: string
+  service_account_details: Record<string, any>
+  serviceAccountJson?: string
+}
+
+export interface SpreadsheetConfig {
+  provider_type: 'csv' | 'gsheets'
+  file_id?: string
+  spreadsheet_id?: string
+  session_id?: string
+  selected_sheets?: string[]
+  sqlite_path?: string
+  last_synced?: string
+  table_mappings?: Record<string, string>
+  table_hashes?: Record<string, string>
+}
+
+// Union type for all database configs
+export type DatabaseConfig =
+  | HostBasedSQLConfig
+  | SQLiteConfig
+  | BigQueryConfig
+  | SpreadsheetConfig
+
 export interface SheetMetadata {
   name: string;
   row_count: number;

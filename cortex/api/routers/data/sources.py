@@ -1,9 +1,9 @@
+import os
+import sqlite3
 from datetime import datetime
 from http import HTTPStatus
 from typing import List, Dict, Any, Optional
 from uuid import UUID
-import os
-import sqlite3
 
 import pytz
 from fastapi import APIRouter, HTTPException, status, File, UploadFile
@@ -21,11 +21,10 @@ from cortex.api.schemas.responses.data_sources import (
 )
 from cortex.core.connectors.api.sheets.exceptions import StorageFileAlreadyExists
 from cortex.core.connectors.api.sheets.service import CortexSpreadsheetService
-from cortex.core.connectors.api.sheets.types import CortexCSVFileConfig
 from cortex.core.connectors.databases.SQL.humanizer import SchemaHumanizer
 from cortex.core.connectors.databases.clients.service import DBClientService
-from cortex.core.data.db.source_service import DataSourceCRUD
 from cortex.core.data.db.file_storage_service import FileStorageService as FileStorageCRUD, FileDataSourceService
+from cortex.core.data.db.source_service import DataSourceCRUD
 from cortex.core.data.sources.data_sources import DataSource
 from cortex.core.exceptions.data.sources import (
     DataSourceAlreadyExistsError,

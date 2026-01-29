@@ -183,9 +183,9 @@ API_BASE_URL=http://localhost:9002
 
 # File Storage & Spreadsheet Configuration
 CORTEX_FILE_STORAGE_TYPE=local  # or 'gcs' for Google Cloud Storage
-CORTEX_FILE_STORAGE_INPUT_DIR=./.cortex/storage/inputs
-CORTEX_FILE_STORAGE_SQLITE_DIR=./.cortex/storage/sqlite
-CORTEX_FILE_STORAGE_CACHE_DIR=./.cortex/cache/sqlite
+CORTEX_FILE_STORAGE_INPUT_DIR=./.cortex/storage/inputs  # Uploaded CSV/Excel files
+CORTEX_FILE_STORAGE_SQLITE_DIR=./.cortex/storage/sqlite  # Converted SQLite databases
+CORTEX_FILE_STORAGE_CACHE_DIR=./.cortex/cache  # Cache metadata (file_storage_meta.db)
 CORTEX_FILE_STORAGE_CACHE_MAX_SIZE_GB=10
 
 # GCS Configuration (only if CORTEX_FILE_STORAGE_TYPE=gcs)
@@ -288,7 +288,7 @@ export CORTEX_FILE_STORAGE_GCS_PREFIX=cortex-files
 ### Cache Configuration
 
 ```bash
-export CORTEX_FILE_STORAGE_CACHE_DIR=./.cortex/cache/sqlite
+export CORTEX_FILE_STORAGE_CACHE_DIR=./.cortex/cache  # Stores file_storage_meta.db
 export CORTEX_FILE_STORAGE_CACHE_MAX_SIZE_GB=10
 export CORTEX_FILE_STORAGE_CACHE_TTL_HOURS=168  # 7 days
 ```

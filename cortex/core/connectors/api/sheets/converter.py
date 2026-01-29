@@ -63,11 +63,39 @@ class CortexSQLiteConverter:
                     print(f"Error parsing CSV {table_name}: {e}")
                     continue
 
-            # Detach SQLite database
+            # CRITICAL FIX: Explicitly commit the transaction
+            # DuckDB's SQLite extension may not auto-commit
+            try:
+                duckdb_conn.execute("COMMIT")
+            except Exception as e:
+                print(f"Note: COMMIT not needed or failed: {e}")
+
+            # Force checkpoint to ensure data is written to disk
+            try:
+                duckdb_conn.execute("CHECKPOINT sqlite_db")
+            except Exception as e:
+                print(f"Note: CHECKPOINT failed: {e}")
+
+            # Detach SQLite database (this should flush remaining data)
             duckdb_conn.execute("DETACH sqlite_db")
 
         finally:
             duckdb_conn.close()
+
+        # Verify the SQLite file was created AND has data
+        if not os.path.exists(self.db_path):
+            raise FileNotFoundError(
+                f"SQLite database was not created at {self.db_path} after DuckDB conversion."
+            )
+
+        file_size = os.path.getsize(self.db_path)
+        if file_size == 0:
+            raise ValueError(
+                f"SQLite database at {self.db_path} is empty (0 bytes). "
+                f"DuckDB failed to write data. Tables attempted: {list(table_mappings.keys())}"
+            )
+
+        print(f"SQLite database created successfully: {self.db_path} ({file_size} bytes)")
 
         return table_mappings
 
@@ -85,7 +113,7 @@ class CortexSQLiteConverter:
 
     def _setup_duckdb_connection(self):
         """
-        Create DuckDB connection and setup SQLite extension
+        Create DuckDB connection and setup SQLite extension with explicit transaction
 
         Returns:
             DuckDB connection with SQLite extension loaded and attached
@@ -99,6 +127,12 @@ class CortexSQLiteConverter:
 
         # Attach SQLite database
         duckdb_conn.execute(f"ATTACH '{self.db_path}' AS sqlite_db (TYPE SQLITE)")
+
+        # Start an explicit transaction for the SQLite database
+        try:
+            duckdb_conn.execute("BEGIN TRANSACTION")
+        except Exception as e:
+            print(f"Note: BEGIN TRANSACTION not needed: {e}")
 
         return duckdb_conn
 

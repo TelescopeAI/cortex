@@ -126,8 +126,16 @@ const metricTypes = computed(() => {
 })
 
 const allSelected = computed(() => {
-  return recommendedMetrics.value.length > 0 && 
+  return recommendedMetrics.value.length > 0 &&
          selectedMetricIds.value.size === recommendedMetrics.value.length
+})
+
+const sortedRecommendedMetrics = computed(() => {
+  return [...recommendedMetrics.value].sort((a, b) => {
+    const countA = (a.measures?.length || 0) + (a.dimensions?.length || 0)
+    const countB = (b.measures?.length || 0) + (b.dimensions?.length || 0)
+    return countB - countA // Descending order
+  })
 })
 
 const selectedDataSourceName = computed(() => {
@@ -483,8 +491,8 @@ onMounted(() => {
 
       <!-- Metrics List -->
       <div class="space-y-4">
-        <MetricPreviewCard 
-          v-for="metric in recommendedMetrics" 
+        <MetricPreviewCard
+          v-for="metric in sortedRecommendedMetrics"
           :key="metric.name"
           :metric="metric"
           :selected="selectedMetricIds.has(metric.name)"
@@ -539,7 +547,7 @@ onMounted(() => {
           <p class="text-sm text-muted-foreground">
             Successfully created {{ creationProgress.current - creationProgress.errors.length }} metrics
           </p>
-          <Button @click="handleBackToMetrics">
+          <Button @click="handleBackToMetrics" class="cursor-pointer">
             View Metrics
             <ChevronRight class="h-4 w-4 ml-2" />
           </Button>

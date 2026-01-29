@@ -151,6 +151,7 @@ class FileStorageService:
                     config = get_sheets_config()
                     cache_manager = CortexFileStorageCacheManager(
                         cache_dir=config.cache_dir,
+                        sqlite_dir=config.sqlite_storage_path,
                         max_size_gb=config.cache_max_size_gb
                     )
                     # Remove cache entry by file_id
@@ -351,6 +352,7 @@ class FileDataSourceService:
         config = get_sheets_config()
         cache_manager = CortexFileStorageCacheManager(
             cache_dir=config.cache_dir,
+            sqlite_dir=config.sqlite_storage_path,
             max_size_gb=config.cache_max_size_gb
         )
 

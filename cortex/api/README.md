@@ -66,18 +66,32 @@ Development stages within workspaces (dev, staging, production).
 
 ### Data Sources
 
-Database connection management.
+Database connection management and file storage.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/data/sources` | List data sources |
+| `GET` | `/environments/{environment_id}/data/sources` | List data sources by environment |
 | `POST` | `/data/sources` | Create data source |
 | `GET` | `/data/sources/{id}` | Get data source details |
 | `PUT` | `/data/sources/{id}` | Update data source |
-| `DELETE` | `/data/sources/{id}` | Delete data source |
+| `DELETE` | `/data/sources/{id}?cascade=false` | Delete data source (with optional cascade) |
 | `POST` | `/data/sources/{id}/test` | Test connection |
+| `POST` | `/data/sources/{id}/ping` | Ping connection |
+| `GET` | `/data/sources/{id}/schema` | Get data source schema |
 | `GET` | `/data/sources/{id}/tables` | List tables |
 | `GET` | `/data/sources/{id}/tables/{name}/columns` | List columns |
+| `POST` | `/data/sources/{id}/rebuild` | Rebuild data source |
+
+**Spreadsheet & File Management:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/data/sources/upload` | Upload files (CSV, spreadsheets) |
+| `GET` | `/data/sources/files` | List uploaded files |
+| `DELETE` | `/data/sources/files/{file_id}?cascade=false` | Delete file (with optional cascade) |
+| `POST` | `/data/sources/discover` | Discover sheets in uploaded files |
+| `POST` | `/data/sources/preview` | Preview sheet data |
+| `POST` | `/data/sources/{id}/refresh` | Refresh spreadsheet data source |
 
 ### Data Models
 
@@ -417,6 +431,69 @@ response = httpx.get(f"{BASE_URL}/metrics", params={
     "environment_id": "env-123",
     "search": "revenue"
 })
+```
+
+## Cascade Delete
+
+Data sources and files support cascade delete to remove dependent entities:
+
+### Delete Data Source with Dependencies
+
+```python
+# Attempt to delete a data source
+response = httpx.delete(f"{BASE_URL}/data/sources/{source_id}")
+
+# If 409 Conflict returned, dependencies exist
+if response.status_code == 409:
+    dependencies = response.json()["detail"]
+    print(f"Cannot delete: {len(dependencies['dependencies']['metrics'])} dependent metrics")
+
+    # Cascade delete (removes data source + all dependent metrics)
+    response = httpx.delete(f"{BASE_URL}/data/sources/{source_id}?cascade=true")
+```
+
+### Delete File with Dependencies
+
+```python
+# Attempt to delete a file
+response = httpx.delete(
+    f"{BASE_URL}/data/sources/files/{file_id}",
+    params={"environment_id": environment_id}
+)
+
+# If 409 Conflict, check which data sources depend on it
+if response.status_code == 409:
+    dependencies = response.json()["detail"]
+    data_sources = dependencies["dependencies"]["data_sources"]
+    print(f"File used by {len(data_sources)} data sources")
+
+    # Cascade delete (removes file + all dependent data sources + metrics)
+    response = httpx.delete(
+        f"{BASE_URL}/data/sources/files/{file_id}?cascade=true",
+        params={"environment_id": environment_id}
+    )
+```
+
+**Response on 409 Conflict:**
+
+```json
+{
+  "detail": {
+    "error": "DataSourceHasDependencies",
+    "message": "Cannot delete data source: 3 metrics depend on it",
+    "data_source_id": "ds-uuid",
+    "dependencies": {
+      "metrics": [
+        {
+          "id": "metric-uuid",
+          "name": "Monthly Revenue",
+          "alias": "monthly_revenue",
+          "version_count": 2
+        }
+      ]
+    }
+  }
+}
 ```
 
 ## Webhooks

@@ -18,7 +18,6 @@ Cortex provides a unified semantic layer that lets you define what matters once 
 - **🔌 Data Sources**: PostgreSQL, MySQL, BigQuery, SQLite, and Spreadsheets (CSV/Google Sheets). Easy to add custom sources.
 - **📊 Dashboards**: Build dashboards using 10+ chart types. Easily extended to support custom visualizations.
 - **📁 File Storage**: Upload CSV files with automatic SQLite conversion, hash-based change detection, and cloud storage support (GCS)
-- **🗑️ Cascade Delete**: Smart dependency tracking - delete data sources and files with automatic cleanup of dependent metrics
 - **👥 Multi Tenant**: Hierarchical organization (Workspaces → Environments → Consumers) with context-aware query execution
 - **🔐 API First**: Comprehensive REST API with OpenAPI documentation
 

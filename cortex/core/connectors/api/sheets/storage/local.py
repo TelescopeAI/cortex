@@ -105,14 +105,24 @@ class CortexLocalFileStorage(CortexFileStorageBackend):
                 f"DuckDB conversion failed to write data."
             )
 
-        # Copy the database file
-        shutil.copy2(db_path, dest_path)
+        # Check if source and destination are the same file
+        if os.path.exists(dest_path) and os.path.samefile(db_path, dest_path):
+            # File is already in the correct location, no need to copy
+            print(f"SQLite database already at destination: {dest_path} ({file_size} bytes)")
+        else:
+            # Remove destination if it exists (to allow overwrite)
+            if os.path.exists(dest_path):
+                os.remove(dest_path)
+                print(f"Removed existing SQLite database: {dest_path}")
 
-        # Verify the copy succeeded
+            # Copy the database file
+            shutil.copy2(db_path, dest_path)
+            print(f"SQLite database copied: {db_path} → {dest_path} ({file_size} bytes)")
+
+        # Verify the destination file exists
         if not os.path.exists(dest_path):
             raise IOError(f"Failed to copy SQLite database to {dest_path}")
 
-        print(f"SQLite database copied successfully: {dest_path} ({file_size} bytes)")
         return str(dest_path)
     
     def get_sqlite_path(

@@ -1,6 +1,6 @@
 import { useEnvironments } from '~/composables/useEnvironments';
 import { computed, ref, watch } from 'vue';
-import type { DataSource } from '~/types';
+import type { DataSource, DataSourceDependenciesError } from '~/types';
 
 export function useDataSources() {
   const { apiUrl } = useApi();
@@ -119,6 +119,51 @@ export function useDataSources() {
     }
   }
 
+  /**
+   * Delete a data source
+   * @param id - Data source ID
+   * @param cascade - If true, delete all dependent metrics first
+   * @returns Promise that resolves when deleted or rejects with error details
+   */
+  async function deleteDataSource(id: string, cascade: boolean = false) {
+    try {
+      await $fetch(apiUrl(`/api/v1/data/sources/${id}${cascade ? '?cascade=true' : ''}`), {
+        method: 'DELETE'
+      });
+
+      // Refresh data sources list
+      await refresh();
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('Failed to delete data source:', err);
+
+      // Extract error detail
+      let errorDetail = err.data?.detail || err.data;
+
+      // Parse if it's a string
+      if (typeof errorDetail === 'string') {
+        try {
+          errorDetail = JSON.parse(errorDetail);
+        } catch (parseErr) {
+          console.error('Failed to parse error detail:', parseErr);
+        }
+      }
+
+      // If 409 Conflict, throw structured dependencies error
+      if (err.status === 409 && errorDetail?.error === 'DataSourceHasDependencies') {
+        throw {
+          error: 'DataSourceHasDependencies',
+          message: errorDetail.message,
+          data_source_id: errorDetail.data_source_id,
+          dependencies: errorDetail.dependencies
+        } as DataSourceDependenciesError;
+      }
+
+      throw err;
+    }
+  }
+
   return {
     dataSources,
     loading,
@@ -127,6 +172,7 @@ export function useDataSources() {
     selectedEnvironmentId,
     createDataSource,
     getDataSource,
-    getDataSourceSchema
+    getDataSourceSchema,
+    deleteDataSource
   };
 } 

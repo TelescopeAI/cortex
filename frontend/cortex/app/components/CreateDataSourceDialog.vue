@@ -15,84 +15,20 @@
           <div class="space-y-2">
             <Select v-model="form.source_type" :disabled="isLoading">
               <SelectTrigger class="flex items-center gap-2">
-                <SelectValue :placeholder="form.source_type ? getSourceTypeLabel(form.source_type) : 'Select database type'" />
+                <SelectValue :placeholder="form.source_type ? DATA_SOURCE_TYPES[form.source_type]?.label : 'Select database type'" />
                 <SelectIcon v-if="form.source_type" as-child>
-                  <NuxtImg 
-                    :src="getIconPath(form.source_type)" 
-                    :alt="form.source_type"
-                    class="w-4 h-4"
-                  />
+                  <DataSourceIcon :source-type="form.source_type" size="sm" />
                 </SelectIcon>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="postgresql">
+                <SelectItem
+                  v-for="sourceType in getOrderedSourceTypes()"
+                  :key="sourceType.type"
+                  :value="sourceType.type"
+                >
                   <div class="flex items-center gap-2">
-                    <NuxtImg 
-                      :src="getIconPath('postgresql')" 
-                      alt="PostgreSQL"
-                      class="w-4 h-4"
-                    />
-                    <span>PostgreSQL</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="mysql">
-                  <div class="flex items-center gap-2">
-                    <NuxtImg 
-                      :src="getIconPath('mysql')" 
-                      alt="MySQL"
-                      class="w-4 h-4"
-                    />
-                    <span>MySQL</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="sqlite">
-                  <div class="flex items-center gap-2">
-                    <NuxtImg 
-                      :src="getIconPath('sqlite')" 
-                      alt="SQLite"
-                      class="w-4 h-4"
-                    />
-                    <span>SQLite</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="oracle">
-                  <div class="flex items-center gap-2">
-                    <NuxtImg 
-                      :src="getIconPath('oracle')" 
-                      alt="Oracle"
-                      class="w-4 h-4"
-                    />
-                    <span>Oracle</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="bigquery">
-                  <div class="flex items-center gap-2">
-                    <NuxtImg 
-                      :src="getIconPath('bigquery')" 
-                      alt="BigQuery"
-                      class="w-4 h-4"
-                    />
-                    <span>BigQuery</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="snowflake">
-                  <div class="flex items-center gap-2">
-                    <NuxtImg 
-                      :src="getIconPath('snowflake')" 
-                      alt="Snowflake"
-                      class="w-4 h-4"
-                    />
-                    <span>Snowflake</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="redshift">
-                  <div class="flex items-center gap-2">
-                    <NuxtImg 
-                      :src="getIconPath('redshift')" 
-                      alt="Redshift"
-                      class="w-4 h-4"
-                    />
-                    <span>Redshift</span>
+                    <DataSourceIcon :source-type="sourceType.type" size="sm" />
+                    <span>{{ sourceType.label }}</span>
                   </div>
                 </SelectItem>
               </SelectContent>
@@ -102,10 +38,36 @@
         
         <!-- Dynamic Configuration Section -->
         <div v-if="form.source_type" class="space-y-2">
-          <Label class="text-base font-medium">Database Configuration</Label>
+          <Label class="text-base font-medium">
+            {{ form.source_type === 'spreadsheet' ? 'Spreadsheet Configuration' : 'Database Configuration' }}
+          </Label>
           <div class="border rounded-lg p-4 bg-muted/50">
+            <div v-if="form.source_type === 'spreadsheet'" class="space-y-4">
+              <div class="space-y-2">
+                <Label for="file-select">Select File</Label>
+                <Select v-model="(form.config as any).file_id" :disabled="loadingFiles">
+                  <SelectTrigger id="file-select">
+                    <SelectValue :placeholder="loadingFiles ? 'Loading files...' : 'Choose a file'">
+                      {{ getSelectedFileName() || (loadingFiles ? 'Loading files...' : 'Choose a file') }}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="file in uploadedFiles" :key="file.id" :value="file.id">
+                      <div class="flex items-center justify-between w-full gap-3">
+                        <span class="font-medium">{{ file.name }}.{{ file.extension }}</span>
+                        <span class="text-xs text-muted-foreground">{{ formatRelativeTime(file.updated_at) }}</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p v-if="uploadedFiles.length === 0 && !loadingFiles" class="text-xs text-muted-foreground">
+                  No files uploaded yet. Please upload files first using the "Manage Files" option.
+                </p>
+              </div>
+            </div>
+
             <PostgreSQLConfig 
-              v-if="form.source_type === 'postgresql'"
+              v-else-if="form.source_type === 'postgresql'"
               v-model="form.config"
               :disabled="isLoading"
             />
@@ -122,12 +84,6 @@
             <BigQueryConfig
               v-else-if="form.source_type === 'bigquery'"
               v-model="form.config"
-              :disabled="isLoading"
-            />
-            <CommonSQLConfig 
-              v-else-if="['oracle', 'snowflake', 'redshift'].includes(form.source_type)"
-              v-model="form.config"
-              :database-type="form.source_type as 'oracle' | 'snowflake' | 'redshift'"
               :disabled="isLoading"
             />
             <div v-else class="text-center py-4 text-muted-foreground">
@@ -184,9 +140,16 @@
           <Button type="button" variant="outline" @click="resetAndClose" :disabled="isLoading">
             Cancel
           </Button>
-          <Button type="submit" :disabled="isLoading || !isFormValid">
+          <Button
+            type="submit"
+            :disabled="isLoading || !isFormValid"
+            :class="[
+              'cursor-pointer transition-all',
+              isLoading
+            ]"
+          >
             <Loader2 v-if="isLoading" class="w-4 h-4 mr-2 animate-spin" />
-            Create Data Source
+            {{ isLoading ? 'Connecting...' : 'Connect' }}
           </Button>
         </DialogFooter>
       </form>
@@ -195,9 +158,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
-import { useDark } from '@vueuse/core'
+import { ref, reactive, computed, watch, nextTick } from 'vue'
+import { useDark, useTimeAgo } from '@vueuse/core'
 import { ChevronDown } from 'lucide-vue-next'
+import { DATA_SOURCE_TYPES, getOrderedSourceTypes } from '~/config/dataSourceTypes'
+import DataSourceIcon from '~/components/data-sources/DataSourceIcon.vue'
+import type { DatabaseConfig } from '~/types'
+
+// Define props
+const props = defineProps<{
+  initialSourceType?: string
+  initialFileId?: string
+  initialFileName?: string
+  autoOpen?: boolean
+}>()
 
 // Define emits
 const emit = defineEmits<{
@@ -231,9 +205,11 @@ import MySQLConfig from '~/components/data-sources/MySQLConfig.vue'
 import SQLiteConfig from '~/components/data-sources/SQLiteConfig.vue'
 import BigQueryConfig from '~/components/data-sources/BigQueryConfig.vue'
 import CommonSQLConfig from '~/components/data-sources/CommonSQLConfig.vue'
+import { useSpreadsheets } from '~/composables/useSpreadsheets'
 
 const { createDataSource } = useDataSources()
 const { selectedEnvironmentId } = useEnvironments()
+const { discoverSheets, listUploadedFiles } = useSpreadsheets()
 const { 
   generateAlias, 
   validateAlias, 
@@ -255,50 +231,19 @@ const isDark = useDark({
 const open = ref(false)
 const isLoading = ref(false)
 const nameManuallyEdited = ref(false)
+const uploadedFiles = ref<Array<{ id: string; name: string; extension: string; size: number; mime_type: string; hash: string; created_at: string; updated_at: string }>>([])
+const loadingFiles = ref(false)
 
 const form = reactive({
   name: '',
   alias: '',
   description: '',
   source_catalog: 'DATABASE' as 'DATABASE' | 'API' | 'FILE',
-  source_type: '' as 'postgresql' | 'mysql' | 'sqlite' | 'oracle' | 'bigquery' | 'snowflake' | 'redshift',
-  config: {} as any
+  source_type: '' as keyof typeof DATA_SOURCE_TYPES | '',
+  config: {} as DatabaseConfig,
+  discoveredSheets: [] as import('~/types').SheetMetadata[],
 })
 
-// Map source types to icon names
-function getIconName(sourceType: string): string {
-  const iconMap: Record<string, string> = {
-    postgresql: 'postgres',
-    mysql: 'mysql',
-    sqlite: 'sqlite',
-    oracle: 'oracle',
-    bigquery: 'bigquery',
-    snowflake: 'snowflake',
-    redshift: 'redshift'
-  }
-  return iconMap[sourceType] || sourceType
-}
-
-// Get icon path based on source type and dark mode
-function getIconPath(sourceType: string): string {
-  const iconName = getIconName(sourceType)
-  const mode = isDark.value ? 'dark' : 'light'
-  return `/icons/brands/${iconName}-${mode}.svg`
-}
-
-// Get source type display label
-function getSourceTypeLabel(sourceType: string): string {
-  const labels: Record<string, string> = {
-    postgresql: 'PostgreSQL',
-    mysql: 'MySQL',
-    sqlite: 'SQLite',
-    oracle: 'Oracle',
-    bigquery: 'BigQuery',
-    snowflake: 'Snowflake',
-    redshift: 'Redshift'
-  }
-  return labels[sourceType] || sourceType
-}
 
 // Capitalize first letter of each word
 function capitalizeWords(str: string): string {
@@ -308,44 +253,42 @@ function capitalizeWords(str: string): string {
     .join(' ')
 }
 
+// Convert UTC date to local timezone
+const convertUTCToLocal = (dateString: string): Date => {
+  const utcDate = new Date(dateString)
+  return new Date(utcDate.getTime() - (utcDate.getTimezoneOffset() * 60000))
+}
+
+// Format relative time
+const formatRelativeTime = (date: string | Date) => {
+  const localDate = typeof date === 'string' ? convertUTCToLocal(date) : date
+  return useTimeAgo(localDate, {
+    updateInterval: 1000
+  })
+}
+
+// Get selected file name for display
+function getSelectedFileName(): string {
+  const config = form.config as any
+  if (!config.file_id || uploadedFiles.value.length === 0) {
+    return ''
+  }
+  const selectedFile = uploadedFiles.value.find(f => f.id === config.file_id)
+  return selectedFile ? `${selectedFile.name}.${selectedFile.extension}` : ''
+}
+
 // Auto-generate name from database configuration
 function generateNameFromConfig(): string {
   if (!form.source_type || !form.config) {
     return ''
   }
 
-  const config = form.config
-  let hostName = ''
-
-  // Get host name based on source type
-  if (form.source_type === 'sqlite') {
-    // For SQLite, use database path or filename
-    hostName = config.database ? config.database.split('/').pop()?.split('\\').pop()?.replace(/\.[^/.]+$/, '') || 'SQLite' : 'SQLite'
-  } else if (form.source_type === 'bigquery') {
-    // For BigQuery, use project_id
-    hostName = config.project_id || 'BigQuery'
-  } else {
-    // For other databases, use host
-    hostName = config.host || 'Database'
+  const metadata = DATA_SOURCE_TYPES[form.source_type]
+  if (!metadata || !metadata.generateName) {
+    return metadata?.label || ''
   }
 
-  // Capitalize host name
-  const capitalizedHost = capitalizeWords(hostName)
-
-  // Get source type display name
-  const sourceTypeNames: Record<string, string> = {
-    postgresql: 'PostgreSQL',
-    mysql: 'MySQL',
-    sqlite: 'SQLite',
-    oracle: 'Oracle',
-    bigquery: 'BigQuery',
-    snowflake: 'Snowflake',
-    redshift: 'Redshift'
-  }
-
-  const sourceTypeName = sourceTypeNames[form.source_type] || form.source_type
-
-  return `${capitalizedHost} ${sourceTypeName} Dataset`
+  return metadata.generateName(form.config as any) || metadata.label
 }
 
 // Auto-generate name when config changes
@@ -377,7 +320,7 @@ watch(() => form.name, (newName) => {
 // Reset config when source type changes
 watch(() => form.source_type, (newType) => {
   if (newType) {
-    form.config = getDefaultConfig(newType)
+    form.config = getDefaultConfig(newType) as any
     nameManuallyEdited.value = false
     // Generate name after config is set
     setTimeout(() => {
@@ -387,7 +330,7 @@ watch(() => form.source_type, (newType) => {
       }
     }, 0)
   } else {
-    form.config = {}
+    form.config = {} as any
     form.name = ''
     nameManuallyEdited.value = false
   }
@@ -397,8 +340,8 @@ watch(() => form.source_type, (newType) => {
 watch(() => form.config, (newConfig) => {
   if (form.source_type && newConfig && typeof newConfig === 'object') {
     // For SQL databases, ensure dialect matches the current source type
-    if (['postgresql', 'mysql', 'sqlite', 'oracle', 'snowflake', 'redshift'].includes(form.source_type)) {
-      newConfig.dialect = form.source_type
+    if (['postgresql', 'mysql', 'sqlite'].includes(form.source_type)) {
+      (newConfig as any).dialect = form.source_type
     }
   }
 }, { deep: true })
@@ -406,15 +349,104 @@ watch(() => form.config, (newConfig) => {
 // Update dialect when source type changes
 watch(() => form.source_type, (newSourceType, oldSourceType) => {
   if (newSourceType && newSourceType !== oldSourceType && form.config && typeof form.config === 'object') {
+    const config = form.config as any
     // For SQL databases, update dialect to match new source type
-    if (['postgresql', 'mysql', 'sqlite', 'oracle', 'snowflake', 'redshift'].includes(newSourceType)) {
-      form.config.dialect = newSourceType
+    if (['postgresql', 'mysql', 'sqlite'].includes(newSourceType)) {
+      config.dialect = newSourceType
+    } else if (newSourceType === 'spreadsheet') {
+      // For spreadsheet, remove dialect
+      delete config.dialect
     } else {
       // For non-SQL databases (like BigQuery), remove dialect if it exists
-      delete form.config.dialect
+      delete config.dialect
     }
   }
 })
+
+// Load uploaded files when CSV provider is selected
+watch(() => (form.config as any).provider_type, async (newProviderType) => {
+  if (newProviderType === 'csv' && selectedEnvironmentId.value) {
+    loadingFiles.value = true
+    try {
+      const files = await listUploadedFiles(selectedEnvironmentId.value)
+      uploadedFiles.value = files
+      // Clear the file_id if no files available
+      if (files.length === 0) {
+        (form.config as any).file_id = ''
+      }
+    } catch (error) {
+      console.error('Failed to load uploaded files:', error)
+      uploadedFiles.value = []
+    } finally {
+      loadingFiles.value = false
+    }
+  }
+})
+
+// Watch for file selection changes and update name/alias
+watch(() => (form.config as any).file_id, (newFileId) => {
+  if (newFileId && form.source_type === 'spreadsheet' && uploadedFiles.value.length > 0) {
+    const selectedFile = uploadedFiles.value.find(f => f.id === newFileId)
+    if (selectedFile && !nameManuallyEdited.value) {
+      // Generate name from file name
+      const titleCaseName = capitalizeWords(selectedFile.name)
+      form.name = titleCaseName
+      // Alias will be auto-generated by the watch on form.name
+    }
+  }
+})
+
+// Handle initial props for auto-opening with prefilled data
+watch(() => props.autoOpen, async (shouldAutoOpen) => {
+  if (shouldAutoOpen && props.initialSourceType === 'spreadsheet' && selectedEnvironmentId.value) {
+    open.value = true
+
+    // Set source type to spreadsheet
+    form.source_type = 'spreadsheet' as any
+    form.source_catalog = 'FILE'
+
+    // Load files first, then set the config with file_id
+    if (props.initialFileId) {
+      loadingFiles.value = true
+      try {
+        const files = await listUploadedFiles(selectedEnvironmentId.value)
+        uploadedFiles.value = files
+
+        // Now set the config with file_id after files are loaded
+        // This ensures the file_id watcher can find the file in uploadedFiles
+        await nextTick()
+        form.config = {
+          provider_type: 'csv',
+          file_id: props.initialFileId
+        }
+
+        // Name and alias will be set by the file_id watcher above
+      } catch (error) {
+        console.error('Failed to load uploaded files:', error)
+        uploadedFiles.value = []
+        form.config = {
+          provider_type: 'csv',
+          file_id: ''
+        }
+      } finally {
+        loadingFiles.value = false
+      }
+    } else {
+      // Set provider type to CSV without file_id
+      form.config = {
+        provider_type: 'csv',
+        file_id: ''
+      }
+
+      if (props.initialFileName) {
+        // Fallback: if no file_id but fileName provided, use fileName for name
+        const decodedFileName = decodeURIComponent(props.initialFileName.replace(/\+/g, ' '))
+        const titleCaseName = capitalizeWords(decodedFileName)
+        form.name = titleCaseName
+      }
+    }
+  }
+}, { immediate: true })
 
 const aliasError = computed(() => getAliasError(form.alias))
 
@@ -430,90 +462,16 @@ const isFormValid = computed(() => {
 
 const isConfigValid = computed(() => {
   if (!form.source_type) return false
-  
-  const config = form.config
-  
-  switch (form.source_type) {
-    case 'postgresql':
-    case 'mysql':
-      return config.host && config.port && config.username && config.password && config.database && config.dialect
-    case 'sqlite':
-      return config.database && config.dialect
-    case 'bigquery':
-      return config.project_id && config.service_account_details &&
-             Object.keys(config.service_account_details).length > 0
-    case 'oracle':
-    case 'snowflake':
-    case 'redshift':
-      return config.host && config.port && config.username && config.password && config.database && config.dialect
-    default:
-      return false
-  }
+
+  const metadata = DATA_SOURCE_TYPES[form.source_type]
+  if (!metadata) return false
+
+  return metadata.validateConfig(form.config as any)
 })
 
 function getDefaultConfig(sourceType: string): any {
-  switch (sourceType) {
-    case 'postgresql':
-      return {
-        host: '',
-        port: 5432,
-        username: '',
-        password: '',
-        database: '',
-        dialect: 'postgresql'
-      }
-    case 'mysql':
-      return {
-        host: '',
-        port: 3306,
-        username: '',
-        password: '',
-        database: '',
-        dialect: 'mysql'
-      }
-    case 'sqlite':
-      return {
-        database: '',
-        dialect: 'sqlite'
-      }
-    case 'bigquery':
-      return {
-        project_id: '',
-        dataset_id: '',
-        service_account_details: {},
-        serviceAccountJson: ''
-      }
-      // Note: BigQuery doesn't need a dialect field
-    case 'oracle':
-      return {
-        host: '',
-        port: 1521,
-        username: '',
-        password: '',
-        database: '',
-        dialect: 'oracle'
-      }
-    case 'snowflake':
-      return {
-        host: '',
-        port: 443,
-        username: '',
-        password: '',
-        database: '',
-        dialect: 'snowflake'
-      }
-    case 'redshift':
-      return {
-        host: '',
-        port: 5439,
-        username: '',
-        password: '',
-        database: '',
-        dialect: 'redshift'
-      }
-    default:
-      return {}
-  }
+  const metadata = DATA_SOURCE_TYPES[sourceType]
+  return metadata ? { ...metadata.defaultConfig } : {}
 }
 
 async function handleSubmit() {
@@ -537,7 +495,7 @@ async function handleSubmit() {
       alias: form.alias.trim(),
       description: form.description.trim(),
       source_catalog: form.source_catalog,
-      source_type: form.source_type,
+      source_type: form.source_type as any,
       config: cleanConfig
     })
     
@@ -558,17 +516,69 @@ async function handleSubmit() {
 
 function resetAndClose() {
   open.value = false
-  
+
   // Reset form
   form.name = ''
   form.alias = ''
   form.description = ''
   form.source_catalog = 'DATABASE' as 'DATABASE' | 'API' | 'FILE'
-  form.source_type = '' as any
-  form.config = {}
-  
+  form.source_type = ''
+  form.config = {} as any
+
   // Reset flags
   nameManuallyEdited.value = false
   resetManualEditFlag()
 }
-</script> 
+</script>
+
+<style scoped>
+.gradient-ring {
+  position: relative;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1),
+              0 0 0 4px transparent;
+  animation: gradient-ring-animation 2s ease-in-out infinite;
+}
+
+.gradient-ring::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  padding: 3px;
+  background: linear-gradient(45deg,
+    rgb(59, 130, 246),
+    rgb(147, 51, 234),
+    rgb(236, 72, 153),
+    rgb(59, 130, 246)
+  );
+  background-size: 300% 300%;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: gradient-animation 3s ease infinite;
+}
+
+@keyframes gradient-animation {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes gradient-ring-animation {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+</style>

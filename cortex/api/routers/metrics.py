@@ -120,7 +120,7 @@ async def create_metric(metric_data: MetricCreateRequest):
                 config = data_source.config
                 
                 # Add dialect for SQL databases if not present
-                if data_source.source_type in [DataSourceTypes.POSTGRESQL, DataSourceTypes.MYSQL, DataSourceTypes.ORACLE, DataSourceTypes.SQLITE]:
+                if data_source.source_type in [DataSourceTypes.POSTGRESQL, DataSourceTypes.MYSQL, DataSourceTypes.ORACLE, DataSourceTypes.SQLITE, DataSourceTypes.SPREADSHEET]:
                     config["dialect"] = data_source.source_type
                 
                 # Create database client and get schema
@@ -326,7 +326,7 @@ async def update_metric(metric_id: UUID, metric_data: MetricUpdateRequest):
                         config = data_source.config
                         
                         # Add dialect for SQL databases if not present
-                        if data_source.source_type in [DataSourceTypes.POSTGRESQL, DataSourceTypes.MYSQL, DataSourceTypes.ORACLE, DataSourceTypes.SQLITE]:
+                        if data_source.source_type in [DataSourceTypes.POSTGRESQL, DataSourceTypes.MYSQL, DataSourceTypes.ORACLE, DataSourceTypes.SQLITE, DataSourceTypes.SPREADSHEET]:
                             config["dialect"] = data_source.source_type
                         
                         # Create database client and get schema
@@ -634,10 +634,7 @@ async def generate_metric_recommendations(request: MetricRecommendationsRequest)
             environment_id=request.environment_id,
             data_source_id=request.data_source_id,
             data_model_id=request.data_model_id,
-            include_tables=request.include_tables,
-            exclude_tables=request.exclude_tables,
-            include_columns=request.include_columns,
-            exclude_columns=request.exclude_columns,
+            select=request.select,
             metric_types=request.metric_types,
             time_windows=request.time_windows,
             grains=request.grains,
@@ -671,10 +668,7 @@ async def generate_metric_recommendations(request: MetricRecommendationsRequest)
                 "environment_id": str(request.environment_id),
                 "data_source_id": str(request.data_source_id),
                 "data_model_id": str(request.data_model_id),
-                "include_tables": request.include_tables,
-                "exclude_tables": request.exclude_tables,
-                "include_columns": request.include_columns,
-                "exclude_columns": request.exclude_columns,
+                "select": request.select.model_dump() if request.select else {},
                 "metric_types": request.metric_types,
                 "time_windows": request.time_windows,
                 "grains": request.grains,

@@ -178,6 +178,9 @@ cython_debug/
 # Observations Contents
 observations
 
+# Cortex Metadata
+.cortex
+
 
 # -------------------------- FRONTEND --------------------------
 # Nuxt dev/build outputs

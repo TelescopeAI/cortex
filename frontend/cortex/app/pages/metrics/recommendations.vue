@@ -6,10 +6,12 @@ import { Button } from '~/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 import { Separator } from '~/components/ui/separator'
 import { Alert, AlertDescription } from '~/components/ui/alert'
-import { Sparkles, Database, Target, Loader2, CheckCircle2, XCircle, ArrowLeft, ChevronRight } from 'lucide-vue-next'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '~/components/ui/collapsible'
+import { Sparkles, Database, Target, Loader2, CheckCircle2, XCircle, ArrowLeft, ChevronRight, ChevronDown } from 'lucide-vue-next'
 import type { SemanticMetric } from '~/composables/useMetrics'
 import { toast } from 'vue-sonner'
 import MetricPreviewCard from '~/components/recommend/MetricPreviewCard.vue'
+import MetricRecommendFilterSection from '~/components/recommend/MetricRecommendFilterSection.vue'
 
 // Page metadata
 definePageMeta({
@@ -34,14 +36,19 @@ const isGenerating = ref(false)
 const isCreating = ref(false)
 const creationProgress = ref({ current: 0, total: 0, errors: [] as string[] })
 
-// Filters / options
-const includeTablesInput = ref<string>('')
-const excludeTablesInput = ref<string>('')
-const includeColumnsInput = ref<string>('')
-const excludeColumnsInput = ref<string>('')
-const metricTypesSelected = ref<Set<string>>(new Set(['count', 'sum', 'avg', 'min', 'max', 'count_distinct', 'boolean']))
-const timeWindowsInput = ref<string>('30')
-const grainsInput = ref<string>('day,week,month,quarter,year')
+// Schema and filter state
+interface TableSelectionState {
+  excluded: boolean
+  selectedColumns: string[]
+}
+
+const schema = ref<{ tables: any[] } | null>(null)
+const isLoadingSchema = ref(false)
+const tableSelections = ref<Record<string, TableSelectionState>>({})
+const selectedMetricTypes = ref<string[]>(['count'])
+const selectedTimeGrains = ref<string[]>(['month'])
+const timeWindowDays = ref<number>(30)
+const advancedFiltersOpen = ref(false)
 
 // Scroll detection for sticky header
 const scrollSentinel = ref<HTMLElement | null>(null)
@@ -64,17 +71,71 @@ const selectedMetrics = computed(() => {
   return recommendedMetrics.value.filter(m => selectedMetricIds.value.has(m.name))
 })
 
-const includeTables = computed(() => parseCsv(includeTablesInput.value))
-const excludeTables = computed(() => parseCsv(excludeTablesInput.value))
-const includeColumns = computed(() => parseCsv(includeColumnsInput.value))
-const excludeColumns = computed(() => parseCsv(excludeColumnsInput.value))
-const timeWindows = computed(() => parseNumberCsv(timeWindowsInput.value))
-const grains = computed(() => parseCsv(grainsInput.value))
-const metricTypes = computed(() => Array.from(metricTypesSelected.value))
+// Transform state to backend API format
+const selectConfig = computed(() => {
+  if (!schema.value) return {}
+
+  const include: Record<string, string[]> = {}
+  const exclude: Record<string, string[]> = {}
+
+  Object.entries(tableSelections.value).forEach(([tableName, state]) => {
+    const table = schema.value?.tables.find(t => t.name === tableName)
+    if (!table) return
+
+    // Handle excluded tables
+    if (state.excluded) {
+      exclude[tableName] = []  // Empty array = exclude entire table
+      return
+    }
+
+    // Determine if all columns selected or specific columns
+    const allColumnCount = table.columns.length
+    const selectedCount = state.selectedColumns.length
+
+    if (selectedCount === allColumnCount) {
+      // All columns selected - send empty array to backend as optimization
+      include[tableName] = []  // Empty array = all columns (backend convention)
+    } else {
+      // Specific columns selected
+      include[tableName] = state.selectedColumns
+    }
+  })
+
+  // If no specific filters, return empty object (select all)
+  if (Object.keys(include).length === 0 && Object.keys(exclude).length === 0) {
+    return {}
+  }
+
+  // Return config with only populated fields
+  const config: any = {}
+  if (Object.keys(include).length > 0) config.include = include
+  if (Object.keys(exclude).length > 0) config.exclude = exclude
+  return config
+})
+
+const timeWindows = computed(() => {
+  return timeWindowDays.value ? [timeWindowDays.value] : undefined
+})
+
+const grains = computed(() => {
+  return selectedTimeGrains.value.length > 0 ? selectedTimeGrains.value : undefined
+})
+
+const metricTypes = computed(() => {
+  return selectedMetricTypes.value.length > 0 ? selectedMetricTypes.value : undefined
+})
 
 const allSelected = computed(() => {
-  return recommendedMetrics.value.length > 0 && 
+  return recommendedMetrics.value.length > 0 &&
          selectedMetricIds.value.size === recommendedMetrics.value.length
+})
+
+const sortedRecommendedMetrics = computed(() => {
+  return [...recommendedMetrics.value].sort((a, b) => {
+    const countA = (a.measures?.length || 0) + (a.dimensions?.length || 0)
+    const countB = (b.measures?.length || 0) + (b.dimensions?.length || 0)
+    return countB - countA // Descending order
+  })
 })
 
 const selectedDataSourceName = computed(() => {
@@ -96,10 +157,7 @@ const handleGenerate = async () => {
       selectedDataSource.value,
       selectedDataModel.value,
       {
-        includeTables: includeTables.value,
-        excludeTables: excludeTables.value,
-        includeColumns: includeColumns.value,
-        excludeColumns: excludeColumns.value,
+        select: selectConfig.value,
         metricTypes: metricTypes.value,
         timeWindows: timeWindows.value,
         grains: grains.value
@@ -216,33 +274,35 @@ const handleBackToMetrics = () => {
   navigateTo('/metrics')
 }
 
-// Helpers
-function parseCsv(value: string): string[] | undefined {
-  if (!value) return undefined
-  const parts = value.split(',').map(v => v.trim()).filter(Boolean)
-  return parts.length ? parts : undefined
-}
-
-function parseNumberCsv(value: string): number[] | undefined {
-  if (!value) return undefined
-  const parts = value
-    .split(',')
-    .map(v => v.trim())
-    .filter(Boolean)
-    .map(v => Number(v))
-    .filter(v => !Number.isNaN(v) && v > 0)
-  return parts.length ? parts : undefined
-}
-
-function toggleMetricType(type: string, checked: boolean | 'indeterminate') {
-  const next = new Set(metricTypesSelected.value)
-  if (checked === true) {
-    next.add(type)
-  } else {
-    next.delete(type)
+// Watch for data source changes to fetch schema
+watch(selectedDataSource, async (dataSourceId) => {
+  if (!dataSourceId) {
+    schema.value = null
+    tableSelections.value = {}
+    return
   }
-  metricTypesSelected.value = next
-}
+
+  isLoadingSchema.value = true
+  try {
+    schema.value = await getDataSourceSchema(dataSourceId)
+
+    // Initialize with all tables and columns selected
+    const selections: Record<string, TableSelectionState> = {}
+    schema.value.tables.forEach(table => {
+      const allColumnNames = table.columns.map(col => col.name)
+      selections[table.name] = {
+        excluded: false,
+        selectedColumns: allColumnNames  // All column names
+      }
+    })
+    tableSelections.value = selections
+  } catch (error) {
+    console.error('Failed to fetch schema:', error)
+    toast.error('Failed to load data source schema')
+  } finally {
+    isLoadingSchema.value = false
+  }
+})
 
 // Initialize data
 onMounted(() => {
@@ -330,48 +390,32 @@ onMounted(() => {
           </p>
         </div>
 
-        <Separator />
-
-        <!-- Filters -->
-        <div class="grid gap-4 md:grid-cols-2">
-          <div class="space-y-2">
-            <label class="text-sm font-medium">Include Tables (comma-separated)</label>
-            <input v-model="includeTablesInput" class="input" placeholder="orders, customers" />
-          </div>
-          <div class="space-y-2">
-            <label class="text-sm font-medium">Exclude Tables (comma-separated)</label>
-            <input v-model="excludeTablesInput" class="input" placeholder="tmp_logs" />
-          </div>
-          <div class="space-y-2">
-            <label class="text-sm font-medium">Include Columns (comma-separated)</label>
-            <input v-model="includeColumnsInput" class="input" placeholder="orders.amount, status" />
-          </div>
-          <div class="space-y-2">
-            <label class="text-sm font-medium">Exclude Columns (comma-separated)</label>
-            <input v-model="excludeColumnsInput" class="input" placeholder="orders.debug_flag" />
-          </div>
-          <div class="space-y-2">
-            <label class="text-sm font-medium">Metric Types</label>
-            <div class="flex flex-wrap gap-2">
-              <label v-for="type in ['count','sum','avg','min','max','count_distinct','boolean']" :key="type" class="flex items-center space-x-1 text-sm">
-                <input
-                  type="checkbox"
-                  :checked="metricTypesSelected.has(type)"
-                  @change="(e: any) => toggleMetricType(type, e.target.checked)"
-                />
-                <span>{{ type }}</span>
-              </label>
+        <!-- Advanced Filters (Collapsible) -->
+        <Collapsible v-model:open="advancedFiltersOpen" class="border rounded-lg">
+          <div class="flex items-center justify-between p-4">
+            <div>
+              <h3 class="font-semibold text-sm text-gray-900 dark:text-gray-100">Advanced</h3>
+              <p class="text-xs text-muted-foreground mt-1">Configure tables, columns, metric types, time grains, and frequency</p>
             </div>
+            <CollapsibleTrigger as-child>
+              <Button variant="ghost" size="sm" class="w-9 p-0">
+                <ChevronDown :class="['h-4 w-4 transition-transform', advancedFiltersOpen && 'rotate-180']" />
+                <span class="sr-only">Toggle advanced filters</span>
+              </Button>
+            </CollapsibleTrigger>
           </div>
-          <div class="space-y-2">
-            <label class="text-sm font-medium">Time Windows (days, comma-separated)</label>
-            <input v-model="timeWindowsInput" class="input" placeholder="30,90" />
-          </div>
-          <div class="space-y-2">
-            <label class="text-sm font-medium">Time Grains (comma-separated)</label>
-            <input v-model="grainsInput" class="input" placeholder="day,week,month,quarter,year" />
-          </div>
-        </div>
+
+          <CollapsibleContent class="CollapsibleContent p-4 border-t">
+            <MetricRecommendFilterSection
+              v-model:table-selections="tableSelections"
+              v-model:metric-types="selectedMetricTypes"
+              v-model:time-grains="selectedTimeGrains"
+              v-model:time-window-days="timeWindowDays"
+              :schema="schema"
+              :is-loading-schema="isLoadingSchema"
+            />
+          </CollapsibleContent>
+        </Collapsible>
 
         <Separator />
 
@@ -447,8 +491,8 @@ onMounted(() => {
 
       <!-- Metrics List -->
       <div class="space-y-4">
-        <MetricPreviewCard 
-          v-for="metric in recommendedMetrics" 
+        <MetricPreviewCard
+          v-for="metric in sortedRecommendedMetrics"
           :key="metric.name"
           :metric="metric"
           :selected="selectedMetricIds.has(metric.name)"
@@ -503,7 +547,7 @@ onMounted(() => {
           <p class="text-sm text-muted-foreground">
             Successfully created {{ creationProgress.current - creationProgress.errors.length }} metrics
           </p>
-          <Button @click="handleBackToMetrics">
+          <Button @click="handleBackToMetrics" class="cursor-pointer">
             View Metrics
             <ChevronRight class="h-4 w-4 ml-2" />
           </Button>
@@ -520,6 +564,35 @@ onMounted(() => {
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Collapsible animation styles */
+.CollapsibleContent {
+  overflow: hidden;
+}
+.CollapsibleContent[data-state="open"] {
+  animation: slideDown 400ms cubic-bezier(0.0, 0.0, 0.2, 1);
+}
+.CollapsibleContent[data-state="closed"] {
+  animation: slideUp 300ms cubic-bezier(0.4, 0.0, 1, 1);
+}
+
+@keyframes slideDown {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--reka-collapsible-content-height);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    height: var(--reka-collapsible-content-height);
+  }
+  to {
+    height: 0;
+  }
 }
 </style>
 

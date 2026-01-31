@@ -13,9 +13,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from uuid import UUID
 
+from cortex.api.schemas.requests.metrics import RecommendSelectionConfig
 from cortex.core.data.db.model_service import DataModelService
 from cortex.core.data.db.source_service import DataSourceCRUD
-from cortex.core.services.data_sources import DataSourceSchemaService
+from cortex.core.services.data.sources.schemas import DataSourceSchemaService
 from cortex.core.semantics.conditions import ComparisonOperator, Condition, WhenClause
 from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.filters import SemanticFilter
@@ -303,9 +304,8 @@ class MetricsGenerationService:
 
     @staticmethod
     def _build_metric_name_and_title(table_name: str, base: str) -> Tuple[str, str]:
-        slug = MetricsGenerationService._slugify(table_name, base)
         title = MetricsGenerationService._humanize_name(base)
-        return slug, title
+        return title, title  # Both use humanized format
 
     @staticmethod
     def _should_create(metric_key: str, selected: Set[str]) -> bool:
@@ -814,10 +814,7 @@ class MetricsGenerationService:
         data_source_id: UUID,
         data_model_id: UUID,
         *,
-        include_tables: Optional[List[str]] = None,
-        exclude_tables: Optional[List[str]] = None,
-        include_columns: Optional[List[str]] = None,
-        exclude_columns: Optional[List[str]] = None,
+        select: RecommendSelectionConfig = None,
         metric_types: Optional[List[str]] = None,
         time_windows: Optional[List[int]] = None,
         grains: Optional[List[str]] = None,
@@ -827,6 +824,9 @@ class MetricsGenerationService:
         Generate metric recommendations from a data source schema.
         Supports optional scoping by tables/columns, metric types, time windows, and time grains.
         """
+        # Default to empty config if not provided (selects all)
+        if select is None:
+            select = RecommendSelectionConfig()
         data_source = DataSourceCRUD.get_data_source(data_source_id)
         if not data_source:
             raise ValueError(f"Data source {data_source_id} not found")
@@ -849,31 +849,83 @@ class MetricsGenerationService:
         schema = schema_response.get("schema", {})
         tables = schema.get("tables", [])
 
-        include_tables_set = MetricsGenerationService._normalize_set(include_tables)
-        exclude_tables_set = MetricsGenerationService._normalize_set(exclude_tables)
-        include_columns_set = MetricsGenerationService._normalize_set(include_columns)
-        exclude_columns_set = MetricsGenerationService._normalize_set(exclude_columns)
+        # Helper function to determine columns for a table
+        def get_table_columns(
+            table_name: str,
+            all_columns: List[str],
+            select_config: RecommendSelectionConfig
+        ) -> List[str]:
+            """
+            Get the list of columns to process for a table based on select config.
+
+            Args:
+                table_name: Name of the table
+                all_columns: List of all column names in the table
+                select_config: Selection configuration
+
+            Returns:
+                List of column names to process (empty list = skip table)
+            """
+            include_dict = select_config.include or {}
+            exclude_dict = select_config.exclude or {}
+
+            # If table is in exclude dict with empty list, skip entire table
+            if table_name in exclude_dict and not exclude_dict[table_name]:
+                return []
+
+            # If include dict exists and table not in it, skip
+            if include_dict and table_name not in include_dict:
+                return []
+
+            # Determine which columns to include
+            if table_name in include_dict:
+                included_cols = include_dict[table_name]
+                if not included_cols:  # Empty list = all columns
+                    result_cols = all_columns
+                else:
+                    result_cols = [c for c in included_cols if c in all_columns]
+            else:
+                # No include specified, use all columns
+                result_cols = all_columns
+
+            # Apply column-level exclusions
+            if table_name in exclude_dict and exclude_dict[table_name]:
+                excluded_cols = set(exclude_dict[table_name])
+                result_cols = [c for c in result_cols if c not in excluded_cols]
+
+            return result_cols
 
         metric_types_set = set(metric_types) if metric_types else MetricsGenerationService.DEFAULT_METRIC_TYPES
         time_windows_list = time_windows or MetricsGenerationService.DEFAULT_TIME_WINDOWS
         grains_list = grains or ["day", "week", "month", "quarter", "year"]
 
-        filtered_tables = MetricsGenerationService._apply_table_filters(
-            tables, include_tables_set, exclude_tables_set
-        )
-
         all_metrics: List[SemanticMetric] = []
         seen_names: Set[str] = set()
 
-        for table in filtered_tables:
+        for table in tables:
+            table_name = table.get("name")
+            all_column_names = [col["name"] for col in table.get("columns", [])]
+
+            # Get columns to process using helper function
+            columns_to_process = get_table_columns(table_name, all_column_names, select)
+
+            # Skip table if no columns to process
+            if not columns_to_process:
+                continue
+
+            # Filter column objects for classification
+            filtered_columns = [col for col in table.get("columns", []) if col["name"] in columns_to_process]
+
+            # Pass to _classify_columns
+            filtered_table = {"name": table_name, "columns": filtered_columns}
             classified = MetricsGenerationService._classify_columns(
-                table,
-                include_columns=include_columns_set,
-                exclude_columns=exclude_columns_set,
+                filtered_table,
+                include_columns=set(),
+                exclude_columns=set(),
             )
 
             single_value_metrics = MetricsGenerationService._generate_single_value_metrics(
-                table,
+                filtered_table,
                 classified,
                 environment_id,
                 data_model_id,
@@ -884,7 +936,7 @@ class MetricsGenerationService:
                 tzinfo=tzinfo,
             )
             comparison_metrics = MetricsGenerationService._generate_comparison_metrics(
-                table,
+                filtered_table,
                 classified,
                 environment_id,
                 data_model_id,

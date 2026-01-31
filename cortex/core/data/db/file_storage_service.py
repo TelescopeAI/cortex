@@ -1,0 +1,463 @@
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+from uuid import UUID
+import os
+import sqlite3
+
+import pytz
+from pydantic import Field
+from sqlalchemy.exc import IntegrityError
+
+from cortex.core.data.db.sources import CortexFileStorageORM, DataSourceORM
+from cortex.core.data.db.source_service import DataSourceCRUD
+from cortex.core.exceptions.data.sources import (
+    FileDoesNotExistError,
+    FileHasDependenciesError
+)
+from cortex.core.storage.store import CortexStorage
+from cortex.core.connectors.api.sheets.cache import CortexFileStorageCacheManager
+from cortex.core.connectors.api.sheets.config import get_sheets_config
+from cortex.core.connectors.api.sheets.types import CortexCSVFileConfig
+from cortex.core.types.telescope import TSModel
+from cortex.core.utils.encryption import FilePathEncryption
+
+
+class FileStorageService:
+    """CRUD operations for file storage with cascade delete support"""
+
+    @staticmethod
+    def get_file_dependencies(
+        file_id: UUID,
+        storage: Optional[CortexStorage] = None
+    ) -> Dict[str, Any]:
+        """
+        Get all entities that depend on a file.
+
+        Traverses the dependency tree:
+        File → DataSources → Metrics → MetricVersions
+
+        Returns:
+            {
+                "data_sources": [
+                    {
+                        "id": UUID,
+                        "name": str,
+                        "alias": str,
+                        "metrics": [
+                            {
+                                "id": UUID,
+                                "name": str,
+                                "alias": str,
+                                "version_count": int
+                            },
+                            ...
+                        ]
+                    },
+                    ...
+                ]
+            }
+        """
+        db_session = (storage or CortexStorage()).get_session()
+        try:
+            # Query data sources where config['file_id'] matches
+            # Use path-based indexing for dialect-independent JSON querying
+            # This works across PostgreSQL, MySQL, and SQLite
+            dependent_data_sources = db_session.query(DataSourceORM).filter(
+                DataSourceORM.config["file_id"].as_string() == str(file_id)
+            ).all()
+
+            result_data_sources = []
+            for ds in dependent_data_sources:
+                # Get metrics for each data source
+                ds_deps = DataSourceCRUD.get_data_source_dependencies(ds.id, storage=storage)
+                result_data_sources.append({
+                    "id": ds.id,
+                    "name": ds.name,
+                    "alias": ds.alias,
+                    "metrics": ds_deps["metrics"]
+                })
+
+            return {
+                "data_sources": result_data_sources
+            }
+        finally:
+            db_session.close()
+
+    @staticmethod
+    def delete_file(
+        file_id: UUID,
+        environment_id: UUID,
+        cascade: bool = False,
+        storage: Optional[CortexStorage] = None
+    ) -> bool:
+        """
+        Delete a file from storage and database.
+
+        Args:
+            file_id: File ID to delete
+            environment_id: Environment ID for multi-tenancy validation
+            cascade: If True, cascade delete data sources (and their metrics)
+            storage: Optional CortexStorage instance
+
+        Returns:
+            True if deleted successfully
+
+        Raises:
+            FileDoesNotExistError: If file not found
+            FileHasDependenciesError: If cascade=False and dependencies exist
+        """
+        storage_instance = storage or CortexStorage()
+        db_session = storage_instance.get_session()
+
+        try:
+            # 1. Verify file exists and belongs to the environment
+            file_record = db_session.query(CortexFileStorageORM).filter(
+                CortexFileStorageORM.id == file_id,
+                CortexFileStorageORM.environment_id == environment_id
+            ).first()
+
+            if file_record is None:
+                raise FileDoesNotExistError(file_id)
+
+            # 2. Check for dependencies
+            dependencies = FileStorageService.get_file_dependencies(file_id, storage=storage_instance)
+            dependent_data_sources = dependencies["data_sources"]
+
+            if len(dependent_data_sources) > 0:
+                if not cascade:
+                    # Count total metrics across all data sources
+                    total_metrics = sum(
+                        len(ds["metrics"]) for ds in dependent_data_sources
+                    )
+                    raise FileHasDependenciesError(
+                        file_id=file_id,
+                        data_source_ids=[ds["id"] for ds in dependent_data_sources],
+                        metric_count=total_metrics
+                    )
+
+                # 3. CASCADE: Delete all dependent data sources
+                # DataSourceCRUD.delete_data_source already handles cascade to metrics
+                for ds in dependent_data_sources:
+                    DataSourceCRUD.delete_data_source(
+                        ds["id"],
+                        cascade=True,
+                        storage=storage_instance
+                    )
+
+            # 4. Clean up cache entries if this is a SQLite file
+            file_path = FilePathEncryption.decrypt(file_record.path)
+            if file_path.endswith('.db'):
+                try:
+                    config = get_sheets_config()
+                    cache_manager = CortexFileStorageCacheManager(
+                        cache_dir=config.cache_dir,
+                        sqlite_dir=config.sqlite_storage_path,
+                        max_size_gb=config.cache_max_size_gb
+                    )
+                    # Remove cache entry by file_id
+                    conn = sqlite3.connect(cache_manager.metadata_db)
+                    conn.execute(
+                        "DELETE FROM files_cache_entries WHERE file_id = ?",
+                        (str(file_id),)
+                    )
+                    conn.commit()
+                    conn.close()
+                except Exception as e:
+                    # Log but don't fail on cache cleanup errors
+                    print(f"Warning: Failed to clean cache for file {file_id}: {e}")
+
+            # 5. Delete physical file
+            if os.path.exists(file_path):
+                os.remove(file_path)
+
+            # 6. Delete database record
+            db_session.delete(file_record)
+            db_session.commit()
+
+            return True
+
+        except (FileDoesNotExistError, FileHasDependenciesError):
+            db_session.rollback()
+            raise
+        except Exception as e:
+            db_session.rollback()
+            raise e
+        finally:
+            db_session.close()
+
+
+# ============================================================================
+# Pydantic Models for Spreadsheet Data Source Building
+# ============================================================================
+
+
+class CSVProviderConfig(TSModel):
+    """Configuration for CSV provider"""
+    provider_type: str = Field(default='csv')
+    files: List[CortexCSVFileConfig]
+    environment_id: Optional[UUID] = None
+
+
+class ConversionResult(TSModel):
+    """Result from spreadsheet to SQLite conversion"""
+    success: bool
+    sqlite_path: str
+    selected_sheets: List[str]
+    table_mappings: Dict[str, str]  # original_name -> safe_name
+    table_hashes: Dict[str, str]  # original_name -> hash
+    last_synced: str
+
+
+class SQLiteDataSourceConfig(TSModel):
+    """Final SQLite data source configuration"""
+    dialect: str = Field(default='sqlite')
+    file_path: str  # Local path for query engine
+    file_id: UUID  # Original file ID for dependency tracking
+    provider_type: str  # 'csv' or 'gsheets'
+    selected_sheets: List[str]
+    table_mappings: Dict[str, str]
+    table_hashes: Dict[str, str]
+    last_synced: str
+    sqlite_path: str  # Canonical path (GCS or local)
+
+
+# ============================================================================
+# File Data Source Service
+# ============================================================================
+
+
+class FileDataSourceService:
+    """Service for building spreadsheet-based data sources"""
+
+    @staticmethod
+    def validate(file_id: UUID, environment_id: UUID):
+        """
+        Validate that a file exists and belongs to the environment.
+
+        Args:
+            file_id: File ID to validate
+            environment_id: Environment ID for multi-tenancy
+
+        Returns:
+            CortexFileStorage model with decrypted path
+
+        Raises:
+            FileDoesNotExistError: If file not found
+        """
+        from cortex.core.services.data.sources.files import FileStorageService as FileService
+
+        # Use FileStorageService from files.py to get file
+        file_record = FileService().get_file(file_id, environment_id)
+        return file_record
+
+    @staticmethod
+    def get_file_config(file_record) -> CSVProviderConfig:
+        """
+        Create CSV provider configuration from file record.
+
+        Args:
+            file_record: CortexFileStorage model
+
+        Returns:
+            CSVProviderConfig with typed configuration
+        """
+        filename = f"{file_record.name}.{file_record.extension}"
+
+        csv_file = CortexCSVFileConfig(
+            filename=filename,
+            file_path=file_record.path,  # Already decrypted by get_file()
+            source_type="upload"
+        )
+
+        return CSVProviderConfig(
+            provider_type='csv',
+            files=[csv_file]
+        )
+
+    @staticmethod
+    def convert_sqlite(
+        source_id: str,
+        provider_type: str,
+        spreadsheet_config: CSVProviderConfig,
+        selected_sheets: Optional[List[str]] = None
+    ) -> ConversionResult:
+        """
+        Convert spreadsheet to SQLite database.
+
+        Args:
+            source_id: Data source identifier
+            provider_type: 'csv' or 'gsheets'
+            spreadsheet_config: CSV provider configuration
+            selected_sheets: Optional sheet selection
+
+        Returns:
+            ConversionResult with conversion metadata
+
+        Raises:
+            Exception: If conversion fails
+        """
+        from cortex.core.connectors.api.sheets.service import CortexSpreadsheetService
+
+        # Convert Pydantic model to dict for the service
+        config_dict = spreadsheet_config.model_dump()
+
+        # Call spreadsheet service
+        result = CortexSpreadsheetService.create_data_source(
+            source_id=source_id,
+            provider_type=provider_type,
+            config=config_dict,
+            selected_sheets=selected_sheets
+        )
+
+        # Check if conversion succeeded
+        if not result.get("success"):
+            error_msg = result.get("error", "Unknown conversion error")
+            raise Exception(f"Spreadsheet conversion failed: {error_msg}")
+
+        # Extract config from result
+        config = result.get("config", {})
+
+        # Build typed ConversionResult
+        return ConversionResult(
+            success=result["success"],
+            sqlite_path=config["sqlite_path"],
+            selected_sheets=config["selected_sheets"],
+            table_mappings=config["table_mappings"],
+            table_hashes=config["table_hashes"],
+            last_synced=config["last_synced"]
+        )
+
+    @staticmethod
+    def resolve_sqlite_path(sqlite_path: str, source_id: str) -> str:
+        """
+        Resolve SQLite path for query engine access.
+
+        For local paths: returns as-is
+        For GCS paths: downloads to local cache and returns cached path
+
+        Args:
+            sqlite_path: Path from conversion (local or gs://)
+            source_id: Data source identifier for cache key
+
+        Returns:
+            Local file path accessible by SQLite query engine
+        """
+        # If not GCS path, return as-is
+        if not sqlite_path.startswith('gs://'):
+            return sqlite_path
+
+        # For GCS paths, set up cache manager
+        from cortex.core.connectors.api.sheets.storage.gcs import CortexFileStorageGCSBackend
+
+        config = get_sheets_config()
+        cache_manager = CortexFileStorageCacheManager(
+            cache_dir=config.cache_dir,
+            sqlite_dir=config.sqlite_storage_path,
+            max_size_gb=config.cache_max_size_gb
+        )
+
+        # Create GCS backend with cache manager
+        gcs_backend = CortexFileStorageGCSBackend(
+            bucket_name=config.gcs_bucket,
+            prefix=config.gcs_prefix,
+            cache_manager=cache_manager
+        )
+
+        # Extract blob path from gs:// URI
+        # Format: gs://bucket/prefix/path/file.db
+        blob_path = sqlite_path.replace(f'gs://{config.gcs_bucket}/', '')
+
+        # Download to cache and get local path
+        local_path = cache_manager.get_cached_path(
+            file_id=source_id,
+            remote_path=blob_path,
+            storage_backend=gcs_backend
+        )
+
+        return local_path
+
+    @staticmethod
+    def _build_config(
+        file_id: UUID,
+        provider_type: str,
+        local_sqlite_path: str,
+        conversion: ConversionResult
+    ) -> SQLiteDataSourceConfig:
+        """
+        Build final SQLite data source configuration.
+
+        Args:
+            file_id: Original uploaded file ID
+            provider_type: 'csv' or 'gsheets'
+            local_sqlite_path: Local path for query engine
+            conversion: Conversion result with metadata
+
+        Returns:
+            SQLiteDataSourceConfig with all fields
+        """
+        return SQLiteDataSourceConfig(
+            dialect='sqlite',
+            file_path=local_sqlite_path,
+            file_id=file_id,
+            provider_type=provider_type,
+            selected_sheets=conversion.selected_sheets,
+            table_mappings=conversion.table_mappings,
+            table_hashes=conversion.table_hashes,
+            last_synced=conversion.last_synced,
+            sqlite_path=conversion.sqlite_path
+        )
+
+    @staticmethod
+    def build(
+        file_id: UUID,
+        environment_id: UUID,
+        source_alias: str,
+        selected_sheets: Optional[List[str]] = None
+    ) -> SQLiteDataSourceConfig:
+        """
+        Build a spreadsheet data source from an uploaded file.
+
+        Main orchestration method that coordinates all conversion steps.
+
+        Args:
+            file_id: Uploaded file ID
+            environment_id: Environment ID
+            source_alias: Data source alias (used as source_id)
+            selected_sheets: Optional sheet selection (None = all sheets)
+
+        Returns:
+            SQLiteDataSourceConfig with complete configuration
+
+        Raises:
+            FileDoesNotExistError: If file not found
+            Exception: If conversion fails
+        """
+        # 1. Validate file exists
+        file_record = FileDataSourceService.validate(file_id, environment_id)
+
+        # 2. Create CSV provider config
+        provider_config = FileDataSourceService.get_file_config(file_record)
+
+        # 3. Convert to SQLite
+        conversion = FileDataSourceService.convert_sqlite(
+            source_id=source_alias,
+            provider_type='csv',
+            spreadsheet_config=provider_config,
+            selected_sheets=selected_sheets
+        )
+
+        # 4. Resolve local path for query engine
+        local_path = FileDataSourceService.resolve_sqlite_path(
+            conversion.sqlite_path,
+            source_alias
+        )
+
+        # 5. Build final config
+        config = FileDataSourceService._build_config(
+            file_id=file_id,
+            provider_type='csv',
+            local_sqlite_path=local_path,
+            conversion=conversion
+        )
+
+        return config

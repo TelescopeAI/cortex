@@ -62,4 +62,13 @@ class DocsMeta:
             "name": "Health",
             "description": "Endpoints to check server readiness and system health",
         },
+        {
+            "name": "Admin",
+            "description": """
+            Operations to manage admin tasks and configurations.
+            
+            Admin endpoints are used to manage admin tasks and configurations.
+            Each admin endpoint must have a unique name within their environment.
+            """,
+        }
     ]

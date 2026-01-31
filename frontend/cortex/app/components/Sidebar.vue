@@ -69,22 +69,23 @@ watch([selectedWorkspaceId, selectedEnvironmentId], ([workspaceId, environmentId
 </script>
 
 <template>
+  <ClientOnly>
   <Sidebar class="w-64">
     <SidebarHeader ref="sidebarHeaderRef" 
-                  class="relative border-b p-4 flex flex-row
+                  class="relative border-b p-4 md:h-20 flex flex-row
                          hover:drop-shadow-2xs
                          items-center justify-between overflow-hidden">
       <!-- Pattern Background Effect -->
-      <div v-show="isSidebarHeaderHovered || isLogoHovered"
-        class="absolute inset-0 pointer-events-none transition-opacity duration-700 z-10 isolate transform-gpu"
+      <div v-if="isSidebarHeaderHovered || isLogoHovered"
+        class="absolute inset-0"
       >
         <WarpBackground 
-        :perspective="70"
-        :beamsPerSide="3"
+        :perspective="60"
+        :beamsPerSide="2"
         :beamSize="10"
         :beamDuration="3"
         :gridColor="starColor"
-        class="z-50 max-h-4 mx-auto"/>
+        class="!border-0 !rounded-none !p-0 w-full h-full"/>
         </div>
 
       <Logo @hover="handleLogoHover" class="z-60"/>
@@ -126,4 +127,5 @@ watch([selectedWorkspaceId, selectedEnvironmentId], ([workspaceId, environmentId
       </SidebarMenu>
     </SidebarContent>
   </Sidebar>
+</ClientOnly>
 </template>

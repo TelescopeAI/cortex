@@ -212,7 +212,7 @@ class MigrationManager:
     def get_pending_migrations(self) -> List[Dict[str, str]]:
         """
         Get list of pending migrations that haven't been applied.
-        
+
         Returns:
             List of dicts with keys: revision_id, description
         """
@@ -220,17 +220,20 @@ class MigrationManager:
             script_dir = ScriptDirectory.from_config(self._alembic_cfg)
             current_rev = self.get_current_revision()
             head_rev = self.get_head_revision()
-            
+
             if not head_rev:
                 return []
-            
+
             if not current_rev:
-                # No migrations applied yet, get all
-                revisions = list(script_dir.walk_revisions(head_rev, head_rev))
+                # No migrations applied yet, get all revisions from start to head
+                # Use named arguments (base=None means from the beginning)
+                revisions = list(script_dir.walk_revisions(base=None, head=head_rev))
             else:
                 # Get revisions between current and head
-                revisions = list(script_dir.walk_revisions(head_rev, current_rev))
-            
+                # IMPORTANT: Use named arguments (base, head) not positional args
+                # Positional args are deprecated and fail with "not on same branch" error
+                revisions = list(script_dir.walk_revisions(base=current_rev, head=head_rev))
+
             pending = []
             for rev in revisions:
                 if current_rev is None or rev.revision != current_rev:
@@ -240,7 +243,7 @@ class MigrationManager:
                         'revision_id': rev.revision[:12],  # Short form
                         'description': desc
                     })
-            
+
             return pending
         except Exception as e:
             logger.warning(f"Could not get pending migrations: {e}")
@@ -598,10 +601,64 @@ class MigrationManager:
             logger.error(f"Failed to apply database migrations: {e}")
             return False
     
+    def downgrade_migrations(self, target: str) -> bool:
+        """
+        Downgrade database migrations to the target revision with interactive confirmation.
+
+        Args:
+            target: Target revision to downgrade to (e.g., revision ID, "-1" for previous, "base" for start)
+
+        Returns:
+            bool: True if migrations were downgraded successfully, False otherwise
+        """
+        try:
+            current_rev = self.get_current_revision()
+
+            if not current_rev:
+                if self.interactive:
+                    self.console.print("[yellow]No migrations applied yet, nothing to downgrade[/yellow]")
+                return True
+
+            # Show confirmation prompt if interactive
+            if self.interactive:
+                target_display = target if target != "-1" else "previous revision"
+                warning = (
+                    f"[red]⚠ WARNING: This will downgrade your database from [cyan]{current_rev[:12]}[/cyan] to [cyan]{target_display}[/cyan][/red]\n"
+                    "[red]This operation may result in data loss![/red]"
+                )
+                self.console.print(warning)
+
+                # Get confirmation
+                if not self.console.input(f"\n[bold]Are you sure you want to proceed?[/bold] [cyan][(y)es/(n)o]:[/cyan] ").lower() in ("y", "yes"):
+                    self.console.print("[yellow]⚠ Downgrade cancelled by user[/yellow]")
+                    logger.info("Downgrade cancelled by user")
+                    return False
+
+            logger.info(f"Downgrading database migrations to {target}...")
+
+            # Apply downgrade
+            command.downgrade(self._alembic_cfg, target)
+
+            if self.interactive:
+                self.console.print("\n[green]✓ Downgrade executed successfully[/green]")
+                new_rev = self.get_current_revision()
+                if new_rev:
+                    self.console.print(f"Database is now at revision: [cyan]{new_rev[:12]}[/cyan]")
+                else:
+                    self.console.print("Database is now at: [cyan]base (no migrations)[/cyan]")
+
+            logger.info("Database migrations downgraded successfully.")
+            return True
+
+        except Exception as e:
+            self.console.print(f"[red]✗ Failed to downgrade migrations: {e}[/red]")
+            logger.error(f"Failed to downgrade database migrations: {e}")
+            return False
+
     def auto_apply_migrations_if_enabled(self) -> bool:
         """
         Automatically apply migrations if the environment variable is enabled.
-        
+
         Returns:
             bool: True if migrations were applied or not needed, False if failed
         """

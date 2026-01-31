@@ -16,10 +16,11 @@ from starlette.types import ASGIApp
 
 from cortex.__version__ import version
 from cortex.api.docs.meta import DocsMeta
-from cortex.api.routers import PUBLIC_ROUTES
+from cortex.api.routers import ALL_ENABLED_ROUTES
 from cortex.core.config.execution_env import ExecutionEnv
 from cortex.core.onboarding.onboard import OnboardingManager
 from fastapi.logger import logger as fastapi_logger
+from cortex.core.connectors.api.sheets.config import ensure_storage_directories
 
 API_PREFIX = "/api"
 AUTH_PREFIX = "/auth"
@@ -38,7 +39,35 @@ if ExecutionEnv.https_enabled():
     SSL_KEYFILE = os.getenv("LOCAL_SSL_KEY")
     SSL_CERTIFICATE = os.getenv("LOCAL_SSL_CERT")
 
-ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:9002").split(",")
+
+def _parse_allowed_origins() -> list:
+    """Parse ALLOWED_ORIGINS from environment
+    
+    Handles both formats:
+    - Comma-separated: "http://localhost:3000,http://localhost:3001"
+    - JSON array: ["http://localhost:3000", "http://localhost:3001"]
+    """
+    import json
+    
+    origins_str = ExecutionEnv.get_key("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:9003")
+    
+    if not origins_str:
+        return ["http://localhost:3000", "http://localhost:9003"]
+    
+    origins_str = str(origins_str).strip()
+    
+    # Check if it's already a JSON array format
+    if origins_str.startswith("["):
+        try:
+            return json.loads(origins_str)
+        except (json.JSONDecodeError, ValueError):
+            pass
+    
+    # Otherwise treat as comma-separated string
+    return [origin.strip() for origin in origins_str.split(",") if origin.strip()]
+
+
+ORIGINS = _parse_allowed_origins()
 
 
 @asynccontextmanager
@@ -47,6 +76,13 @@ async def lifespan(app: FastAPI):
     # Startup: Execute before the application starts receiving requests
     logger = logging.getLogger(__name__)
     logger.info("Starting Cortex API server...")
+    
+    # Ensure storage directories exist
+    try:
+        ensure_storage_directories()
+        logger.info("Storage directories created successfully")
+    except Exception as e:
+        logger.error(f"Error creating storage directories: {e}")
     
     # Run onboarding operations
     try:
@@ -106,7 +142,7 @@ if not ExecutionEnv.is_local():
 
 
 
-for route in PUBLIC_ROUTES:
+for route in ALL_ENABLED_ROUTES:
     app.include_router(route["router"], prefix=API_URL_PREFIX)
 
 
@@ -195,13 +231,50 @@ app.add_middleware(
 reload_dirs = [os.path.join(ROOT_DIR, "api"), os.path.join(ROOT_DIR, "core")]
 
 
-def start_api_server():
-    if ExecutionEnv.https_enabled():
-        uvicorn.run("cortex.api.main:app", host=SERVER_HOST, port=SERVER_PORT, reload=True, reload_dirs=reload_dirs,
-                    ssl_keyfile=SSL_KEYFILE, ssl_certfile=SSL_CERTIFICATE, server_header=False)
+def start_api_server(
+    host: str = "0.0.0.0",
+    port: int = 9002,
+    reload: bool = True,
+    ssl_keyfile: str = None,
+    ssl_certfile: str = None
+):
+    """Start the FastAPI API server with configurable parameters
+    
+    Args:
+        host: Server host (default: 0.0.0.0)
+        port: Server port (default: 9002)
+        reload: Enable auto-reload on code changes (default: True)
+        ssl_keyfile: Path to SSL key file (optional)
+        ssl_certfile: Path to SSL certificate file (optional)
+    """
+    # Use provided cert/key or fall back to environment config
+    keyfile = ssl_keyfile
+    certfile = ssl_certfile
+    
+    if not keyfile and not certfile and ExecutionEnv.https_enabled():
+        keyfile = SSL_KEYFILE
+        certfile = SSL_CERTIFICATE
+    
+    if keyfile and certfile:
+        uvicorn.run(
+            "cortex.api.main:app",
+            host=host,
+            port=port,
+            reload=reload,
+            reload_dirs=reload_dirs,
+            ssl_keyfile=keyfile,
+            ssl_certfile=certfile,
+            server_header=False
+        )
     else:
-        uvicorn.run("cortex.api.main:app", host=SERVER_HOST, port=SERVER_PORT, reload=True, reload_dirs=reload_dirs,
-                    server_header=False)
+        uvicorn.run(
+            "cortex.api.main:app",
+            host=host,
+            port=port,
+            reload=reload,
+            reload_dirs=reload_dirs,
+            server_header=False
+        )
 
 
 if __name__ == "__main__":

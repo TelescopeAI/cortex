@@ -268,6 +268,12 @@ class MetricService:
                 .filter(MetricVersionORM.metric_id == metric_id)
                 .order_by(desc(MetricVersionORM.version_number))
                 .all())
+
+    def get_metric_version_count(self, metric_id: UUID) -> int:
+        """Get the count of versions for a specific metric"""
+        return (self.session.query(MetricVersionORM)
+                .filter(MetricVersionORM.metric_id == metric_id)
+                .count())
     
     def clone_metric(self, metric_id: UUID, new_data_model_id: UUID, new_name: Optional[str] = None) -> MetricORM:
         """Clone a metric to another data model"""

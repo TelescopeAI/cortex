@@ -79,7 +79,7 @@ class DataSourceSchemaService:
             }
 
             if cache_enabled and cache_manager and cache_key:
-                ttl_seconds = 3600
+                ttl_seconds = 300
                 cache_manager.set(cache_key, response, ttl_seconds)
 
             return response

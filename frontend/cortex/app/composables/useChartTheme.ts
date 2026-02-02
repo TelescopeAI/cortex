@@ -1,9 +1,11 @@
 import { computed } from 'vue'
 import { useDark } from '@vueuse/core'
+import { shadcnLightTheme } from '~/assets/themes/charts/shadcn-light'
+import { shadcnDarkTheme } from '~/assets/themes/charts/shadcn-dark'
 
 /**
  * Composable to provide ECharts theme based on dark mode
- * @returns computed theme string for ECharts ('dark' or undefined for light)
+ * Now returns custom Shadcn theme objects instead of ECharts built-in themes
  */
 export function useChartTheme() {
   // Use the same dark mode configuration as the rest of the app
@@ -15,8 +17,9 @@ export function useChartTheme() {
     storageKey: 'cortex-color-scheme'
   })
 
-  // ECharts built-in theme: 'dark' for dark mode, undefined for light mode
-  const chartTheme = computed(() => isDark.value ? 'dark' : undefined)
+  // Return Shadcn theme objects (not strings!)
+  // VChart accepts theme objects directly via :theme prop
+  const chartTheme = computed(() => isDark.value ? shadcnDarkTheme : shadcnLightTheme)
 
   return {
     isDark,

@@ -86,7 +86,7 @@ function resetDialog() {
   <!-- Main upload dialog -->
   <Dialog v-model:open="open" @update:open="(isOpen) => { if (!isOpen) resetDialog() }">
     <DialogTrigger as-child>
-      <Button variant="outline" size="sm">
+      <Button variant="outline" size="sm" class="cursor-pointer">
         <Upload class="w-4 h-4 mr-2" />
         Upload
       </Button>

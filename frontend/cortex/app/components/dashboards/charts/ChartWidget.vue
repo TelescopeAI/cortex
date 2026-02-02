@@ -109,23 +109,23 @@ const chartData = computed(() => {
 // Prepare categories for chart components
 const chartCategories = computed(() => {
   const { processed } = props.data
-  
+
   if (!processed.series || processed.series.length === 0) {
     return {}
   }
-  
-  const categories: Record<string, { name: string; color: string }> = {}
-  
+
+  const categories: Record<string, { name: string; color?: string }> = {}
+
   processed.series.forEach((series, index) => {
-    const colors = ['#3b82f6', '#ef4444', '#22c55e', '#f97316', '#8b5cf6', '#d946ef']
     if (series.name) {
       categories[series.name] = {
-        name: series.name,
-        color: series.color || colors[index % colors.length] as string
+        name: series.name
+        // Don't pass color at all - let theme gradients apply
+        // Backend colors override theme, so we ignore them completely
       }
     }
   })
-  
+
   return categories
 })
 
@@ -151,8 +151,7 @@ const chartProps = computed(() => {
     data: chartData.value,
     categories: chartCategories.value,
     xFormatter,
-    hideLegend: props.widget.visualization.show_legend === false,
-    yGridLine: props.widget.visualization.show_grid !== false
+    hideLegend: props.widget.visualization.show_legend === false
   }
   
   switch (vizType) {
@@ -161,7 +160,7 @@ const chartProps = computed(() => {
         ...baseProps,
         yAxis: yAxisKeys.value,
         xNumTicks: 7,
-        radius: 4,
+        radius: 0,
         legendPosition: 'top'
       }
     

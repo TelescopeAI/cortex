@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useChartTheme } from '~/composables/useChartTheme'
+import { getShadcnTooltipConfig } from '~/config/echartShadCNTooltip'
 
 interface BulletLegendItemInterface {
   name: string
-  color: string
+  color?: string  // Make color optional
 }
 
 interface StackedLineChartProps {
@@ -18,6 +19,8 @@ interface StackedLineChartProps {
   curveType?: string
   legendPosition?: string
   hideLegend?: boolean
+  hideToolbar?: boolean
+  xGridLine?: boolean
   yGridLine?: boolean
   dataZoom?: boolean
 }
@@ -26,10 +29,12 @@ const props = withDefaults(defineProps<StackedLineChartProps>(), {
   yLabel: '',
   xNumTicks: 5,
   yNumTicks: 4,
-  curveType: 'linear',
+  curveType: 'smooth',
   legendPosition: 'top',
   hideLegend: false,
-  yGridLine: true
+  hideToolbar: true,
+  xGridLine: false,
+  yGridLine: false
 })
 
 const { chartTheme } = useChartTheme()
@@ -37,32 +42,42 @@ const { chartTheme } = useChartTheme()
 // Convert data to ECharts format with stacking
 const chartOption = computed(() => {
   const xAxisData = props.data.map((_, index) => props.xFormatter(index))
-  
+  const categorySize = props.data.length
+
   const series = Object.keys(props.categories).map(key => {
     const categoryInfo = props.categories[key]
-    return {
+    const seriesConfig: any = {
       name: categoryInfo?.name || key,
       type: 'line',
       stack: 'total', // This enables stacking
       data: props.data.map(item => item[key]),
       smooth: props.curveType === 'smooth',
-      itemStyle: {
-        color: categoryInfo?.color || '#3b82f6'
-      },
-      lineStyle: {
-        color: categoryInfo?.color || '#3b82f6'
-      },
+      symbol: 'none',  // Hide data point markers
       areaStyle: {
         opacity: 0.3
       }
     }
+
+    // Only override theme colors if explicitly provided
+    if (categoryInfo?.color) {
+      seriesConfig.itemStyle = {
+        color: categoryInfo.color
+      }
+      seriesConfig.lineStyle = {
+        color: categoryInfo.color
+      }
+    }
+
+    return seriesConfig
   })
 
   return {
     tooltip: {
-      trigger: 'axis',
+      ...getShadcnTooltipConfig({
+        categorySize
+      }),
       axisPointer: {
-        type: 'cross'
+        type: 'none'
       }
     },
     legend: {
@@ -78,7 +93,7 @@ const chartOption = computed(() => {
       containLabel: true
     },
     toolbox: {
-      show: true,
+      show: !props.hideToolbar,
       feature: {
         dataZoom: {
           show: true,
@@ -126,7 +141,10 @@ const chartOption = computed(() => {
     xAxis: {
       type: 'category',
       data: xAxisData,
-      boundaryGap: false
+      boundaryGap: false,
+      splitLine: {
+        show: props.xGridLine
+      }
     },
     yAxis: {
       type: 'value',

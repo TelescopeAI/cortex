@@ -1,7 +1,7 @@
 <template>
   <Dialog v-model:open="open">
     <DialogTrigger as-child>
-      <Button variant="outline" size="sm">
+      <Button variant="outline" size="sm" class="cursor-pointer">
         <Plus class="w-4 h-4 mr-2" />
         Add
       </Button>

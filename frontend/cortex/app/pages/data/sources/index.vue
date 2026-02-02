@@ -164,7 +164,7 @@ const filteredDataSources = computed(() => {
             :initial-file-name="dialogInitialFileName"
             @data-source-created="handleDataSourceCreated"
           />
-          <Button variant="outline" size="sm" @click="router.push('/data/sources/files')">
+          <Button variant="outline" size="sm" class="cursor-pointer" @click="router.push('/data/sources/files')">
             <Upload class="w-4 h-4 mr-2" />
             Upload File
           </Button>

@@ -33,12 +33,12 @@ const isPieOrDonut = computed(() => props.type === 'pie_chart' || props.type ===
 
 const lineAreaBarData = computed(() => {
   const series = Array.isArray(props.processed?.series) ? props.processed.series : []
-  const categories: Record<string, { name: string; color: string }> = {}
-  const colors = ['#3b82f6', '#ef4444', '#22c55e', '#f97316', '#8b5cf6', '#d946ef']
+  const categories: Record<string, { name: string }> = {}
   const rowsMap: Record<string, any> = {}
   series.forEach((s: any, sIdx: number) => {
     const seriesName = String((s && s.name) ? s.name : `Series ${sIdx + 1}`)
-    categories[seriesName] = { name: seriesName, color: colors[sIdx % colors.length] || '#3b82f6' }
+    // Don't pass color at all - let theme gradients apply
+    categories[seriesName] = { name: seriesName }
     const dataPoints: any[] = Array.isArray(s?.data) ? (s.data as any[]) : []
     dataPoints.forEach((p: any) => {
       const x: string = String(p?.x ?? '')
@@ -173,7 +173,6 @@ const stackedAreaComponent = computed(() => {
         :y-formatter="(v:number)=> v"
         :x-num-ticks="7"
         :radius="4"
-        :y-grid-line="true"
         :legend-position="'top'"
         :hide-legend="false"
         :data-zoom="dataZoom"
@@ -187,7 +186,6 @@ const stackedAreaComponent = computed(() => {
         :y-formatter="(v:number)=> v"
         :x-num-ticks="7"
         :radius="4"
-        :y-grid-line="true"
         :legend-position="'top'"
         :hide-legend="false"
         :data-zoom="dataZoom"

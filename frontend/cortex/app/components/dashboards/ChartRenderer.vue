@@ -55,7 +55,7 @@ const donutData = computed(() => {
   const firstSeries: any = Array.isArray(props.processed?.series) ? (props.processed.series as any[])[0] : null
   const points: any[] = Array.isArray(firstSeries?.data) ? (firstSeries.data as any[]) : []
   const values = points.map((p: any) => (typeof p?.y === 'number' ? p.y : Number(p?.y) || 0))
-  const labels: { name: string; color: string }[] = points.map((p: any, idx: number) => ({ name: String(p?.x ?? String(idx)), color: ['#3b82f6', '#ef4444', '#22c55e', '#f97316', '#8b5cf6', '#d946ef'][idx % 6] || '#3b82f6' }))
+  const labels: { name: string; color?: string }[] = points.map((p: any, idx: number) => ({ name: String(p?.x ?? String(idx)) }))
   return { values, labels }
 })
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useChartTheme } from '~/composables/useChartTheme'
+import { getShadcnTooltipConfig } from '~/config/echartShadCNTooltip'
 import type { BoxPlotDataPoint, ChartSeries } from '~/types/dashboards'
 
 interface BoxPlotProps {
@@ -8,9 +9,22 @@ interface BoxPlotProps {
   height?: number
   yLabel?: string
   xLabel?: string
+  hideLegend?: boolean
+  hideToolbar?: boolean
+  xGridLine?: boolean
+  yGridLine?: boolean
+  dataZoom?: boolean
+  legendPosition?: string
 }
 
-const props = defineProps<BoxPlotProps>()
+const props = withDefaults(defineProps<BoxPlotProps>(), {
+  hideLegend: false,
+  hideToolbar: true,
+  xGridLine: false,
+  yGridLine: false,
+  dataZoom: false,
+  legendPosition: 'top'
+})
 
 const { chartTheme } = useChartTheme()
 
@@ -46,14 +60,16 @@ const echartsData = computed(() => {
 const option = computed(() => {
   return {
     tooltip: {
+      ...getShadcnTooltipConfig({
+        categorySize: echartsData.value.categories.length
+      }),
       trigger: 'item',
       axisPointer: {
-        type: 'shadow'
+        type: 'none'
       },
       formatter: (params: any) => {
         if (params.componentSubType === 'boxplot') {
           const data = params.data
-          // Get the category name from the x-axis data
           const categoryName = echartsData.value.categories[params.dataIndex] || 'Unknown'
           return `${categoryName}<br/>
             Max: ${data[4]}<br/>
@@ -62,21 +78,17 @@ const option = computed(() => {
             Q1: ${data[1]}<br/>
             Min: ${data[0]}`
         } else {
-          // For outliers, also use the category name
           const categoryName = echartsData.value.categories[params.dataIndex] || 'Unknown'
           return `${categoryName}<br/>Outlier: ${params.data[1]}`
         }
       }
     },
     grid: {
-      left: '10%',
-      right: '10%',
-      bottom: '15%',
-      top: '10%',
-      containLabel: true,
-      backgroundColor: 'rgba(0, 0, 0, 0.02)',
-      borderColor: 'rgba(0, 0, 0, 0.1)',
-      borderWidth: 1
+      left: '3%',
+      right: '4%',
+      bottom: props.dataZoom ? '20%' : '3%',
+      top: props.hideLegend ? '3%' : '15%',
+      containLabel: true
     },
     xAxis: {
       type: 'category',
@@ -85,28 +97,12 @@ const option = computed(() => {
       nameLocation: 'middle',
       nameGap: 30,
       boundaryGap: true,
-      splitArea: {
-        show: false
-      },
       splitLine: {
-        show: false
+        show: props.xGridLine
       },
       axisLabel: {
         formatter: (value: string) => {
-          // Truncate long labels if necessary
           return value.length > 15 ? value.substring(0, 12) + '...' : value
-        },
-        color: '#666',
-        fontSize: 12
-      },
-      axisLine: {
-        lineStyle: {
-          color: '#ccc'
-        }
-      },
-      axisTick: {
-        lineStyle: {
-          color: '#ccc'
         }
       }
     },
@@ -115,101 +111,74 @@ const option = computed(() => {
       name: props.yLabel,
       nameLocation: 'middle',
       nameGap: 50,
-      splitArea: {
-        show: true,
-        areaStyle: {
-          color: ['rgba(250,250,250,0.3)', 'rgba(200,200,200,0.3)']
-        }
-      },
       splitLine: {
-        lineStyle: {
-          color: '#e0e0e0',
-          type: 'dashed'
-        }
-      },
-      axisLabel: {
-        color: '#666',
-        fontSize: 12
-      },
-      axisLine: {
-        lineStyle: {
-          color: '#ccc'
-        }
+        show: props.yGridLine
       }
     },
     legend: {
-      data: props.series.map(s => s.name),
-      top: 10,
-      left: 'center',
-      textStyle: {
-        color: '#666',
-        fontSize: 12
-      }
+      show: !props.hideLegend,
+      [props.legendPosition]: 10,
+      data: props.series.map(s => s.name)
     },
-    dataZoom: [
+    dataZoom: props.dataZoom ? [
       {
-        type: 'inside', // Zoom by scrolling
-        start: 0,
-        end: 100
+        type: 'inside',
+        xAxisIndex: [0],
+        filterMode: 'none'
       },
       {
-        type: 'slider', // Zoom with a slider
-        start: 0,
-        end: 100,
-        height: 20,
-        bottom: 10
+        type: 'slider',
+        xAxisIndex: [0],
+        bottom: '5%',
+        height: '12%',
+        filterMode: 'none',
+        showDetail: false,
+        showDataShadow: true,
+        handleSize: '110%',
+        handleStyle: {
+          color: '#fff',
+          shadowBlur: 3,
+          shadowColor: 'rgba(0,0,0,0.6)',
+          shadowOffsetX: 2,
+          shadowOffsetY: 2
+        }
       }
-    ],
+    ] : undefined,
     toolbox: {
-      show: true,
+      show: !props.hideToolbar,
       feature: {
         dataZoom: {
-          yAxisIndex: 'none'
+          show: true,
+          title: {
+            zoom: 'Zoom',
+            back: 'Reset Zoom'
+          }
         },
-        restore: {},
-        saveAsImage: {},
-        dataView: { readOnly: true }
+        restore: {
+          show: true,
+          title: 'Restore'
+        },
+        saveAsImage: {
+          show: true,
+          title: 'Save as Image'
+        }
       },
-      right: 20,
-      top: 0
+      right: '5%',
+      top: '5%'
     },
     series: [
       // Box plot series
       {
         name: props.series[0]?.name || 'Box Plot',
         type: 'boxplot',
-        data: echartsData.value.boxData,
-        itemStyle: {
-          color: '#5470c6',
-          borderColor: '#5470c6',
-          borderWidth: 1
-        },
-        boxWidth: ['7%', '50%'],
-        emphasis: {
-          itemStyle: {
-            borderColor: '#5470c6',
-            borderWidth: 2
-          }
-        }
+        data: echartsData.value.boxData
       },
       // Outliers series (if any)
       ...(echartsData.value.outliers.length > 0 ? [{
         name: 'Outliers',
         type: 'scatter',
         data: echartsData.value.outliers,
-        itemStyle: {
-          color: 'rgba(255, 99, 71, 0.8)',
-          borderColor: 'rgba(255, 99, 71, 1)',
-          borderWidth: 1
-        },
-        symbolSize: 4,
-        emphasis: {
-          itemStyle: {
-            color: 'rgba(255, 99, 71, 1)',
-            borderColor: 'rgba(255, 99, 71, 1)',
-            borderWidth: 2
-          }
-        }
+        symbolSize: 4
       }] : [])
     ]
   }

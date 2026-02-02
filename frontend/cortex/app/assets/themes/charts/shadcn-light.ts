@@ -60,6 +60,69 @@ export const shadcnLightTheme = {
       borderRadius: 4,
       borderColor: 'hsl(0, 0%, 100%)',
       borderWidth: 2
+    },
+    label: {
+      color: 'hsl(222.2, 84%, 4.9%)',  // Dark text for labels
+      fontSize: 12
+    },
+    labelLine: {
+      lineStyle: {
+        color: 'hsl(222.2, 84%, 4.9%)'  // Dark lines connecting labels to slices
+      }
+    }
+  },
+
+  // BoxPlot chart defaults
+  boxplot: {
+    itemStyle: {
+      borderWidth: 2
+    },
+    boxWidth: ['7%', '50%']
+  },
+
+  // Scatter chart defaults
+  scatter: {
+    symbolSize: 8,
+    itemStyle: {
+      borderWidth: 0,
+      opacity: 0.8
+    }
+  },
+
+  // Gauge chart defaults
+  gauge: {
+    axisLine: {
+      lineStyle: {
+        color: [[1, 'hsl(214.3, 31.8%, 91.4%)']]  // Background arc color
+      }
+    },
+    axisLabel: {
+      color: 'hsl(222.2, 84%, 4.9%)',  // Dark text for axis labels
+      fontSize: 12
+    },
+    axisTick: {
+      lineStyle: {
+        color: 'hsl(222.2, 84%, 4.9%)'  // Dark tick marks
+      }
+    },
+    splitLine: {
+      lineStyle: {
+        color: 'hsl(222.2, 84%, 4.9%)'  // Dark split lines
+      }
+    },
+    title: {
+      color: 'hsl(222.2, 84%, 4.9%)',  // Dark title text
+      fontSize: 14
+    },
+    detail: {
+      color: 'hsl(222.2, 84%, 4.9%)',  // Dark detail/value text
+      fontSize: 24,
+      fontWeight: 'bold'
+    },
+    pointer: {
+      itemStyle: {
+        color: 'hsl(217, 91%, 60%)'  // Blue pointer
+      }
     }
   },
 

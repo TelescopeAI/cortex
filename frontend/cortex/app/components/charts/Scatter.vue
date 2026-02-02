@@ -1,24 +1,75 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useChartTheme } from '~/composables/useChartTheme'
+import { getShadcnTooltipConfig } from '~/config/echartShadCNTooltip'
 
-const props = defineProps<{ series: { name: string; data: { x: number | string; y: number }[] }[]; height?: number; dataZoom?: boolean }>()
+interface ScatterProps {
+  series: {
+    name: string
+    data: { x: number | string; y: number }[]
+  }[]
+  height?: number
+  hideLegend?: boolean
+  hideToolbar?: boolean
+  xGridLine?: boolean
+  yGridLine?: boolean
+  dataZoom?: boolean
+  legendPosition?: string
+  xLabel?: string
+  yLabel?: string
+}
+
+const props = withDefaults(defineProps<ScatterProps>(), {
+  hideLegend: false,
+  hideToolbar: true,
+  xGridLine: false,
+  yGridLine: false,
+  dataZoom: true,
+  legendPosition: 'top',
+  xLabel: '',
+  yLabel: ''
+})
 
 const { chartTheme } = useChartTheme()
 
 const option = computed(() => ({
-  tooltip: { trigger: 'item', formatter: (p:any) => `${p.seriesName}<br/>(${p.data[0]}, ${p.data[1]})` },
-  xAxis: { type: 'category' },
-  yAxis: { type: 'value' },
+  tooltip: {
+    ...getShadcnTooltipConfig({
+      categorySize: props.series.reduce((acc, s) => acc + s.data.length, 0)
+    }),
+    trigger: 'item',
+    axisPointer: {
+      type: 'none'
+    }
+  },
+  legend: {
+    show: !props.hideLegend,
+    [props.legendPosition]: 10,
+    data: props.series.map(s => s.name)
+  },
+  xAxis: {
+    type: 'category',
+    name: props.xLabel,
+    splitLine: {
+      show: props.xGridLine
+    }
+  },
+  yAxis: {
+    type: 'value',
+    name: props.yLabel,
+    splitLine: {
+      show: props.yGridLine
+    }
+  },
   grid: {
     left: '3%',
     right: '4%',
-    bottom: props.dataZoom ? '20%' : '3%',
-    top: '15%',
+    bottom: '3%',
+    top: props.hideLegend ? '3%' : '15%',
     containLabel: true
   },
   toolbox: {
-    show: true,
+    show: !props.hideToolbar,
     feature: {
       dataZoom: {
         show: true,
@@ -51,6 +102,7 @@ const option = computed(() => ({
       bottom: '5%',
       height: '12%',
       filterMode: 'none',
+      show: false,
       showDetail: false,
       showDataShadow: true,
       handleSize: '110%',

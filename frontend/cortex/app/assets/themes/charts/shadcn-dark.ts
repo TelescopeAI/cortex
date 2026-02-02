@@ -58,8 +58,71 @@ export const shadcnDarkTheme = {
   pie: {
     itemStyle: {
       borderRadius: 4,
-      borderColor: 'hsl(222.2, 84%, 4.9%)',
+      borderColor: 'hsl(217.2, 32.6%, 17.5%)',  // Lighter border for better contrast
       borderWidth: 2
+    },
+    label: {
+      color: 'hsl(210, 40%, 98%)',  // White text for labels
+      fontSize: 12
+    },
+    labelLine: {
+      lineStyle: {
+        color: 'hsl(210, 40%, 98%)'  // White lines connecting labels to slices
+      }
+    }
+  },
+
+  // BoxPlot chart defaults
+  boxplot: {
+    itemStyle: {
+      borderWidth: 2
+    },
+    boxWidth: ['7%', '50%']
+  },
+
+  // Scatter chart defaults
+  scatter: {
+    symbolSize: 8,
+    itemStyle: {
+      borderWidth: 0,
+      opacity: 0.8
+    }
+  },
+
+  // Gauge chart defaults
+  gauge: {
+    axisLine: {
+      lineStyle: {
+        color: [[1, 'hsl(217.2, 32.6%, 17.5%)']]  // Background arc color
+      }
+    },
+    axisLabel: {
+      color: 'hsl(210, 40%, 98%)',  // White text for axis labels
+      fontSize: 12
+    },
+    axisTick: {
+      lineStyle: {
+        color: 'hsl(210, 40%, 98%)'  // White tick marks
+      }
+    },
+    splitLine: {
+      lineStyle: {
+        color: 'hsl(210, 40%, 98%)'  // White split lines
+      }
+    },
+    title: {
+      color: 'hsl(210, 40%, 98%)',  // White title text
+      fontSize: 14
+    },
+    detail: {
+      color: 'hsl(210, 40%, 98%)',  // White detail/value text
+      fontSize: 24,
+      fontWeight: 'bold'
+    },
+    pointer: {
+      itemStyle: {
+        color: 'hsl(217, 91%, 60%)'  // Blue pointer
+      }
     }
   },
 

@@ -47,7 +47,7 @@ export function createShadcnTooltipFormatter(options: ShadcnTooltipOptions = {})
     const axisLabel = showAxisLabel ? (params[0].axisValueLabel || params[0].name) : ''
 
     let html = `
-      <div style="min-width: 180px;">
+      <div style="min-width: 180px; font-family: 'Geist Mono', monospace;">
         ${axisLabel ? `<div style="font-weight: 600; margin-bottom: 8px; color: inherit;">
           ${axisLabel}
         </div>` : ''}

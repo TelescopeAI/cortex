@@ -44,7 +44,8 @@ const props = withDefaults(defineProps<AreaChartProps>(), {
   yGridLine: false,
   yDomainLine: true,
   xTickLine: false,
-  legendPosition: 'top'
+  legendPosition: 'top',
+  dataZoom: true
 })
 
 const { chartTheme } = useChartTheme()
@@ -87,7 +88,7 @@ const chartOption = computed(() => {
       }),
       show: !props.hideTooltip,
       axisPointer: {
-        type: 'cross'
+        type: 'none'
       }
     },
     legend: {
@@ -98,7 +99,7 @@ const chartOption = computed(() => {
     grid: {
       left: '3%',
       right: '4%',
-      bottom: props.dataZoom ? '20%' : '3%',
+      bottom: '3%',
       top: props.hideLegend ? '3%' : '15%',
       containLabel: true
     },
@@ -136,6 +137,7 @@ const chartOption = computed(() => {
         bottom: '5%',
         height: '12%',
         filterMode: 'none',
+        show: false,
         showDetail: false,
         showDataShadow: true,
         handleSize: '110%',

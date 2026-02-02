@@ -34,7 +34,8 @@ const props = withDefaults(defineProps<StackedLineChartProps>(), {
   hideLegend: false,
   hideToolbar: true,
   xGridLine: false,
-  yGridLine: false
+  yGridLine: false,
+  dataZoom: true
 })
 
 const { chartTheme } = useChartTheme()
@@ -88,7 +89,7 @@ const chartOption = computed(() => {
     grid: {
       left: '3%',
       right: '4%',
-      bottom: props.dataZoom ? '20%' : '3%',
+      bottom: '3%',
       top: props.hideLegend ? '3%' : '15%',
       containLabel: true
     },
@@ -126,6 +127,7 @@ const chartOption = computed(() => {
         bottom: '5%',
         height: '12%',
         filterMode: 'none',
+        show: false,
         showDetail: false,
         showDataShadow: true,
         handleSize: '110%',

@@ -23,6 +23,7 @@
 @theme inline {
   --font-sans: "Inter", sans-serif;
   --font-display: "Space Grotesk", sans-serif;
+  --font-geist: "Geist Mono", monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

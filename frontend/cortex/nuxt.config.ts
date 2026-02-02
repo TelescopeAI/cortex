@@ -88,7 +88,8 @@ export default defineNuxtConfig({
   fonts: {
     families: [
       { name: 'Inter', provider: 'google' },
-      { name: 'Space Grotesk', provider: 'google' }
+      { name: 'Space Grotesk', provider: 'google' },
+      { name: 'Geist Mono', provider: 'google' }
     ],
     defaults: {
       weights: [400, 500, 600, 700],

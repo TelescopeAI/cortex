@@ -92,16 +92,29 @@ class CortexFileStorageBackend(ABC):
     def delete_file(self, source_id: str, filename: str) -> bool:
         """
         Delete a file from storage
-        
+
         Args:
             source_id: Unique identifier for the data source
             filename: Name of the file to delete
-            
+
         Returns:
             True if deleted, False if file didn't exist
         """
         pass
-    
+
+    @abstractmethod
+    def delete_sqlite(self, sqlite_path: str) -> bool:
+        """
+        Delete a SQLite database file from storage
+
+        Args:
+            sqlite_path: Full path to SQLite file (local or GCS path)
+
+        Returns:
+            True if file was deleted, False if not found
+        """
+        pass
+
     @abstractmethod
     def exists(self, source_id: str, filename: str) -> bool:
         """

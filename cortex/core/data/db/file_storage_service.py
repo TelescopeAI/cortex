@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from uuid import UUID
 import os
 import sqlite3
@@ -15,11 +17,11 @@ from cortex.core.exceptions.data.sources import (
     FileHasDependenciesError
 )
 from cortex.core.storage.store import CortexStorage
-from cortex.core.connectors.api.sheets.cache import CortexFileStorageCacheManager
-from cortex.core.connectors.api.sheets.config import get_sheets_config
-from cortex.core.connectors.api.sheets.types import CortexCSVFileConfig
 from cortex.core.types.telescope import TSModel
 from cortex.core.utils.encryption import FilePathEncryption
+
+if TYPE_CHECKING:
+    from cortex.core.connectors.api.sheets.types import CortexCSVFileConfig
 
 
 class FileStorageService:
@@ -148,6 +150,10 @@ class FileStorageService:
             file_path = FilePathEncryption.decrypt(file_record.path)
             if file_path.endswith('.db'):
                 try:
+                    # Lazy imports to avoid circular dependencies
+                    from cortex.core.connectors.api.sheets.cache import CortexFileStorageCacheManager
+                    from cortex.core.connectors.api.sheets.config import get_sheets_config
+
                     config = get_sheets_config()
                     cache_manager = CortexFileStorageCacheManager(
                         cache_dir=config.cache_dir,
@@ -261,6 +267,9 @@ class FileDataSourceService:
         Returns:
             CSVProviderConfig with typed configuration
         """
+        # Lazy import to avoid circular dependencies
+        from cortex.core.connectors.api.sheets.types import CortexCSVFileConfig
+
         filename = f"{file_record.name}.{file_record.extension}"
 
         csv_file = CortexCSVFileConfig(
@@ -279,7 +288,8 @@ class FileDataSourceService:
         source_id: str,
         provider_type: str,
         spreadsheet_config: CSVProviderConfig,
-        selected_sheets: Optional[List[str]] = None
+        selected_sheets: Optional[List[str]] = None,
+        environment_id: Optional[UUID] = None
     ) -> ConversionResult:
         """
         Convert spreadsheet to SQLite database.
@@ -289,6 +299,7 @@ class FileDataSourceService:
             provider_type: 'csv' or 'gsheets'
             spreadsheet_config: CSV provider configuration
             selected_sheets: Optional sheet selection
+            environment_id: Environment ID for hierarchical storage
 
         Returns:
             ConversionResult with conversion metadata
@@ -300,6 +311,10 @@ class FileDataSourceService:
 
         # Convert Pydantic model to dict for the service
         config_dict = spreadsheet_config.model_dump()
+
+        # Add environment_id to config for hierarchical path generation
+        if environment_id:
+            config_dict['environment_id'] = environment_id
 
         # Call spreadsheet service
         result = CortexSpreadsheetService.create_data_source(
@@ -348,6 +363,8 @@ class FileDataSourceService:
 
         # For GCS paths, set up cache manager
         from cortex.core.connectors.api.sheets.storage.gcs import CortexFileStorageGCSBackend
+        from cortex.core.connectors.api.sheets.cache import CortexFileStorageCacheManager
+        from cortex.core.connectors.api.sheets.config import get_sheets_config
 
         config = get_sheets_config()
         cache_manager = CortexFileStorageCacheManager(
@@ -443,7 +460,8 @@ class FileDataSourceService:
             source_id=source_alias,
             provider_type='csv',
             spreadsheet_config=provider_config,
-            selected_sheets=selected_sheets
+            selected_sheets=selected_sheets,
+            environment_id=environment_id
         )
 
         # 4. Resolve local path for query engine

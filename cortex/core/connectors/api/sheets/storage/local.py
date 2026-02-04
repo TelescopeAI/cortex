@@ -5,6 +5,7 @@ from typing import Optional, List, Callable
 from cortex.core.connectors.api.sheets.storage.base import CortexFileStorageBackend
 from cortex.core.connectors.api.sheets.config import get_sheets_config
 from cortex.core.connectors.api.sheets.exceptions import StorageFileAlreadyExists
+from cortex.core.utils.data_sources import cleanup_empty_directories
 
 
 class CortexLocalFileStorage(CortexFileStorageBackend):
@@ -86,9 +87,10 @@ class CortexLocalFileStorage(CortexFileStorageBackend):
     
     def save_sqlite(self, source_id: str, db_path: str) -> str:
         """Save or copy SQLite database to storage location"""
-        self.base_sqlite_path.mkdir(parents=True, exist_ok=True)
-
-        dest_path = self.base_sqlite_path / f"{source_id}.db"
+        # db_path is already the full hierarchical path from path_generator
+        # Ensure parent directories exist for hierarchical structure
+        dest_path = Path(db_path)
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Validate source file exists
         if not os.path.exists(db_path):
@@ -105,14 +107,13 @@ class CortexLocalFileStorage(CortexFileStorageBackend):
                 f"DuckDB conversion failed to write data."
             )
 
-        # Check if source and destination are the same file
-        if os.path.exists(dest_path) and os.path.samefile(db_path, dest_path):
-            # File is already in the correct location, no need to copy
+        # Check if file is already in the correct location
+        if dest_path.exists() and os.path.samefile(db_path, dest_path):
             print(f"SQLite database already at destination: {dest_path} ({file_size} bytes)")
         else:
             # Remove destination if it exists (to allow overwrite)
-            if os.path.exists(dest_path):
-                os.remove(dest_path)
+            if dest_path.exists():
+                dest_path.unlink()
                 print(f"Removed existing SQLite database: {dest_path}")
 
             # Copy the database file
@@ -120,7 +121,7 @@ class CortexLocalFileStorage(CortexFileStorageBackend):
             print(f"SQLite database copied: {db_path} → {dest_path} ({file_size} bytes)")
 
         # Verify the destination file exists
-        if not os.path.exists(dest_path):
+        if not dest_path.exists():
             raise IOError(f"Failed to copy SQLite database to {dest_path}")
 
         return str(dest_path)
@@ -139,13 +140,42 @@ class CortexLocalFileStorage(CortexFileStorageBackend):
         """Delete a file from storage"""
         source_dir = self._get_source_dir(source_id)
         file_path = source_dir / filename
-        
+
         if not file_path.exists():
             return False
-        
+
         file_path.unlink()
         return True
-    
+
+    def delete_sqlite(self, sqlite_path: str) -> bool:
+        """Delete a SQLite database file from local storage"""
+        db_path = Path(sqlite_path)
+
+        if not db_path.exists():
+            return False
+
+        # Delete the file
+        db_path.unlink()
+        print(f"Deleted SQLite file: {db_path}")
+
+        # Clean up empty parent directories aggressively
+        self._cleanup_empty_directories(db_path.parent)
+
+        return True
+
+    def _cleanup_empty_directories(self, start_dir: Path):
+        """
+        Recursively remove empty directories up the hierarchy.
+
+        Cleans up: environment_id/ -> workspace_id/ -> stops at base
+        Uses rmdir() which only succeeds if directory is empty.
+
+        Args:
+            start_dir: Starting directory to check and remove if empty
+        """
+        base_paths = {self.base_input_path, self.base_sqlite_path}
+        cleanup_empty_directories(start_dir, base_paths)
+
     def exists(self, source_id: str, filename: str) -> bool:
         """Check if a file exists"""
         source_dir = self._get_source_dir(source_id)

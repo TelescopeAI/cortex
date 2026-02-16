@@ -437,9 +437,11 @@ class FileDataSourceService:
         Main orchestration method that coordinates all conversion steps.
 
         Args:
-            file_id: Uploaded file ID
-            environment_id: Environment ID
-            source_alias: Data source alias (used as source_id)
+            file_id: Uploaded file ID (used for input file path: workspace/env/file_id.csv)
+            environment_id: Environment ID for hierarchical storage
+            source_alias: Data source ID (UUID) for SQLite file paths (workspace/env/data_source_id.db)
+                         IMPORTANT: Should be data_source.id, NOT user-provided alias.
+                         Using system-generated UUIDs prevents path injection and ensures stable file paths.
             selected_sheets: Optional sheet selection (None = all sheets)
 
         Returns:
@@ -448,6 +450,10 @@ class FileDataSourceService:
         Raises:
             FileDoesNotExistError: If file not found
             Exception: If conversion fails
+
+        Security Note:
+            The source_alias parameter determines the SQLite file path. Always use system-generated
+            UUIDs (data_source.id), never user input, to prevent path injection vulnerabilities.
         """
         # 1. Validate file exists
         file_record = FileDataSourceService.validate(file_id, environment_id)

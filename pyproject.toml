@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "telescope-cortex"
 version = "0.0.1a7"
-description = "Minimal Headless BI for perfectionists with deadline"
+description = "Minimal Headless BI for perfectionists on deadlines"
 authors = ["Nilotpal Roychowdhury <nilotpal@jointelescope.com>"]
 license = "MIT"
 readme = "README.md"

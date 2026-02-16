@@ -120,26 +120,33 @@ class FileStorageService:
             if existing and not overwrite:
                 raise StorageFileAlreadyExists(filename, str(existing.id))
 
+            # Generate file_id for new files, or use existing file_id for overwrite
+            # This ensures file paths use stable IDs instead of random UUIDs
+            file_id = existing.id if existing else uuid4()
+
             # Build config for path generation
             path_config = UploadPathGeneratorConfig(
                 workspace_id=workspace_id,
                 environment_id=environment_id,
                 filename=name,
                 extension=extension,
-                source_id=None,
+                source_id=None,  # Will be set by lambda below
                 base_storage_path=storage_config.input_storage_path,
                 file_size=file_size,
                 mime_type=mime_type
             )
-            
+
             # Call path generator with config
+            # Pass file_id as source_id, which will be used in hierarchical path
             path_generator = config.upload_path_generator or default_upload_path_generator
             file_path = self.storage_backend.save_file(
-                source_id=str(uuid4()),
+                source_id=str(file_id),
                 filename=filename,
                 data=content,
                 overwrite=overwrite,
-                path_generator=lambda source_id, _filename: path_generator(path_config),
+                path_generator=lambda source_id, _filename: path_generator(
+                    path_config.model_copy(update={"source_id": source_id})
+                ),
             )
 
             # Encrypt path
@@ -154,7 +161,9 @@ class FileStorageService:
                 existing.updated_at = datetime.now(pytz.UTC)
                 file_record = existing
             else:
+                # Use the pre-generated file_id (ensures path matches database ID)
                 file_record = CortexFileStorageORM(
+                    id=file_id,
                     environment_id=environment_id,
                     name=name,
                     mime_type=mime_type,

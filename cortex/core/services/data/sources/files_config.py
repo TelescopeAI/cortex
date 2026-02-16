@@ -109,12 +109,25 @@ def set_file_storage_config(config: FileStorageConfig) -> None:
 
 
 def default_upload_path_generator(config: UploadPathGeneratorConfig) -> str:
-    """Default upload path generator"""
+    """
+    Default upload path generator.
+
+    IMPORTANT: When source_id is provided, it should ALWAYS be a system-generated UUID (file_id),
+    NOT user input. This prevents path injection vulnerabilities and ensures consistent naming.
+
+    File naming pattern:
+    - With source_id: workspace_id/environment_id/{source_id}.{extension}
+    - Without source_id: workspace_id/environment_id/{filename}.{extension}
+
+    Original filename is preserved in database metadata for display purposes.
+    """
     base_path = Path(config.base_storage_path)
-    
+
     if config.source_id:
-        return str(base_path / str(config.workspace_id) / str(config.environment_id) / config.source_id / f"{config.filename}.{config.extension}")
-    
+        # Use source_id as the filename (not as a subdirectory)
+        # This creates: workspace/env/file_id.csv
+        return str(base_path / str(config.workspace_id) / str(config.environment_id) / f"{config.source_id}.{config.extension}")
+
     return str(base_path / str(config.workspace_id) / str(config.environment_id) / f"{config.filename}.{config.extension}")
 
 

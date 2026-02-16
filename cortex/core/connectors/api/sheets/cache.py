@@ -6,6 +6,7 @@ from typing import Optional, TYPE_CHECKING
 import pytz
 
 from cortex.core.connectors.api.sheets.storage.base import CortexFileStorageBackend
+from cortex.core.utils.data_sources import cleanup_empty_directories
 
 
 class CortexFileStorageCacheManager:
@@ -84,22 +85,28 @@ class CortexFileStorageCacheManager:
         bytes_to_free = (current_size_gb - self.max_size_gb) * 1024**3
         bytes_freed = 0
         
+        base_paths = {self.cache_dir, self.sqlite_dir}
+
         for file_id, local_path, size_bytes in cursor.fetchall():
             if bytes_freed >= bytes_to_free:
                 break
-            
+
             # Delete file
-            Path(local_path).unlink(missing_ok=True)
-            
+            path_obj = Path(local_path)
+            if path_obj.exists():
+                path_obj.unlink()
+                # Clean up empty parent directories
+                cleanup_empty_directories(path_obj.parent, base_paths)
+
             # Remove from metadata
             conn.execute("DELETE FROM files_cache_entries WHERE file_id = ?", (file_id,))
-            
+
             bytes_freed += size_bytes
             evicted_count += 1
-        
+
         conn.commit()
         conn.close()
-        
+
         return evicted_count
     
     def _get_cache_size_gb(self) -> float:
@@ -165,8 +172,32 @@ class CortexFileStorageCacheManager:
         storage_backend: "CortexFileStorageBackend"
     ) -> str:
         """Download file from remote storage and cache it locally"""
-        local_path = str(self.sqlite_dir / f"{file_id}.db")
-        
+        # Extract hierarchical path from remote path
+        # remote_path formats:
+        #   - gs://bucket/prefix/sqlite/workspace_id/environment_id/source_id.db
+        #   - prefix/sqlite/workspace_id/environment_id/source_id.db
+        # We want to preserve: workspace_id/environment_id/source_id.db
+
+        # Try to extract the path after 'sqlite/' regardless of gs:// prefix
+        try:
+            if '/sqlite/' in remote_path:
+                parts = remote_path.split('/sqlite/')
+                if len(parts) > 1:
+                    rel_path = parts[1]  # workspace_id/environment_id/source_id.db
+                    local_path = str(self.sqlite_dir / rel_path)
+                else:
+                    # Fallback to flat structure
+                    local_path = str(self.sqlite_dir / f"{file_id}.db")
+            else:
+                # No sqlite/ in path, use flat structure
+                local_path = str(self.sqlite_dir / f"{file_id}.db")
+        except Exception:
+            # Fallback to flat structure on any error
+            local_path = str(self.sqlite_dir / f"{file_id}.db")
+
+        # Ensure parent directories exist
+        Path(local_path).parent.mkdir(parents=True, exist_ok=True)
+
         # Download file
         storage_backend.download_file(remote_path, local_path)
         
@@ -201,3 +232,83 @@ class CortexFileStorageCacheManager:
         current_size_gb = self._get_cache_size_gb()
         if current_size_gb > self.max_size_gb:
             self.evict_lru()
+
+    def add_cache_entry(self, file_id: str, local_path: str, remote_path: str):
+        """
+        Add an existing local file to the cache metadata.
+
+        This is used when uploading a file to GCS - we want to keep the local
+        copy cached so immediate queries don't need to download from GCS.
+
+        Args:
+            file_id: Unique identifier for the file
+            local_path: Path to the local file (already exists)
+            remote_path: GCS path where file was uploaded
+        """
+        if not Path(local_path).exists():
+            raise FileNotFoundError(f"Local file not found: {local_path}")
+
+        # Get file size
+        size_bytes = Path(local_path).stat().st_size
+
+        # Check if entry already exists
+        existing = self._get_cache_entry(file_id)
+
+        now = datetime.now(pytz.UTC)
+        conn = sqlite3.connect(self.metadata_db)
+
+        if existing:
+            # Update existing entry
+            conn.execute(
+                """UPDATE files_cache_entries
+                   SET local_path = ?, remote_path = ?, size_bytes = ?, last_accessed = ?
+                   WHERE file_id = ?""",
+                (local_path, remote_path, size_bytes, now.isoformat(), file_id)
+            )
+        else:
+            # Insert new entry
+            conn.execute(
+                """INSERT INTO files_cache_entries
+                   (file_id, local_path, remote_path, size_bytes, last_accessed, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (file_id, local_path, remote_path, size_bytes, now.isoformat(), now.isoformat())
+            )
+
+        conn.commit()
+        conn.close()
+
+        # Check if we need to evict after adding
+        self._check_and_evict_if_needed()
+
+    def delete_cache_entry(self, file_id: str) -> bool:
+        """
+        Delete a cache entry and its local file.
+
+        Args:
+            file_id: The file ID to remove from cache
+
+        Returns:
+            True if entry was found and deleted, False otherwise
+        """
+        # Get cache entry
+        cache_entry = self._get_cache_entry(file_id)
+        if not cache_entry:
+            return False
+
+        # Delete local cached file if exists
+        local_path = Path(cache_entry)
+        if local_path.exists():
+            local_path.unlink()
+
+            # Clean up empty parent directories
+            # Stop at cache_dir (metadata) and sqlite_dir (base)
+            base_paths = {self.cache_dir, self.sqlite_dir}
+            cleanup_empty_directories(local_path.parent, base_paths)
+
+        # Remove from metadata
+        conn = sqlite3.connect(self.metadata_db)
+        conn.execute("DELETE FROM files_cache_entries WHERE file_id = ?", (file_id,))
+        conn.commit()
+        conn.close()
+
+        return True

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useChartTheme } from '~/composables/useChartTheme'
+import { getShadcnTooltipConfig } from '~/config/echartShadCNTooltip'
 
 interface BulletLegendItemInterface {
   name: string
-  color: string
+  color?: string  // Make color optional
 }
 
 interface StackedBarChartProps {
@@ -16,9 +17,11 @@ interface StackedBarChartProps {
   yFormatter?: (i: number, idx?: number) => string | number
   xNumTicks?: number
   radius?: number
+  xGridLine?: boolean
   yGridLine?: boolean
   legendPosition?: string
   hideLegend?: boolean
+  hideToolbar?: boolean
   dataZoom?: boolean
 }
 
@@ -26,9 +29,12 @@ const props = withDefaults(defineProps<StackedBarChartProps>(), {
   yFormatter: (i: number) => i,
   xNumTicks: 5,
   radius: 0,
-  yGridLine: true,
+  xGridLine: false,
+  yGridLine: false,
   legendPosition: 'top',
-  hideLegend: false
+  hideLegend: false,
+  hideToolbar: true,
+  dataZoom: true
 })
 
 const { chartTheme } = useChartTheme()
@@ -36,34 +42,41 @@ const { chartTheme } = useChartTheme()
 // Convert data to ECharts format with stacking
 const chartOption = computed(() => {
   const xAxisData = props.data.map((_, index) => props.xFormatter(index))
-  
-  const series = props.yAxis.map(key => {
+  const categorySize = props.data.length
+
+  const series = props.yAxis.map((key, index) => {
     const categoryInfo = props.categories[key]
-    return {
+    const isLastSeries = index === props.yAxis.length - 1
+    const seriesConfig: any = {
       name: categoryInfo?.name || key,
       type: 'bar',
       stack: 'total', // This enables stacking
       data: props.data.map(item => item[key]),
       itemStyle: {
-        color: categoryInfo?.color || '#3b82f6',
-        borderRadius: props.radius
+        // Only apply top border radius to the topmost (last) segment in the stack
+        // Format: [top-left, top-right, bottom-right, bottom-left]
+        borderRadius: isLastSeries ? [props.radius, props.radius, 0, 0] : 0
       }
     }
+
+    // Only override theme colors if explicitly provided
+    if (categoryInfo?.color) {
+      seriesConfig.itemStyle.color = categoryInfo.color
+    }
+
+    return seriesConfig
   })
 
   return {
     tooltip: {
-      trigger: 'axis',
+      ...getShadcnTooltipConfig({
+        valueFormatter: props.yFormatter
+          ? (value) => String(props.yFormatter!(typeof value === 'number' ? value : Number(value)))
+          : undefined,
+        categorySize
+      }),
       axisPointer: {
         type: 'shadow'
-      },
-      formatter: (params: any) => {
-        let result = `${params[0].axisValueLabel}<br/>`
-        params.forEach((param: any) => {
-          const formattedValue = props.yFormatter ? props.yFormatter(param.value) : param.value
-          result += `${param.marker} ${param.seriesName}: ${formattedValue}<br/>`
-        })
-        return result
       }
     },
     legend: {
@@ -74,12 +87,12 @@ const chartOption = computed(() => {
     grid: {
       left: '3%',
       right: '4%',
-      bottom: props.dataZoom ? '20%' : '3%',
+      bottom: '3%',
       top: props.hideLegend ? '3%' : '15%',
       containLabel: true
     },
     toolbox: {
-      show: true,
+      show: !props.hideToolbar,
       feature: {
         dataZoom: {
           show: true,
@@ -112,6 +125,7 @@ const chartOption = computed(() => {
         bottom: '5%',
         height: '12%',
         filterMode: 'none',
+        show: false,
         showDetail: false,
         showDataShadow: true,
         handleSize: '110%',
@@ -129,6 +143,9 @@ const chartOption = computed(() => {
       data: xAxisData,
       axisTick: {
         alignWithLabel: true
+      },
+      splitLine: {
+        show: props.xGridLine
       }
     },
     yAxis: {

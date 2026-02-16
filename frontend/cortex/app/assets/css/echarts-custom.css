@@ -1,0 +1,25 @@
+/**
+ * Custom ECharts styling overrides
+ * Makes tooltip markers rounded rectangles instead of circles
+ */
+
+/* Target ECharts tooltip markers - these are generated as span elements with inline styles */
+div[style*="pointer-events"] span[style*="display:inline-block"][style*="margin-right"][style*="border-radius"],
+div[style*="pointer-events"] span[style*="display: inline-block"][style*="margin-right"][style*="border-radius"] {
+  border-radius: 2px !important;
+  width: 10px !important;
+  height: 10px !important;
+}
+
+/* More specific selector for tooltip container and markers */
+div[style*="position: absolute"][style*="z-index"][style*="pointer-events"] span[style*="width"][style*="height"] {
+  border-radius: 2px !important;
+}
+
+/* Target markers within the actual tooltip content */
+div[style*="line-height"][style*="white-space"] > span[style*="display:inline-block"][style*="border-radius"],
+div[style*="line-height"][style*="white-space"] > span[style*="display: inline-block"][style*="border-radius"] {
+  border-radius: 2px !important;
+  width: 10px !important;
+  height: 10px !important;
+}

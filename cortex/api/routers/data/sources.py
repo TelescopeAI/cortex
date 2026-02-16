@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime
 from http import HTTPStatus
 from typing import List, Dict, Any, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytz
 from fastapi import APIRouter, HTTPException, status, File, UploadFile
@@ -53,6 +53,10 @@ async def create_data_source(data_source_data: DataSourceCreateRequest):
         config = dict(data_source_data.config)
         source_type = data_source_data.source_type
         
+        # Pre-generate UUID for this data source (used for both DB record and file paths)
+        # This ensures consistent hierarchical file naming without using user input
+        data_source_id = uuid4()
+
         # Handle spreadsheet data sources - convert CSV to SQLite
         if source_type == 'spreadsheet':
             provider_type = config.get('provider_type')
@@ -66,17 +70,20 @@ async def create_data_source(data_source_data: DataSourceCreateRequest):
                 file_id_uuid = UUID(file_id) if isinstance(file_id, str) else file_id
 
                 # Build spreadsheet data source using service
+                # Use data_source_id (UUID) instead of user alias for file paths
                 sqlite_config = FileDataSourceService.build(
                     file_id=file_id_uuid,
                     environment_id=data_source_data.environment_id,
-                    source_alias=str(data_source_data.alias),
+                    source_alias=str(data_source_id),
                     selected_sheets=None  # Import all sheets by default
                 )
 
                 # Convert Pydantic model to dict for data source config
                 config = sqlite_config.model_dump()
-        
+
+        # Create DataSource with pre-generated ID (CRUD will respect it)
         data_source = DataSource(
+            id=data_source_id,
             environment_id=data_source_data.environment_id,
             name=data_source_data.name,
             alias=data_source_data.alias,
@@ -842,10 +849,11 @@ async def rebuild_data_source(
                 _clear_sqlite_cache(data_source_id, old_sqlite_path)
 
         # 6. Rebuild using builder service
+        # Use existing data_source.id (stable, never changes) instead of user alias
         new_config = FileDataSourceService.build(
             file_id=file_id_uuid,
             environment_id=data_source.environment_id,
-            source_alias=str(data_source.alias),
+            source_alias=str(data_source.id),
             selected_sheets=data_source.config.get("selected_sheets")
         )
 

@@ -36,7 +36,7 @@ const { executeWidget, deleteWidget } = useDashboards()
 const loading = ref(true)
 const error = ref<string | null>(null)
 const data = ref<any | null>(null)
-const dataZoom = ref(false)
+const dataZoom = ref(true)
 const deleteDialogOpen = ref(false)
 const deleting = ref(false)
 

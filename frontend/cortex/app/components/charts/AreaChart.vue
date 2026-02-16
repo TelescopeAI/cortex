@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useChartTheme } from '~/composables/useChartTheme'
+import { getShadcnTooltipConfig } from '~/config/echartShadCNTooltip'
 
 interface BulletLegendItemInterface {
   name: string
-  color: string
+  color?: string  // Make color optional
 }
 
 interface AreaChartProps {
@@ -20,6 +21,7 @@ interface AreaChartProps {
   yNumTicks?: number
   hideLegend?: boolean
   hideTooltip?: boolean
+  hideToolbar?: boolean
   xGridLine?: boolean
   xDomainLine?: boolean
   yGridLine?: boolean
@@ -36,12 +38,14 @@ const props = withDefaults(defineProps<AreaChartProps>(), {
   yNumTicks: 4,
   hideLegend: false,
   hideTooltip: false,
-  xGridLine: true,
+  hideToolbar: true,
+  xGridLine: false,
   xDomainLine: true,
-  yGridLine: true,
+  yGridLine: false,
   yDomainLine: true,
   xTickLine: false,
-  legendPosition: 'top'
+  legendPosition: 'top',
+  dataZoom: true
 })
 
 const { chartTheme } = useChartTheme()
@@ -49,32 +53,42 @@ const { chartTheme } = useChartTheme()
 // Convert data to ECharts format
 const chartOption = computed(() => {
   const xAxisData = props.data.map((_, index) => props.xFormatter(index))
-  
+  const categorySize = props.data.length
+
   const series = Object.keys(props.categories).map(key => {
     const categoryInfo = props.categories[key]
-    return {
+    const seriesConfig: any = {
       name: categoryInfo?.name || key,
       type: 'line',
       data: props.data.map(item => item[key]),
       smooth: true,
+      symbol: 'none',  // Hide data point markers
       areaStyle: {
         opacity: 0.7
-      },
-      itemStyle: {
-        color: categoryInfo?.color || '#3b82f6'
-      },
-      lineStyle: {
-        color: categoryInfo?.color || '#3b82f6'
       }
     }
+
+    // Only override theme colors if explicitly provided
+    if (categoryInfo?.color) {
+      seriesConfig.itemStyle = {
+        color: categoryInfo.color
+      }
+      seriesConfig.lineStyle = {
+        color: categoryInfo.color
+      }
+    }
+
+    return seriesConfig
   })
 
   return {
     tooltip: {
+      ...getShadcnTooltipConfig({
+        categorySize
+      }),
       show: !props.hideTooltip,
-      trigger: 'axis',
       axisPointer: {
-        type: 'cross'
+        type: 'none'
       }
     },
     legend: {
@@ -85,12 +99,12 @@ const chartOption = computed(() => {
     grid: {
       left: '3%',
       right: '4%',
-      bottom: props.dataZoom ? '20%' : '3%',
+      bottom: '3%',
       top: props.hideLegend ? '3%' : '15%',
       containLabel: true
     },
     toolbox: {
-      show: true,
+      show: !props.hideToolbar,
       feature: {
         dataZoom: {
           show: true,
@@ -123,6 +137,7 @@ const chartOption = computed(() => {
         bottom: '5%',
         height: '12%',
         filterMode: 'none',
+        show: false,
         showDetail: false,
         showDataShadow: true,
         handleSize: '110%',

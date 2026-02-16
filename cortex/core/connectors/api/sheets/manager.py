@@ -15,7 +15,45 @@ from cortex.core.connectors.api.sheets.types import CortexSheetsStorageType
 from cortex.core.services.data.sources.files_config import (
     get_file_storage_config,
     default_sqlite_path_generator,
+    SqlitePathGeneratorConfig,
 )
+from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
+from cortex.core.storage.store import CortexStorage
+
+
+def _hierarchical_sqlite_path_generator(
+    workspace_id: UUID,
+    environment_id: UUID,
+    base_storage_path: str,
+    generator: Optional[Any] = None
+) -> Any:
+    """
+    Build a hierarchical SQLite path generator function.
+
+    Args:
+        workspace_id: Workspace UUID
+        environment_id: Environment UUID
+        base_storage_path: Base directory for SQLite storage
+        generator: Custom path generator (uses default if None)
+
+    Returns:
+        Path generator function that takes source_id and returns full path
+    """
+    if generator is None:
+        generator = default_sqlite_path_generator
+
+    def path_generator(source_id: str) -> str:
+        path_config = SqlitePathGeneratorConfig(
+            workspace_id=workspace_id,
+            environment_id=environment_id,
+            source_id=source_id,
+            base_storage_path=base_storage_path
+        )
+        generated_path = generator(path_config)
+        print(f"DEBUG: Generated SQLite path: {generated_path}")
+        return generated_path
+
+    return path_generator
 
 
 class CortexSpreadsheetManager:
@@ -131,19 +169,47 @@ class CortexSpreadsheetManager:
         csv_data = provider.download_selected(sheets_to_download)
         
         # Create converter and convert to SQLite
+        # Get workspace_id from environment and build path generator
         sqlite_path_generator = None
         environment_id = config.get("environment_id")
         if environment_id:
             if not isinstance(environment_id, UUID):
                 environment_id = UUID(str(environment_id))
-            storage_config = get_file_storage_config()
-            generator = storage_config.sqlite_path_generator or default_sqlite_path_generator
-            sqlite_path_generator = lambda source_id: generator(environment_id, source_id)
+
+            # Retrieve workspace_id from environment
+            db_session = CortexStorage().get_session()
+            try:
+                environment = EnvironmentCRUD.get_environment(
+                    storage=CortexStorage(),
+                    environment_id=environment_id
+                )
+                if environment:
+                    workspace_id = environment.workspace_id
+                    print(f"DEBUG: Building hierarchical path generator - workspace_id={workspace_id}, environment_id={environment_id}")
+
+                    # Build hierarchical path generator
+                    storage_config = get_file_storage_config()
+                    generator = storage_config.sqlite_path_generator or default_sqlite_path_generator
+
+                    sqlite_path_generator = _hierarchical_sqlite_path_generator(
+                        workspace_id=workspace_id,
+                        environment_id=environment_id,
+                        base_storage_path=get_sheets_config().sqlite_storage_path,
+                        generator=generator
+                    )
+                    print(f"DEBUG: Path generator created successfully")
+                else:
+                    print(f"DEBUG: Environment not found for environment_id={environment_id}")
+            finally:
+                db_session.close()
+        else:
+            print(f"DEBUG: No environment_id in config")
 
         sqlite_path = self.storage_backend.get_sqlite_path(
             self.source_id,
             path_generator=sqlite_path_generator,
         )
+        print(f"DEBUG: SQLite path from backend: {sqlite_path}")
         converter = CortexSQLiteConverter(sqlite_path)
         
         # Convert CSVs to SQLite tables
@@ -208,19 +274,47 @@ class CortexSpreadsheetManager:
         # Compute current hashes
         sqlite_path = config.get("sqlite_path")
         if not sqlite_path:
+            # Get workspace_id from environment and build path generator
             sqlite_path_generator = None
             environment_id = config.get("environment_id")
             if environment_id:
                 if not isinstance(environment_id, UUID):
                     environment_id = UUID(str(environment_id))
-                storage_config = get_file_storage_config()
-                generator = storage_config.sqlite_path_generator or default_sqlite_path_generator
-                sqlite_path_generator = lambda source_id: generator(environment_id, source_id)
+
+                # Retrieve workspace_id from environment
+                db_session = CortexStorage().get_session()
+                try:
+                    environment = EnvironmentCRUD.get_environment(
+                        storage=CortexStorage(),
+                        environment_id=environment_id
+                    )
+                    if environment:
+                        workspace_id = environment.workspace_id
+                        print(f"DEBUG (refresh): Building hierarchical path generator - workspace_id={workspace_id}, environment_id={environment_id}")
+
+                        # Build hierarchical path generator
+                        storage_config = get_file_storage_config()
+                        generator = storage_config.sqlite_path_generator or default_sqlite_path_generator
+
+                        sqlite_path_generator = _hierarchical_sqlite_path_generator(
+                            workspace_id=workspace_id,
+                            environment_id=environment_id,
+                            base_storage_path=get_sheets_config().sqlite_storage_path,
+                            generator=generator
+                        )
+                        print(f"DEBUG (refresh): Path generator created successfully")
+                    else:
+                        print(f"DEBUG (refresh): Environment not found for environment_id={environment_id}")
+                finally:
+                    db_session.close()
+            else:
+                print(f"DEBUG (refresh): No environment_id in config")
 
             sqlite_path = self.storage_backend.get_sqlite_path(
                 self.source_id,
                 path_generator=sqlite_path_generator,
             )
+            print(f"DEBUG (refresh): SQLite path from backend: {sqlite_path}")
         converter = CortexSQLiteConverter(sqlite_path)
         
         current_hashes = {}

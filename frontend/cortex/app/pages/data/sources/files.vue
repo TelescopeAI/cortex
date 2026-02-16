@@ -140,11 +140,11 @@ async function handleCascadeDelete() {
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-4">
-        <Button variant="ghost" size="icon" @click="router.push('/data/sources')">
+        <Button variant="ghost" size="icon" @click="router.push('/data/sources')" class="cursor-pointer">
           <ArrowLeft class="w-4 h-4" />
         </Button>
         <div>
-          <h1 class="text-5xl font-bold tracking-tight">Uploaded Files</h1>
+          <h1 class="text-5xl font-bold tracking-tight">File Storage</h1>
           <p class="text-muted-foreground mt-1">Manage CSV files for creating spreadsheet data sources</p>
         </div>
       </div>

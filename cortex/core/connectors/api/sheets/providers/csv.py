@@ -141,19 +141,24 @@ class CortexCSVProvider(CortexSpreadsheetProvider):
             # Use storage backend to read remote file
             if not self.storage_backend:
                 raise ValueError(f"Storage backend required to read remote file: {file_path}")
-            
-            # Extract filename from path
-            # For gs://bucket/prefix/file.csv, extract the part after the last /
-            filename = file_path.split('/')[-1]
-            # For GCS paths, need to extract source_id from the path
-            # Path format: gs://bucket/prefix/inputs/{source_id}/{filename}
-            path_parts = file_path.split('/')
-            # Find the source_id (it's before the filename)
-            if len(path_parts) >= 2:
-                source_id_part = path_parts[-2]
-                return self.storage_backend.load_file(source_id_part, filename)
-            else:
-                raise ValueError(f"Cannot parse remote file path: {file_path}")
+
+            # Use full path from database directly (no parsing needed!)
+            # File paths are stored with full hierarchical structure in the database
+            if file_path.startswith('gs://'):
+                # Extract blob path from GCS URI
+                # Format: gs://bucket/blob_path
+                blob_path = file_path.replace(f'gs://{self.storage_backend.bucket.name}/', '')
+
+                # Use storage backend's load_file method with blob_path parameter
+                file_data = self.storage_backend.load_file(blob_path=blob_path)
+
+                if file_data is None:
+                    raise FileNotFoundError(f"GCS file not found: {file_path}")
+
+                return file_data
+            elif file_path.startswith('s3://'):
+                # S3 support can be added here similarly
+                raise NotImplementedError("S3 storage not yet implemented")
         
         # Local file handling
         if file_config.source_type == "file" and file_path:

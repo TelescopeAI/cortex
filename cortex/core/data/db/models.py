@@ -99,12 +99,7 @@ class MetricORM(BaseDBModel):
     cache = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # CachePreference object
     meta = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # Custom metadata
 
-    # Composable metrics fields (discriminated by metric_type)
-    metric_type = mapped_column(String, nullable=False, default='base', index=True)  # Discriminator: 'base' or 'variant'
-    source = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # MetricRef for variant source
-    combine = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # List of MetricRef for CTE composition
-    overrides = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # MetricOverrides for variants
-    include = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # IncludedComponents whitelist for variants
+    # Composable metrics fields (shared with variants)
     derivations = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # List of DerivedEntity (window functions + arithmetic)
     composition = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # List of CompositionSource (compiler-populated, stored to avoid recompilation)
     

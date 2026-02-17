@@ -5,7 +5,7 @@
  * they belong to the metrics domain (e.g., SemanticMetricVariant, MetricRef, MetricOverrides).
  */
 
-import type { SemanticMetric } from './metrics'
+import type { SemanticMetric } from '~/composables/useMetrics'
 
 // ============================================================================
 // Core Variant Types
@@ -17,6 +17,11 @@ export interface SemanticMetricVariant {
   name: string
   alias?: string
   description?: string
+
+  // Environment/DataModel/DataSource binding (must match source metric)
+  environment_id: string
+  data_model_id: string
+  data_source_id?: string
 
   // Variant definition (the recipe)
   source: MetricRef

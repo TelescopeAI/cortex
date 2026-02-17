@@ -8,11 +8,23 @@ metric variants, as well as lifecycle operations (reset, detach, override-source
 from typing import Optional, List
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Query
 
+from cortex.api.schemas.requests.variants import (
+    MetricVariantCreateRequest,
+    MetricVariantUpdateRequest,
+    MetricVariantExecutionRequest,
+    MetricVariantCloneRequest
+)
+from cortex.api.schemas.responses.variants import (
+    MetricVariantResponse,
+    MetricVariantListResponse,
+    MetricVariantExecutionResponse
+)
 from cortex.core.semantics.metrics.variant import SemanticMetricVariant
 from cortex.core.semantics.metrics.metric import SemanticMetric
 from cortex.core.data.db.metric_service import MetricService
+from cortex.core.data.db.metric_variant_service import MetricVariantService
 from cortex.core.compiler import compile as compile_metric
 
 
@@ -22,10 +34,11 @@ VariantsRouter = APIRouter()
 
 @VariantsRouter.post(
     "/metrics/variants",
+    response_model=MetricVariantResponse,
     status_code=status.HTTP_201_CREATED,
     tags=["Metric Variants"],
 )
-async def create_variant(variant_data: dict):
+async def create_variant(variant_request: MetricVariantCreateRequest):
     """
     Create a new metric variant.
 
@@ -33,25 +46,66 @@ async def create_variant(variant_data: dict):
     inclusions, exclusions, derivations, and multi-source composition.
     """
     try:
+        variant_service = MetricVariantService()
         metric_service = MetricService()
 
         try:
-            # Deserialize variant data
-            variant = SemanticMetricVariant.model_validate(variant_data)
+            # Verify source metric exists and belongs to the environment
+            source_metric_id = variant_request.source.metric_id
+            if not source_metric_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Source metric_id is required"
+                )
 
-            # Set metric_type discriminator
-            variant_dict = variant.model_dump()
-            variant_dict["metric_type"] = "variant"
+            source_metric = metric_service.get_metric_by_id(
+                source_metric_id,
+                environment_id=variant_request.environment_id
+            )
+            if not source_metric:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Source metric with ID {source_metric_id} not found in environment {variant_request.environment_id}"
+                )
 
-            # Create variant in database
-            db_variant = metric_service.create_metric(variant_dict)
+            # Create variant model with explicit environment/data_model/data_source binding and source_id
+            variant = SemanticMetricVariant(
+                name=variant_request.name,
+                alias=variant_request.alias,
+                description=variant_request.description,
+                environment_id=variant_request.environment_id,
+                data_model_id=source_metric.data_model_id,
+                data_source_id=source_metric.data_source_id,
+                source_id=source_metric_id,  # For CASCADE DELETE when source metric is deleted
+                source=variant_request.source,
+                overrides=variant_request.overrides,
+                include=variant_request.include,
+                derivations=variant_request.derivations,
+                combine=variant_request.combine,
+                public=variant_request.public,
+                cache=variant_request.cache,
+                refresh=variant_request.refresh,
+                parameters=variant_request.parameters,
+                meta=variant_request.meta
+            )
 
-            # Return the created variant
-            return {"success": True, "data": db_variant, "message": "Variant created successfully"}
+            # Create via MetricVariantService (NO dict conversion, pass Pydantic directly)
+            db_variant = variant_service.create_variant(variant)
+
+            # Convert to response
+            response = MetricVariantResponse.model_validate(db_variant)
+
+            # Add source metric name
+            response.source_metric_name = source_metric.name
+
+            return response
 
         finally:
+            variant_service.close()
             metric_service.close()
 
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
@@ -65,57 +119,59 @@ async def create_variant(variant_data: dict):
 
 @VariantsRouter.get(
     "/metrics/variants",
+    response_model=MetricVariantListResponse,
     status_code=status.HTTP_200_OK,
     tags=["Metric Variants"],
 )
 async def list_variants(
-    environment_id: UUID,
-    data_model_id: Optional[UUID] = None,
-    source_metric_id: Optional[UUID] = None,
-    limit: Optional[int] = 100,
-    offset: Optional[int] = 0,
+    environment_id: UUID = Query(..., description="Environment ID"),
+    data_model_id: Optional[UUID] = Query(None, description="Filter by data model ID"),
+    source_metric_id: Optional[UUID] = Query(None, description="Filter by source metric ID"),
+    limit: Optional[int] = Query(100, ge=1, le=1000, description="Maximum number of results"),
+    offset: Optional[int] = Query(0, ge=0, description="Number of results to skip"),
 ):
     """
     List metric variants with optional filtering.
 
-    Returns only metrics with metric_type = 'variant'.
     Can filter by source_metric_id to get all variants of a specific metric.
     """
     try:
+        variant_service = MetricVariantService()
         metric_service = MetricService()
 
         try:
-            # Get all metrics and filter for variants
-            all_metrics = metric_service.get_all_metrics(
+            # Get variants using MetricVariantService
+            variants = variant_service.get_all_variants(
                 environment_id=environment_id,
                 data_model_id=data_model_id,
+                source_metric_id=source_metric_id,
                 skip=offset,
-                limit=limit,
+                limit=limit
             )
 
-            # Filter for variants only
-            variants = [
-                m
-                for m in all_metrics
-                if hasattr(m, "metric_type") and m.metric_type == "variant"
-            ]
+            # Convert to response models
+            variant_responses = []
+            for v in variants:
+                response = MetricVariantResponse.model_validate(v)
+                # Optionally add source metric name
+                if hasattr(v, "source") and v.source and hasattr(v.source, "get") and v.source.get("metric_id"):
+                    try:
+                        source_metric = metric_service.get_metric_by_id(UUID(v.source["metric_id"]))
+                        if source_metric:
+                            response.source_metric_name = source_metric.name
+                    except:
+                        pass
+                variant_responses.append(response)
 
-            # Additional filter by source_metric_id if provided
-            if source_metric_id:
-                variants = [
-                    v for v in variants
-                    if hasattr(v, "source") and v.source and v.source.get("metric_id") == str(source_metric_id)
-                ]
-
-            return {
-                "success": True,
-                "data": variants,
-                "total": len(variants),
-                "limit": limit,
-                "offset": offset,
-            }
+            return MetricVariantListResponse(
+                variants=variant_responses,
+                total_count=len(variant_responses),
+                limit=limit,
+                offset=offset
+            )
 
         finally:
+            variant_service.close()
             metric_service.close()
 
     except Exception as e:
@@ -127,36 +183,47 @@ async def list_variants(
 
 @VariantsRouter.get(
     "/metrics/variants/{variant_id}",
+    response_model=MetricVariantResponse,
     status_code=status.HTTP_200_OK,
     tags=["Metric Variants"],
 )
-async def get_variant(variant_id: UUID):
+async def get_variant(
+    variant_id: UUID,
+    environment_id: UUID = Query(..., description="Environment ID")
+):
     """
     Get a metric variant by ID.
 
     Returns the variant definition (not the resolved metric).
     """
     try:
+        variant_service = MetricVariantService()
         metric_service = MetricService()
 
         try:
-            db_variant = metric_service.get_metric_by_id(variant_id)
+            db_variant = variant_service.get_variant_by_id(variant_id, environment_id=environment_id)
             if not db_variant:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Variant with ID {variant_id} not found",
+                    detail=f"Variant with ID {variant_id} not found in environment {environment_id}",
                 )
 
-            # Check that it's actually a variant
-            if not hasattr(db_variant, "metric_type") or db_variant.metric_type != "variant":
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Metric {variant_id} is not a variant",
-                )
+            # Convert to response
+            response = MetricVariantResponse.model_validate(db_variant)
 
-            return {"success": True, "data": db_variant}
+            # Optionally add source metric name
+            if hasattr(db_variant, "source") and db_variant.source and hasattr(db_variant.source, "get") and db_variant.source.get("metric_id"):
+                try:
+                    source_metric = metric_service.get_metric_by_id(UUID(db_variant.source["metric_id"]))
+                    if source_metric:
+                        response.source_metric_name = source_metric.name
+                except:
+                    pass
+
+            return response
 
         finally:
+            variant_service.close()
             metric_service.close()
 
     except HTTPException:
@@ -170,50 +237,77 @@ async def get_variant(variant_id: UUID):
 
 @VariantsRouter.put(
     "/metrics/variants/{variant_id}",
+    response_model=MetricVariantResponse,
     status_code=status.HTTP_200_OK,
     tags=["Metric Variants"],
 )
-async def update_variant(variant_id: UUID, variant_data: dict):
+async def update_variant(variant_id: UUID, variant_request: MetricVariantUpdateRequest):
     """
     Update a metric variant.
 
     Can modify overrides, inclusions, derivations, and combine settings.
     """
     try:
+        variant_service = MetricVariantService()
         metric_service = MetricService()
 
         try:
-            # Get existing variant
-            db_variant = metric_service.get_metric_by_id(variant_id)
+            # Get existing variant and validate environment
+            db_variant = variant_service.get_variant_by_id(variant_id, environment_id=variant_request.environment_id)
             if not db_variant:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Variant with ID {variant_id} not found",
+                    detail=f"Variant with ID {variant_id} not found in environment {variant_request.environment_id}",
                 )
 
-            # Check that it's actually a variant
-            if not hasattr(db_variant, "metric_type") or db_variant.metric_type != "variant":
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Metric {variant_id} is not a variant",
-                )
-
-            # Build updates dictionary
+            # Build updates dictionary directly from request fields (only non-None values)
             updates = {}
-            for key, value in variant_data.items():
-                if key not in ["id", "created_at", "metric_type"]:
-                    updates[key] = value
+            if variant_request.name is not None:
+                updates["name"] = variant_request.name
+            if variant_request.alias is not None:
+                updates["alias"] = variant_request.alias
+            if variant_request.description is not None:
+                updates["description"] = variant_request.description
+            if variant_request.source is not None:
+                updates["source"] = variant_request.source.model_dump() if hasattr(variant_request.source, 'model_dump') else variant_request.source
+            if variant_request.overrides is not None:
+                updates["overrides"] = variant_request.overrides.model_dump() if hasattr(variant_request.overrides, 'model_dump') else variant_request.overrides
+            if variant_request.include is not None:
+                updates["include"] = variant_request.include.model_dump() if hasattr(variant_request.include, 'model_dump') else variant_request.include
+            if variant_request.derivations is not None:
+                updates["derivations"] = [d.model_dump() for d in variant_request.derivations] if variant_request.derivations else None
+            if variant_request.combine is not None:
+                updates["combine"] = [c.model_dump() for c in variant_request.combine] if variant_request.combine else None
+            if variant_request.public is not None:
+                updates["public"] = variant_request.public
+            if variant_request.cache is not None:
+                updates["cache"] = variant_request.cache.model_dump() if hasattr(variant_request.cache, 'model_dump') else variant_request.cache
+            if variant_request.refresh is not None:
+                updates["refresh"] = variant_request.refresh.model_dump() if hasattr(variant_request.refresh, 'model_dump') else variant_request.refresh
+            if variant_request.parameters is not None:
+                updates["parameters"] = {k: v.model_dump() for k, v in variant_request.parameters.items()} if variant_request.parameters else None
+            if variant_request.meta is not None:
+                updates["meta"] = variant_request.meta
 
             # Update variant in database
-            updated_variant = metric_service.update_metric(variant_id, updates)
+            updated_variant = variant_service.update_variant(variant_id, updates)
 
-            return {
-                "success": True,
-                "data": updated_variant,
-                "message": "Variant updated successfully",
-            }
+            # Convert to response
+            response = MetricVariantResponse.model_validate(updated_variant)
+
+            # Optionally add source metric name
+            if hasattr(updated_variant, "source") and updated_variant.source and hasattr(updated_variant.source, "get") and updated_variant.source.get("metric_id"):
+                try:
+                    source_metric = metric_service.get_metric_by_id(UUID(updated_variant.source["metric_id"]))
+                    if source_metric:
+                        response.source_metric_name = source_metric.name
+                except:
+                    pass
+
+            return response
 
         finally:
+            variant_service.close()
             metric_service.close()
 
     except HTTPException:
@@ -230,38 +324,34 @@ async def update_variant(variant_id: UUID, variant_data: dict):
     status_code=status.HTTP_204_NO_CONTENT,
     tags=["Metric Variants"],
 )
-async def delete_variant(variant_id: UUID):
+async def delete_variant(
+    variant_id: UUID,
+    environment_id: UUID = Query(..., description="Environment ID")
+):
     """
     Delete a metric variant.
 
-    This does not affect the source metric.
+    This does not affect the source metric. All variant versions are also deleted (CASCADE).
     """
     try:
-        metric_service = MetricService()
+        variant_service = MetricVariantService()
 
         try:
-            # Get existing variant
-            db_variant = metric_service.get_metric_by_id(variant_id)
+            # Get existing variant and validate environment
+            db_variant = variant_service.get_variant_by_id(variant_id, environment_id=environment_id)
             if not db_variant:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Variant with ID {variant_id} not found",
+                    detail=f"Variant with ID {variant_id} not found in environment {environment_id}",
                 )
 
-            # Check that it's actually a variant
-            if not hasattr(db_variant, "metric_type") or db_variant.metric_type != "variant":
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Metric {variant_id} is not a variant",
-                )
-
-            # Delete variant
-            metric_service.delete_metric(variant_id)
+            # Delete variant (cascades to versions)
+            variant_service.delete_variant(variant_id)
 
             return None  # 204 No Content
 
         finally:
-            metric_service.close()
+            variant_service.close()
 
     except HTTPException:
         raise
@@ -275,7 +365,7 @@ async def delete_variant(variant_id: UUID):
 @VariantsRouter.post(
     "/metrics/variants/{variant_id}/reset",
     status_code=status.HTTP_200_OK,
-    tags=["Metric Variants", "Lifecycle"],
+    tags=["Metric Variants"],
 )
 async def reset_variant(variant_id: UUID):
     """
@@ -284,22 +374,15 @@ async def reset_variant(variant_id: UUID):
     The variant will then exactly match its source metric.
     """
     try:
-        metric_service = MetricService()
+        variant_service = MetricVariantService()
 
         try:
             # Get existing variant
-            db_variant = metric_service.get_metric_by_id(variant_id)
+            db_variant = variant_service.get_variant_by_id(variant_id)
             if not db_variant:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Variant with ID {variant_id} not found",
-                )
-
-            # Check that it's actually a variant
-            if not hasattr(db_variant, "metric_type") or db_variant.metric_type != "variant":
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Metric {variant_id} is not a variant",
                 )
 
             # Reset overrides
@@ -310,7 +393,7 @@ async def reset_variant(variant_id: UUID):
                 "combine": None,
             }
 
-            updated_variant = metric_service.update_metric(variant_id, updates)
+            updated_variant = variant_service.update_variant(variant_id, updates)
 
             return {
                 "success": True,
@@ -319,7 +402,7 @@ async def reset_variant(variant_id: UUID):
             }
 
         finally:
-            metric_service.close()
+            variant_service.close()
 
     except HTTPException:
         raise
@@ -333,7 +416,7 @@ async def reset_variant(variant_id: UUID):
 @VariantsRouter.post(
     "/metrics/variants/{variant_id}/detach",
     status_code=status.HTTP_201_CREATED,
-    tags=["Metric Variants", "Lifecycle"],
+    tags=["Metric Variants"],
 )
 async def detach_variant(variant_id: UUID):
     """
@@ -342,43 +425,38 @@ async def detach_variant(variant_id: UUID):
     Returns the new metric ID.
     """
     try:
+        variant_service = MetricVariantService()
         metric_service = MetricService()
 
         try:
             # Get existing variant
-            db_variant = metric_service.get_metric_by_id(variant_id)
+            db_variant = variant_service.get_variant_by_id(variant_id)
             if not db_variant:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Variant with ID {variant_id} not found",
                 )
 
-            # Check that it's actually a variant
-            if not hasattr(db_variant, "metric_type") or db_variant.metric_type != "variant":
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Metric {variant_id} is not a variant",
-                )
-
             # Deserialize as variant
-            variant = SemanticMetricVariant.model_validate(db_variant)
+            variant = SemanticMetricVariant.model_validate(db_variant, from_attributes=True)
 
             # Create fetcher for compiler
             def fetcher(mid: UUID):
+                # Try to get from variant service first
+                db_v = variant_service.get_variant_by_id(mid)
+                if db_v:
+                    return SemanticMetricVariant.model_validate(db_v, from_attributes=True)
+                # Otherwise get from metric service
                 db_m = metric_service.get_metric_by_id(mid)
                 if not db_m:
                     raise ValueError(f"Metric with ID {mid} not found")
-                if hasattr(db_m, "metric_type") and db_m.metric_type == "variant":
-                    return SemanticMetricVariant.model_validate(db_m)
-                else:
-                    return SemanticMetric.model_validate(db_m)
+                return SemanticMetric.model_validate(db_m, from_attributes=True)
 
             # Compile variant to resolved metric
             resolved_metric = compile_metric(variant, fetcher)
 
             # Create new standalone metric
             new_metric_dict = resolved_metric.model_dump()
-            new_metric_dict["metric_type"] = "base"
             new_metric_dict["name"] = f"{resolved_metric.name}_detached"
             new_metric_dict.pop("id")  # Let DB generate new ID
 
@@ -391,6 +469,7 @@ async def detach_variant(variant_id: UUID):
             }
 
         finally:
+            variant_service.close()
             metric_service.close()
 
     except HTTPException:
@@ -404,10 +483,11 @@ async def detach_variant(variant_id: UUID):
 
 @VariantsRouter.post(
     "/metrics/variants/{variant_id}/execute",
+    response_model=MetricVariantExecutionResponse,
     status_code=status.HTTP_200_OK,
     tags=["Metric Variants", "Execution"],
 )
-async def execute_variant(variant_id: UUID, execution_request: dict):
+async def execute_variant(variant_id: UUID, execution_request: MetricVariantExecutionRequest):
     """
     Execute a metric variant and return results.
 
@@ -416,35 +496,48 @@ async def execute_variant(variant_id: UUID, execution_request: dict):
     try:
         from cortex.core.services.metrics.execution import MetricExecutionService
 
-        metric_service = MetricService()
+        variant_service = MetricVariantService()
         execution_service = MetricExecutionService()
 
         try:
-            # Get the variant
-            db_variant = metric_service.get_metric_by_id(variant_id)
+            # Get the variant and validate environment
+            db_variant = variant_service.get_variant_by_id(variant_id, environment_id=execution_request.environment_id)
             if not db_variant:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Variant with ID {variant_id} not found",
-                )
-
-            # Check that it's actually a variant
-            if not hasattr(db_variant, "metric_type") or db_variant.metric_type != "variant":
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Metric {variant_id} is not a variant",
+                    detail=f"Variant with ID {variant_id} not found in environment {execution_request.environment_id}",
                 )
 
             # Execute the variant (execution service handles compilation)
-            result = await execution_service.execute_metric(
+            result = execution_service.execute_metric(
                 metric_id=str(variant_id),
-                execution_request=execution_request,
+                context_id=execution_request.context_id,
+                parameters=execution_request.parameters,
+                limit=execution_request.limit,
+                offset=execution_request.offset,
+                grouped=execution_request.grouped,
+                cache_preference=execution_request.cache,
+                preview=execution_request.preview,
             )
 
-            return result
+            # Build error list from result
+            errors = None
+            if not result["success"]:
+                errors = []
+                if result.get("error"):
+                    errors.append(result.get("error"))
+                if result.get("validation_errors"):
+                    errors.extend(result.get("validation_errors", []))
+
+            return MetricVariantExecutionResponse(
+                success=result["success"],
+                data=result.get("data"),
+                metadata=result.get("metadata", {}),
+                errors=errors
+            )
 
         finally:
-            metric_service.close()
+            variant_service.close()
 
     except HTTPException:
         raise
@@ -458,7 +551,7 @@ async def execute_variant(variant_id: UUID, execution_request: dict):
 @VariantsRouter.post(
     "/metrics/variants/{variant_id}/override-source",
     status_code=status.HTTP_200_OK,
-    tags=["Metric Variants", "Lifecycle"],
+    tags=["Metric Variants"],
 )
 async def override_source(variant_id: UUID):
     """
@@ -467,26 +560,20 @@ async def override_source(variant_id: UUID):
     WARNING: This modifies the source metric and cannot be undone!
     """
     try:
+        variant_service = MetricVariantService()
         metric_service = MetricService()
 
         try:
             # Get existing variant
-            db_variant = metric_service.get_metric_by_id(variant_id)
+            db_variant = variant_service.get_variant_by_id(variant_id)
             if not db_variant:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Variant with ID {variant_id} not found",
                 )
 
-            # Check that it's actually a variant
-            if not hasattr(db_variant, "metric_type") or db_variant.metric_type != "variant":
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Metric {variant_id} is not a variant",
-                )
-
             # Deserialize as variant
-            variant = SemanticMetricVariant.model_validate(db_variant)
+            variant = SemanticMetricVariant.model_validate(db_variant, from_attributes=True)
 
             # Get source ID
             if variant.source.metric_id is None:
@@ -499,13 +586,15 @@ async def override_source(variant_id: UUID):
 
             # Create fetcher for compiler
             def fetcher(mid: UUID):
+                # Try to get from variant service first
+                db_v = variant_service.get_variant_by_id(mid)
+                if db_v:
+                    return SemanticMetricVariant.model_validate(db_v, from_attributes=True)
+                # Otherwise get from metric service
                 db_m = metric_service.get_metric_by_id(mid)
                 if not db_m:
                     raise ValueError(f"Metric with ID {mid} not found")
-                if hasattr(db_m, "metric_type") and db_m.metric_type == "variant":
-                    return SemanticMetricVariant.model_validate(db_m)
-                else:
-                    return SemanticMetric.model_validate(db_m)
+                return SemanticMetric.model_validate(db_m, from_attributes=True)
 
             # Compile variant to resolved metric
             resolved_metric = compile_metric(variant, fetcher)
@@ -534,6 +623,7 @@ async def override_source(variant_id: UUID):
             }
 
         finally:
+            variant_service.close()
             metric_service.close()
 
     except HTTPException:

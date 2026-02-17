@@ -262,6 +262,26 @@ import {
   RotateCcw, Unlink, Upload, Trash, Info, Layers, Play, Clock,
   CheckCircle2, Loader2
 } from 'lucide-vue-next'
+import { Button } from '~/components/ui/button'
+import { Badge } from '~/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '~/components/ui/card'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator
+} from '~/components/ui/breadcrumb'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '~/components/ui/dropdown-menu'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
+import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import type { SemanticMetricVariant } from '~/types/metric_variants'
 import type { SemanticMetric } from '~/composables/useMetrics'
 

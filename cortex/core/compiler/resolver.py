@@ -195,8 +195,26 @@ class VariantResolver:
             merged_derivations.extend(variant.derivations)
         resolved.derivations = merged_derivations if merged_derivations else None
 
-        # Step 7 - Inherit non-overridable fields
-        # These fields are always inherited from the base metric
+        # Step 7 - Validate and inherit non-overridable fields
+        # Variants must belong to the same environment/data_model/data_source as their source
+        if variant.environment_id != base.environment_id:
+            raise IncompatibleSourceError(
+                f"Variant '{variant.name}' (environment={variant.environment_id}) "
+                f"cannot reference source in different environment ({base.environment_id})"
+            )
+        if variant.data_model_id != base.data_model_id:
+            raise IncompatibleSourceError(
+                f"Variant '{variant.name}' (data_model={variant.data_model_id}) "
+                f"cannot reference source with different data model ({base.data_model_id})"
+            )
+        if variant.data_source_id is not None and base.data_source_id is not None:
+            if variant.data_source_id != base.data_source_id:
+                raise IncompatibleSourceError(
+                    f"Variant '{variant.name}' (data_source={variant.data_source_id}) "
+                    f"cannot reference source with different data source ({base.data_source_id})"
+                )
+
+        # Inherit non-overridable fields (already validated to match)
         resolved.environment_id = base.environment_id
         resolved.data_model_id = base.data_model_id
         resolved.data_source_id = base.data_source_id

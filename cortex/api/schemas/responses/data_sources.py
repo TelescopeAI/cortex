@@ -1,12 +1,12 @@
 from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
-from pydantic import BaseModel
 
 from cortex.core.types.databases import DataSourceTypes, DataSourceCatalog
+from cortex.core.types.telescope import TSModel
 
 
-class DataSourceResponse(BaseModel):
+class DataSourceResponse(TSModel):
     id: UUID
     environment_id: UUID
     name: str
@@ -19,7 +19,7 @@ class DataSourceResponse(BaseModel):
     updated_at: datetime
 
 
-class DependentMetricInfo(BaseModel):
+class DependentMetricInfo(TSModel):
     """Brief info about a dependent metric"""
     id: UUID
     name: str
@@ -27,12 +27,12 @@ class DependentMetricInfo(BaseModel):
     version_count: int
 
 
-class DataSourceDependencies(BaseModel):
+class DataSourceDependencies(TSModel):
     """Details of entities depending on a data source"""
     metrics: List[DependentMetricInfo]
 
 
-class DataSourceDependenciesResponse(BaseModel):
+class DataSourceDependenciesResponse(TSModel):
     """Response when data source cannot be deleted due to dependencies"""
     error: str = "DataSourceHasDependencies"
     message: str
@@ -40,7 +40,7 @@ class DataSourceDependenciesResponse(BaseModel):
     dependencies: DataSourceDependencies
 
 
-class DependentDataSourceInfo(BaseModel):
+class DependentDataSourceInfo(TSModel):
     """Brief info about a dependent data source with its metrics"""
     id: UUID
     name: str
@@ -48,12 +48,12 @@ class DependentDataSourceInfo(BaseModel):
     metrics: List[DependentMetricInfo]
 
 
-class FileDependencies(BaseModel):
+class FileDependencies(TSModel):
     """Details of entities depending on a file"""
     data_sources: List[DependentDataSourceInfo]
 
 
-class FileDependenciesResponse(BaseModel):
+class FileDependenciesResponse(TSModel):
     """Response when file cannot be deleted due to dependencies"""
     error: str = "FileHasDependencies"
     message: str
@@ -61,7 +61,7 @@ class FileDependenciesResponse(BaseModel):
     dependencies: FileDependencies
 
 
-class DataSourceRebuildResponse(BaseModel):
+class DataSourceRebuildResponse(TSModel):
     """Response from data source rebuild operation"""
     success: bool
     message: str

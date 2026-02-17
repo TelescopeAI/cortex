@@ -1,7 +1,6 @@
 from typing import Optional, Dict, Any, List
 from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel
 
 from cortex.core.semantics.measures import SemanticMeasure
 from cortex.core.semantics.dimensions import SemanticDimension
@@ -13,9 +12,10 @@ from cortex.core.semantics.order_sequences import SemanticOrderSequence
 from cortex.core.semantics.parameters import ParameterDefinition
 from cortex.core.semantics.refresh_keys import RefreshPolicy
 from cortex.core.semantics.cache import CachePreference
+from cortex.core.types.telescope import TSModel
 
 
-class MetricResponse(BaseModel):
+class MetricResponse(TSModel):
     """Response schema for metric data"""
     id: UUID
     environment_id: UUID
@@ -51,7 +51,7 @@ class MetricResponse(BaseModel):
     updated_at: datetime
 
 
-class MetricListResponse(BaseModel):
+class MetricListResponse(TSModel):
     """Response schema for listing metrics"""
     metrics: List[MetricResponse]
     total_count: int
@@ -59,7 +59,7 @@ class MetricListResponse(BaseModel):
     page_size: int
 
 
-class MetricExecutionResponse(BaseModel):
+class MetricExecutionResponse(TSModel):
     """Response schema for metric execution results"""
     success: bool
     # Execution stats, query info, etc.
@@ -68,7 +68,7 @@ class MetricExecutionResponse(BaseModel):
     errors: Optional[List[str]]
 
 
-class MetricValidationResponse(BaseModel):
+class MetricValidationResponse(TSModel):
     """Response schema for metric validation"""
     is_valid: bool
     errors: Optional[List[str]]
@@ -76,7 +76,7 @@ class MetricValidationResponse(BaseModel):
     compiled_query: Optional[str]
 
 
-class MetricVersionResponse(BaseModel):
+class MetricVersionResponse(TSModel):
     """Response schema for metric version data"""
     id: UUID
     metric_id: UUID
@@ -88,13 +88,13 @@ class MetricVersionResponse(BaseModel):
     created_at: datetime
 
 
-class MetricVersionListResponse(BaseModel):
+class MetricVersionListResponse(TSModel):
     """Response schema for listing metric versions"""
     versions: List[MetricVersionResponse]
     total_count: int 
 
 
-class MetricRecommendationsResponse(BaseModel):
+class MetricRecommendationsResponse(TSModel):
     """Response schema for metric recommendations"""
     metrics: List[MetricResponse]
     total_count: int

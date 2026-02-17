@@ -83,13 +83,19 @@ export const useMetricVariants = () => {
   /**
    * Create a new variant
    */
-  const createVariant = async (variantData: Partial<SemanticMetricVariant>): Promise<SemanticMetricVariant | null> => {
+  const createVariant = async (
+    environmentId: string,
+    variantData: Partial<SemanticMetricVariant>
+  ): Promise<SemanticMetricVariant | null> => {
     try {
       const response = await $fetch<SemanticMetricVariant>(
         apiUrl('/api/v1/metrics/variants'),
         {
           method: 'POST',
-          body: variantData
+          body: {
+            environment_id: environmentId,
+            ...variantData
+          }
         }
       )
       // Add to local state

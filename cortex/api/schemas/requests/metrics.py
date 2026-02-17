@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any, List
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
 from cortex.core.types.telescope import TSModel
 from cortex.core.semantics.measures import SemanticMeasure
@@ -33,7 +33,7 @@ class RecommendSelectionConfig(TSModel):
     exclude: Optional[Dict[str, List[str]]] = None  # table_name -> column_names to exclude
 
 
-class MetricCreateRequest(BaseModel):
+class MetricCreateRequest(TSModel):
     """Request schema for creating a new metric"""
     data_model_id: UUID
     name: str
@@ -53,14 +53,13 @@ class MetricCreateRequest(BaseModel):
     filters: Optional[List[SemanticFilter]] = None
     order: Optional[List[SemanticOrderSequence]] = None
     parameters: Optional[Dict[str, ParameterDefinition]] = None
-    extends: Optional[UUID] = None
     public: Optional[bool] = True
     refresh: Optional[RefreshPolicy] = None
     cache: Optional[CachePreference] = None
     meta: Optional[Dict[str, Any]] = None
 
 
-class MetricUpdateRequest(BaseModel):
+class MetricUpdateRequest(TSModel):
     """Request schema for updating an existing metric"""
     environment_id: UUID = Field(..., description="Environment ID for the metric")
     name: Optional[str] = None
@@ -80,7 +79,6 @@ class MetricUpdateRequest(BaseModel):
     filters: Optional[List[SemanticFilter]] = None
     order: Optional[List[SemanticOrderSequence]] = None
     parameters: Optional[Dict[str, ParameterDefinition]] = None
-    extends: Optional[UUID] = None
     public: Optional[bool] = None
     refresh: Optional[RefreshPolicy] = None
     cache: Optional[CachePreference] = None
@@ -89,7 +87,7 @@ class MetricUpdateRequest(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
 
-class MetricExecutionRequest(BaseModel):
+class MetricExecutionRequest(TSModel):
     """Request schema for executing a metric"""
     parameters: Optional[Dict[str, Any]] = None
     filters: Optional[Dict[str, Any]] = None
@@ -103,19 +101,19 @@ class MetricExecutionRequest(BaseModel):
     preview: Optional[bool] = Field(default=False, description="If true, generate and return query without executing or saving to DB")
 
 
-class MetricCloneRequest(BaseModel):
+class MetricCloneRequest(TSModel):
     """Request schema for cloning a metric to another data model"""
     target_data_model_id: UUID
     new_name: Optional[str] = None
 
 
-class MetricVersionCreateRequest(BaseModel):
+class MetricVersionCreateRequest(TSModel):
     """Request schema for creating a metric version"""
     description: Optional[str] = None
     tags: Optional[List[str]] = None 
 
 
-class MetricRecommendationsRequest(BaseModel):
+class MetricRecommendationsRequest(TSModel):
     """
     Request schema for generating metric recommendations.
     Optional filters allow callers to scope tables/columns, restrict metric

@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional, List
 from uuid import UUID
 
 from cortex.core.data.db.metric_service import MetricService
+from cortex.core.data.db.metric_variant_service import MetricVariantService
 from cortex.core.data.db.model_service import DataModelService
 from cortex.core.data.db.source_service import DataSourceCRUD
 from cortex.core.semantics.cache import CachePreference
@@ -68,8 +69,9 @@ class MetricExecutionService:
             raise ValueError("Must provide either metric_id or metric")
         
         metric_service = MetricService()
+        variant_service = MetricVariantService()
         model_service = DataModelService()
-        
+
         try:
             # Get or use provided metric
             if metric is not None:
@@ -78,46 +80,50 @@ class MetricExecutionService:
                 if isinstance(metric, SemanticMetricVariant):
                     # Create fetcher for compiler
                     def fetcher(mid: UUID):
+                        # Try to get from variant service first
+                        db_v = variant_service.get_variant_by_id(mid)
+                        if db_v:
+                            return SemanticMetricVariant.model_validate(db_v, from_attributes=True)
+                        # Otherwise get from metric service
                         db_m = metric_service.get_metric_by_id(mid)
                         if not db_m:
                             raise ValueError(f"Metric with ID {mid} not found")
-                        # Check metric_type to determine if it's a variant
-                        if hasattr(db_m, 'metric_type') and db_m.metric_type == 'variant':
-                            return SemanticMetricVariant.model_validate(db_m)
-                        else:
-                            return SemanticMetric.model_validate(db_m)
+                        return SemanticMetric.model_validate(db_m, from_attributes=True)
 
                     resolved_metric = compile_metric(metric, fetcher)
                 else:
                     resolved_metric = metric
                 effective_metric_id = metric.id
             else:
-                # Fetch metric from database
-                db_metric = metric_service.get_metric_by_id(metric_id)
-                if not db_metric:
-                    raise ValueError(f"Metric with ID {metric_id} not found")
+                # Try to fetch variant first
+                db_variant = variant_service.get_variant_by_id(metric_id)
 
-                # Check if it's a variant and compile if needed
-                if hasattr(db_metric, 'metric_type') and db_metric.metric_type == 'variant':
-                    # Deserialize as variant
-                    variant = SemanticMetricVariant.model_validate(db_metric)
+                if db_variant:
+                    # It's a variant - compile it
+                    variant = SemanticMetricVariant.model_validate(db_variant, from_attributes=True)
 
                     # Create fetcher for compiler
                     def fetcher(mid: UUID):
+                        # Try to get from variant service first
+                        db_v = variant_service.get_variant_by_id(mid)
+                        if db_v:
+                            return SemanticMetricVariant.model_validate(db_v, from_attributes=True)
+                        # Otherwise get from metric service
                         db_m = metric_service.get_metric_by_id(mid)
                         if not db_m:
                             raise ValueError(f"Metric with ID {mid} not found")
-                        # Check metric_type to determine if it's a variant
-                        if hasattr(db_m, 'metric_type') and db_m.metric_type == 'variant':
-                            return SemanticMetricVariant.model_validate(db_m)
-                        else:
-                            return SemanticMetric.model_validate(db_m)
+                        return SemanticMetric.model_validate(db_m, from_attributes=True)
 
                     # Compile variant to resolved metric
                     resolved_metric = compile_metric(variant, fetcher)
                 else:
+                    # Not a variant - fetch from metrics table
+                    db_metric = metric_service.get_metric_by_id(metric_id)
+                    if not db_metric:
+                        raise ValueError(f"Metric with ID {metric_id} not found")
+
                     # Regular metric - just deserialize
-                    resolved_metric = SemanticMetric.model_validate(db_metric)
+                    resolved_metric = SemanticMetric.model_validate(db_metric, from_attributes=True)
 
                 effective_metric_id = metric_id
             

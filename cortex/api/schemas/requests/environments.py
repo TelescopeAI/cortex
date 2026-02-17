@@ -1,14 +1,15 @@
 from typing import Optional
 from uuid import UUID
-from pydantic import BaseModel
+
+from cortex.core.types.telescope import TSModel
 
 
-class EnvironmentCreateRequest(BaseModel):
+class EnvironmentCreateRequest(TSModel):
     workspace_id: UUID
     name: str = "Development"
     description: Optional[str] = "Default environment for the workspace environment"
 
 
-class EnvironmentUpdateRequest(BaseModel):
+class EnvironmentUpdateRequest(TSModel):
     name: Optional[str] = None
     description: Optional[str] = None

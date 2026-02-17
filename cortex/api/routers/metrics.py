@@ -60,8 +60,8 @@ def build_metric_updates(metric_data_dict: dict, db_metric) -> dict:
             if new_value is not None or key in ['limit', 'filters']:
                 updates[key] = new_value
                 
-        elif key in ['name', 'alias', 'title', 'description', 'query', 'table_name', 
-                     'data_source_id', 'parameters', 'refresh', 'cache', 'meta', 'extends']:
+        elif key in ['name', 'alias', 'title', 'description', 'query', 'table_name',
+                     'data_source_id', 'parameters', 'refresh', 'cache', 'meta']:
             # For other fields, only update if value is different
             if new_value != current_value:
                 updates[key] = new_value

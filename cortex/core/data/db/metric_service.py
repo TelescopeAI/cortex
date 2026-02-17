@@ -44,7 +44,6 @@ class MetricService:
 
                 parameters=metric.parameters,
                 version=metric.version,
-                extends=metric.extends,
                 public=metric.public,
                 refresh=metric.refresh,
                 cache=metric.cache,

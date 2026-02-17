@@ -82,12 +82,7 @@ class ValidationService(TSModel):
         # Measures and dimensions validation
         if not metric.measures and not metric.dimensions and not metric.aggregations:
             warnings.append("No measures, dimensions, or aggregations defined - will use SELECT *")
-        
-        # Extension validation
-        if metric.extends:
-            if metric.extends == metric.alias or metric.extends == metric.name:
-                errors.append("Metric cannot extend itself")
-        
+
         # Parameters validation
         if metric.parameters:
             param_errors = ValidationService._check_parameters(metric.parameters)

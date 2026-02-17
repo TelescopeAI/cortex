@@ -8,7 +8,6 @@ from uuid import UUID, uuid4
 import pytz
 from fastapi import APIRouter, HTTPException, status, File, UploadFile
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 
 from cortex.api.schemas.requests.data_sources import (
     DataSourceCreateRequest,
@@ -37,6 +36,7 @@ from cortex.core.exceptions.environments import EnvironmentDoesNotExistError
 from cortex.core.services import DataSourceSchemaService
 from cortex.core.services.data.sources.files import FileStorageService
 from cortex.core.types.databases import DataSourceTypes
+from cortex.core.types.telescope import TSModel
 
 DataSourcesRouter = APIRouter()
 
@@ -476,18 +476,18 @@ async def delete_data_source(
 # ============================================================================
 
 
-class DiscoverRequest(BaseModel):
+class DiscoverRequest(TSModel):
     """Request to discover available sheets"""
     provider_type: str  # "csv" or "gsheets"
     config: Dict[str, Any]
 
 
-class DiscoverResponse(BaseModel):
+class DiscoverResponse(TSModel):
     """Response with available sheets"""
     tables: List[Dict[str, Any]]
 
 
-class PreviewRequest(BaseModel):
+class PreviewRequest(TSModel):
     """Request to preview sheet data"""
     provider_type: str
     config: Dict[str, Any]
@@ -495,14 +495,14 @@ class PreviewRequest(BaseModel):
     limit: int = 100
 
 
-class PreviewResponse(BaseModel):
+class PreviewResponse(TSModel):
     """Response with preview data"""
     columns: List[str]
     rows: List[List[Optional[str]]]
     total_rows: int
 
 
-class RefreshResponse(BaseModel):
+class RefreshResponse(TSModel):
     """Response from refresh operation"""
     refreshed_tables: List[str]
     unchanged_tables: List[str]

@@ -283,7 +283,7 @@ const handleSubmit = async () => {
         variantData
       )
     } else {
-      result = await createVariant(variantData)
+      result = await createVariant(selectedEnvironmentId.value, variantData)
     }
 
     if (result) {

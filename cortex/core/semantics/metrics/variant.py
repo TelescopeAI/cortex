@@ -36,7 +36,7 @@ class SemanticMetricVariant(TSModel):
     Key design points:
     - Separate from SemanticMetric (no inheritance) for clean autocomplete
     - No table_name, measures, dimensions - these come from resolution
-    - No environment_id, data_model_id - inherited from source
+    - environment_id, data_model_id, data_source_id are stored explicitly and must match the source metric
     - Compiled to SemanticMetric via the compiler module
     """
     model_config = ConfigDict(from_attributes=True)
@@ -51,6 +51,26 @@ class SemanticMetricVariant(TSModel):
     description: Optional[str] = Field(
         default=None,
         description="Human-readable explanation of this variant"
+    )
+
+    # Environment/DataModel/DataSource binding (must match source metric)
+    environment_id: UUID = Field(
+        ...,
+        description="Environment ID - variant must belong to same environment as source metric"
+    )
+    data_model_id: UUID = Field(
+        ...,
+        description="Data model ID - inherited from source metric and stored explicitly"
+    )
+    data_source_id: Optional[UUID] = Field(
+        default=None,
+        description="Data source ID - inherited from source metric and stored explicitly (nullable)"
+    )
+
+    # Source metric ID for cascade deletion
+    source_id: UUID = Field(
+        ...,
+        description="ID of the source metric - enables CASCADE DELETE when source is deleted"
     )
 
     # Variant definition (the recipe)
@@ -93,6 +113,17 @@ class SemanticMetricVariant(TSModel):
     meta: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Additional metadata for this variant"
+    )
+
+    # Validation and compilation (same as SemanticMetric)
+    is_valid: bool = Field(default=False, description="Whether this variant has been validated")
+    validation_errors: Optional[List[str]] = Field(
+        default=None,
+        description="List of validation errors if any"
+    )
+    compiled_query: Optional[str] = Field(
+        default=None,
+        description="Generated SQL after compilation - cached to avoid recompiling on every execution"
     )
 
     # Timestamps

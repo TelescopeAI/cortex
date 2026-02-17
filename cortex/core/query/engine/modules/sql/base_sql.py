@@ -31,16 +31,16 @@ class SQLQueryGenerator(BaseQueryGenerator):
         """Generate a complete SQL query based on the metric with optional parameters and limit/offset"""
         # Use metric's default limit if no limit provided in execution request
         effective_limit = limit if limit is not None else self.metric.limit
-        
+
         # Determine if grouping should be applied
         # If grouped parameter is explicitly set in request, use that
         # Otherwise, use the metric's default grouped setting
         effective_grouped = grouped if grouped is not None else (self.metric.grouped if self.metric.grouped is not None else True)
-        
+
         # Determine if ordering should be applied
         # Use the metric's default ordered setting (defaults to True if not specified)
         effective_ordered = self.metric.ordered if self.metric.ordered is not None else True
-        
+
         # If custom query is provided, substitute parameters and add limit if specified
         if self.metric.query:
             query = self._substitute_parameters(self.metric.query, parameters)
@@ -49,10 +49,16 @@ class SQLQueryGenerator(BaseQueryGenerator):
                 query += f" {limit_clause}"
             return query
 
+        # Check if this is a CTE query (multi-source composition)
+        if self.metric.composition is not None and len(self.metric.composition) > 0:
+            # Build CTE query
+            query = self._build_cte_query(effective_grouped, effective_limit, offset)
+            return self._substitute_parameters(query, parameters)
+
         # Otherwise, build the query from scratch
         # IMPORTANT: Build join clause first to populate table alias mappings
         join_clause = self._build_join_clause()
-        
+
         # Now build SELECT clause with knowledge of table aliases
         select_clause = self._build_select_clause()
         from_clause = self._build_from_clause()
@@ -79,7 +85,7 @@ class SQLQueryGenerator(BaseQueryGenerator):
             query_parts.append(limit_clause)
 
         assembled_query = self._format_query_with_line_breaks(query_parts)
-        
+
         # Substitute parameters in the assembled query
         return self._substitute_parameters(assembled_query, parameters)
 
@@ -119,7 +125,14 @@ class SQLQueryGenerator(BaseQueryGenerator):
             aggregation_clause = AggregationProcessor.process_aggregations(self.metric.aggregations)
             if aggregation_clause:
                 select_parts.append(aggregation_clause)
-        
+
+        # Add derivations (window functions and arithmetic)
+        if self.metric.derivations:
+            for derivation in self.metric.derivations:
+                derivation_sql = self._format_derivation(derivation)
+                if derivation_sql:
+                    select_parts.append(derivation_sql)
+
         if not select_parts:
             return "SELECT *"
         
@@ -263,6 +276,136 @@ class SQLQueryGenerator(BaseQueryGenerator):
             formatted_query = self._apply_database_formatting(qualified_query, dimension.name, formatting_map)
 
             return f"{formatted_query} AS \"{dimension.name}\""
+
+    def _format_derivation(self, derivation) -> str:
+        """
+        Format a derivation (window function or arithmetic operation) for the SELECT clause.
+
+        Args:
+            derivation: DerivedEntity from cortex.core.semantics.derivations
+
+        Returns:
+            SQL string for the derivation
+        """
+        from cortex.core.semantics.derivations import DerivedEntityType
+
+        deriv_type = derivation.type
+        source_measure = derivation.source.measure
+        deriv_name = derivation.name
+
+        # Handle cross-CTE references (alias.measure)
+        if "." in source_measure:
+            # Cross-CTE reference - use as-is
+            measure_ref = f'"{source_measure.split(".")[0]}"."{source_measure.split(".")[1]}"'
+        else:
+            # Local measure reference
+            measure_ref = f'"{source_measure}"'
+
+        # Cortex aggregate-as-window derivations
+        if deriv_type == DerivedEntityType.PERCENT_OF_TOTAL:
+            return f'{measure_ref} * 100.0 / SUM({measure_ref}) OVER () AS "{deriv_name}"'
+
+        elif deriv_type == DerivedEntityType.RUNNING_TOTAL:
+            order_dim = derivation.order_dimension
+            return f'SUM({measure_ref}) OVER (ORDER BY "{order_dim}" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS "{deriv_name}"'
+
+        elif deriv_type == DerivedEntityType.CUMULATIVE_COUNT:
+            order_dim = derivation.order_dimension
+            return f'COUNT({measure_ref}) OVER (ORDER BY "{order_dim}" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS "{deriv_name}"'
+
+        elif deriv_type == DerivedEntityType.SHARE:
+            partition_dim = derivation.partition_by
+            return f'{measure_ref} * 100.0 / SUM({measure_ref}) OVER (PARTITION BY "{partition_dim}") AS "{deriv_name}"'
+
+        # Arithmetic derivations (two-input operations)
+        elif deriv_type == DerivedEntityType.DIVIDE:
+            by_measure = derivation.source.by
+            if "." in by_measure:
+                by_ref = f'"{by_measure.split(".")[0]}"."{by_measure.split(".")[1]}"'
+            else:
+                by_ref = f'"{by_measure}"'
+            return f'CASE WHEN {by_ref} = 0 THEN NULL ELSE {measure_ref} * 1.0 / {by_ref} END AS "{deriv_name}"'
+
+        elif deriv_type == DerivedEntityType.MULTIPLY:
+            by_measure = derivation.source.by
+            if "." in by_measure:
+                by_ref = f'"{by_measure.split(".")[0]}"."{by_measure.split(".")[1]}"'
+            else:
+                by_ref = f'"{by_measure}"'
+            return f'{measure_ref} * {by_ref} AS "{deriv_name}"'
+
+        elif deriv_type == DerivedEntityType.SUBTRACT:
+            by_measure = derivation.source.by
+            if "." in by_measure:
+                by_ref = f'"{by_measure.split(".")[0]}"."{by_measure.split(".")[1]}"'
+            else:
+                by_ref = f'"{by_measure}"'
+            return f'{measure_ref} - {by_ref} AS "{deriv_name}"'
+
+        elif deriv_type == DerivedEntityType.ADD:
+            by_measure = derivation.source.by
+            if "." in by_measure:
+                by_ref = f'"{by_measure.split(".")[0]}"."{by_measure.split(".")[1]}"'
+            else:
+                by_ref = f'"{by_measure}"'
+            return f'{measure_ref} + {by_ref} AS "{deriv_name}"'
+
+        # PostgreSQL window functions - ranking
+        elif deriv_type == DerivedEntityType.ROW_NUMBER:
+            order_dim = derivation.order_dimension
+            return f'ROW_NUMBER() OVER (ORDER BY "{order_dim}") AS "{deriv_name}"'
+
+        elif deriv_type == DerivedEntityType.RANK:
+            order_dim = derivation.order_dimension
+            return f'RANK() OVER (ORDER BY "{order_dim}") AS "{deriv_name}"'
+
+        elif deriv_type == DerivedEntityType.DENSE_RANK:
+            order_dim = derivation.order_dimension
+            return f'DENSE_RANK() OVER (ORDER BY "{order_dim}") AS "{deriv_name}"'
+
+        elif deriv_type == DerivedEntityType.PERCENT_RANK:
+            order_dim = derivation.order_dimension
+            return f'PERCENT_RANK() OVER (ORDER BY "{order_dim}") AS "{deriv_name}"'
+
+        elif deriv_type == DerivedEntityType.CUME_DIST:
+            order_dim = derivation.order_dimension
+            return f'CUME_DIST() OVER (ORDER BY "{order_dim}") AS "{deriv_name}"'
+
+        elif deriv_type == DerivedEntityType.NTILE:
+            order_dim = derivation.order_dimension
+            n = derivation.n
+            return f'NTILE({n}) OVER (ORDER BY "{order_dim}") AS "{deriv_name}"'
+
+        # PostgreSQL window functions - offset
+        elif deriv_type == DerivedEntityType.LAG:
+            order_dim = derivation.order_dimension
+            offset = derivation.offset or 1
+            default = derivation.default_value if derivation.default_value is not None else "NULL"
+            return f'LAG({measure_ref}, {offset}, {default}) OVER (ORDER BY "{order_dim}") AS "{deriv_name}"'
+
+        elif deriv_type == DerivedEntityType.LEAD:
+            order_dim = derivation.order_dimension
+            offset = derivation.offset or 1
+            default = derivation.default_value if derivation.default_value is not None else "NULL"
+            return f'LEAD({measure_ref}, {offset}, {default}) OVER (ORDER BY "{order_dim}") AS "{deriv_name}"'
+
+        # PostgreSQL window functions - value
+        elif deriv_type == DerivedEntityType.FIRST_VALUE:
+            order_dim = derivation.order_dimension
+            return f'FIRST_VALUE({measure_ref}) OVER (ORDER BY "{order_dim}" ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS "{deriv_name}"'
+
+        elif deriv_type == DerivedEntityType.LAST_VALUE:
+            order_dim = derivation.order_dimension
+            return f'LAST_VALUE({measure_ref}) OVER (ORDER BY "{order_dim}" ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS "{deriv_name}"'
+
+        elif deriv_type == DerivedEntityType.NTH_VALUE:
+            order_dim = derivation.order_dimension
+            n = derivation.n
+            return f'NTH_VALUE({measure_ref}, {n}) OVER (ORDER BY "{order_dim}" ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS "{deriv_name}"'
+
+        else:
+            # Unknown derivation type - return as-is
+            return f'{measure_ref} AS "{deriv_name}"'
 
     def _can_re_aggregate(self, measure: SemanticMeasure) -> bool:
         """Check if a measure is re-aggregatable (additive)."""
@@ -518,6 +661,176 @@ class SQLQueryGenerator(BaseQueryGenerator):
             substituted_query = substituted_query.replace(pattern, str(param_value))
         
         return substituted_query
+
+    def _build_cte_query(self, grouped: bool, limit: Optional[int], offset: Optional[int]) -> str:
+        """
+        Build a CTE (Common Table Expression) query for multi-source composition.
+
+        Args:
+            grouped: Whether to apply GROUP BY
+            limit: Optional result limit
+            offset: Optional result offset
+
+        Returns:
+            Complete CTE query string
+        """
+        cte_parts = []
+
+        # Build primary CTE from the main metric
+        primary_alias = self.metric.alias or "primary"
+        primary_cte = self._build_cte_clause(self.metric, primary_alias, grouped)
+        cte_parts.append(f'"{primary_alias}" AS (\n{primary_cte}\n)')
+
+        # Build CTEs for each composition source
+        for comp_source in self.metric.composition:
+            comp_alias = comp_source.alias
+            comp_cte = self._build_cte_clause(comp_source.metric, comp_alias, grouped)
+            cte_parts.append(f'"{comp_alias}" AS (\n{comp_cte}\n)')
+
+        # Build the outer SELECT
+        outer_select = self._build_outer_select(primary_alias, self.metric.composition, self.metric.derivations)
+
+        # Build the FROM + JOIN clause
+        from_join = self._build_cte_join(primary_alias, self.metric.composition)
+
+        # Build limit clause if needed
+        limit_clause = self._build_limit_clause(limit, offset)
+
+        # Assemble the complete CTE query
+        cte_clause = f"WITH {',\n'.join(cte_parts)}"
+        query_parts = [cte_clause, outer_select, from_join]
+        if limit_clause:
+            query_parts.append(limit_clause)
+
+        return "\n".join(query_parts)
+
+    def _build_cte_clause(self, metric, alias: str, grouped: bool) -> str:
+        """
+        Build the inner SELECT for a single CTE.
+
+        Args:
+            metric: SemanticMetric to generate CTE for
+            alias: Alias for this CTE
+            grouped: Whether to apply GROUP BY
+
+        Returns:
+            SQL string for the CTE inner query
+        """
+        select_parts = []
+
+        # Add measures
+        if metric.measures:
+            for measure in metric.measures:
+                select_parts.append(self._format_measure(measure, self.formatting_map))
+
+        # Add dimensions
+        if metric.dimensions:
+            for dimension in metric.dimensions:
+                select_parts.append(self._format_dimension(dimension, self.formatting_map))
+
+        # Build SELECT
+        select_clause = f"  SELECT {', '.join(select_parts)}"
+
+        # Build FROM
+        from_clause = f"  FROM \"{metric.table_name}\""
+
+        # Build WHERE if filters present
+        where_clause = None
+        if metric.filters:
+            where_conditions, _ = FilterProcessor.process_filters(
+                metric.filters,
+                table_prefix=metric.table_name,
+                formatting_map=self.formatting_map
+            )
+            if where_conditions:
+                where_clause = f"  WHERE {where_conditions}"
+
+        # Build GROUP BY if needed
+        group_by_clause = None
+        if grouped and metric.dimensions:
+            dimension_names = [f'"{d.name}"' for d in metric.dimensions]
+            group_by_clause = f"  GROUP BY {', '.join(dimension_names)}"
+
+        # Assemble CTE query
+        parts = [select_clause, from_clause]
+        if where_clause:
+            parts.append(where_clause)
+        if group_by_clause:
+            parts.append(group_by_clause)
+
+        return "\n".join(parts)
+
+    def _build_outer_select(self, primary_alias: str, composition: List, derivations: Optional[List]) -> str:
+        """
+        Build the outer SELECT clause for a CTE query.
+
+        Args:
+            primary_alias: Alias of the primary CTE
+            composition: List of CompositionSource objects
+            derivations: Optional list of DerivedEntity objects
+
+        Returns:
+            SQL string for outer SELECT
+        """
+        select_parts = []
+
+        # Select all measures/dimensions from primary CTE
+        if self.metric.measures:
+            for measure in self.metric.measures:
+                select_parts.append(f'"{primary_alias}"."{measure.name}"')
+
+        if self.metric.dimensions:
+            for dimension in self.metric.dimensions:
+                select_parts.append(f'"{primary_alias}"."{dimension.name}"')
+
+        # Select measures from composed CTEs
+        for comp_source in composition:
+            comp_alias = comp_source.alias
+            if comp_source.metric.measures:
+                for measure in comp_source.metric.measures:
+                    select_parts.append(f'"{comp_alias}"."{measure.name}"')
+
+        # Add derivations (including cross-CTE derivations)
+        if derivations:
+            for derivation in derivations:
+                derivation_sql = self._format_derivation(derivation)
+                if derivation_sql:
+                    # Extract just the expression part (remove the " AS name" suffix)
+                    # derivation_sql is already formatted like: 'expr AS "name"'
+                    select_parts.append(derivation_sql.split(' AS ')[0] + f' AS "{derivation.name}"')
+
+        return f"SELECT {', '.join(select_parts)}"
+
+    def _build_cte_join(self, primary_alias: str, composition: List) -> str:
+        """
+        Build the FROM + JOIN clause for a CTE query.
+
+        Args:
+            primary_alias: Alias of the primary CTE
+            composition: List of CompositionSource objects
+
+        Returns:
+            SQL string for FROM + JOIN
+        """
+        from_clause = f'FROM "{primary_alias}"'
+
+        join_clauses = []
+        for comp_source in composition:
+            comp_alias = comp_source.alias
+            join_on_dims = comp_source.join_on
+
+            # Build JOIN ON condition
+            on_conditions = []
+            for dim_name in join_on_dims:
+                on_conditions.append(f'"{primary_alias}"."{dim_name}" = "{comp_alias}"."{dim_name}"')
+
+            join_on = " AND ".join(on_conditions)
+            join_clauses.append(f'INNER JOIN "{comp_alias}" ON {join_on}')
+
+        if join_clauses:
+            return from_clause + "\n" + "\n".join(join_clauses)
+        else:
+            return from_clause
 
     @abstractmethod
     def _apply_database_formatting(self, column_expression: str, object_name: str, formatting_map: FormattingMap) -> str:

@@ -94,11 +94,19 @@ class MetricORM(BaseDBModel):
     # Configuration
     parameters = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # Parameter definitions
     version = mapped_column(Integer, nullable=False, default=1)
-    extends = mapped_column(UUID, ForeignKey("metrics.id"), nullable=True, index=True)  # Parent metric for inheritance
     public = mapped_column(Boolean, nullable=False, default=True, index=True)
     refresh = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # RefreshPolicy object
     cache = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # CachePreference object
     meta = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # Custom metadata
+
+    # Composable metrics fields (discriminated by metric_type)
+    metric_type = mapped_column(String, nullable=False, default='base', index=True)  # Discriminator: 'base' or 'variant'
+    source = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # MetricRef for variant source
+    combine = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # List of MetricRef for CTE composition
+    overrides = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # MetricOverrides for variants
+    include = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # IncludedComponents whitelist for variants
+    derivations = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # List of DerivedEntity (window functions + arithmetic)
+    composition = mapped_column(DatabaseTypeResolver.json_type(), nullable=True)  # List of CompositionSource (compiler-populated, stored to avoid recompilation)
     
     # Validation and compilation
     is_valid = mapped_column(Boolean, nullable=False, default=False, index=True)

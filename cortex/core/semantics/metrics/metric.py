@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 from datetime import datetime
 
 import pytz
-from pydantic import Field, ConfigDict
+from pydantic import Field, ConfigDict, model_validator
 
 from cortex.core.semantics.dimensions import SemanticDimension
 from cortex.core.semantics.measures import SemanticMeasure
@@ -15,6 +15,68 @@ from cortex.core.semantics.refresh_keys import RefreshPolicy
 from cortex.core.semantics.cache import CachePreference
 from cortex.core.semantics.parameters import ParameterDefinition
 from cortex.core.types.telescope import TSModel
+from cortex.core.semantics.derivations import DerivedEntity
+
+
+class MetricRef(TSModel):
+    """
+    Reference to a saved or inline metric.
+
+    Supports two modes:
+    - ID reference: metric_id points to a saved metric
+    - Inline reference: metric contains a full SemanticMetric definition
+
+    Used in variant source definitions and multi-source composition (combine).
+    """
+    metric_id: Optional[UUID] = Field(
+        default=None,
+        description="ID of a saved metric (mutually exclusive with metric)"
+    )
+    metric: Optional['SemanticMetric'] = Field(
+        default=None,
+        description="Inline metric definition (mutually exclusive with metric_id)"
+    )
+    alias: Optional[str] = Field(
+        default=None,
+        description="Alias for this metric in CTE context"
+    )
+    join_on: Optional[List[str]] = Field(
+        default=None,
+        description="List of dimension names to join on (for combine scenarios)"
+    )
+
+    @model_validator(mode='after')
+    def validate_exactly_one(self):
+        """Ensure exactly one of metric_id or metric is provided."""
+        if self.metric_id is None and self.metric is None:
+            raise ValueError("MetricRef requires either metric_id or metric")
+        if self.metric_id is not None and self.metric is not None:
+            raise ValueError("MetricRef cannot have both metric_id and metric")
+        return self
+
+
+class CompositionSource(TSModel):
+    """
+    A fully-resolved sub-metric that becomes a CTE in the generated query.
+
+    This is populated by the compiler during variant resolution (not by users directly).
+    When a metric has composition populated, the query engine generates a CTE query
+    instead of a simple SELECT.
+
+    The composition is stored in the database to avoid recompiling on every execution.
+    """
+    alias: str = Field(
+        ...,
+        description="Alias for this sub-metric's CTE in the generated SQL"
+    )
+    metric: 'SemanticMetric' = Field(
+        ...,
+        description="Resolved sub-metric with its own table, measures, and dimensions"
+    )
+    join_on: List[str] = Field(
+        ...,
+        description="Shared dimension names for JOIN clause in outer query"
+    )
 
 
 class SemanticMetric(TSModel):
@@ -69,10 +131,17 @@ class SemanticMetric(TSModel):
     
     # Version tracking
     version: int = 1  # Metric version for caching invalidation and change tracking
-    
-    # Metric inheritance
-    extends: Optional[UUID] = None  # Parent metric ID for inheritance
-    
+
+    # Composable metrics (new fields for compiler system)
+    derivations: Optional[List[DerivedEntity]] = Field(
+        default=None,
+        description="Derived entities (currently measures, future: dimensions) computed via window functions or arithmetic"
+    )
+    composition: Optional[List[CompositionSource]] = Field(
+        default=None,
+        description="Resolved CTE sub-metrics (populated by compiler, stored in DB to avoid recompilation)"
+    )
+
     # Visibility control
     public: bool = True  # Whether this metric can be queried via API
     
@@ -93,5 +162,3 @@ class SemanticMetric(TSModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(pytz.UTC))
 
     model_config = ConfigDict(from_attributes=True, use_enum_values=True)
-
-

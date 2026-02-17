@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { Button } from '~/components/ui/button'
+import { Badge } from '~/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
-import { ArrowLeft, Trash2, Loader2, Edit } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, Trash2, Loader2, Edit, GitBranch } from 'lucide-vue-next'
 import type { SemanticOrderSequence } from '~/types/order'
 import { toast } from 'vue-sonner'
 import SchemaSheet from '~/components/metric/builder/SchemaSheet.vue'
@@ -10,9 +12,10 @@ import MetricQueryHistory from '~/components/MetricQueryHistory.vue'
 import { useDateFormat, useTimeAgo, useNavigatorLanguage } from '@vueuse/core'
 import { useDataSources } from '~/composables/useDataSources'
 import type { MetricModifiers } from '~/types/metric-modifiers'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '~/components/ui/alert-dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, } from '~/components/ui/alert-dialog'
 import MetricDisplayOverviewContainer from '~/components/metric/display/OverviewContainer.vue'
 import MetricDisplayExecuteContainer from '~/components/metric/display/ExecuteContainer.vue'
+import type { SemanticMetricVariant } from '~/types/metric_variants'
 
 // Page metadata
 definePageMeta({
@@ -28,6 +31,7 @@ const metricId = route.params.id as string
 const { getMetric, executeMetric, getMetricVersions, updateMetric, deleteMetric } = useMetrics()
 const { getModel } = useDataModels()
 const { selectedEnvironmentId } = useEnvironments()
+const { getVariantsForMetric } = useMetricVariants()
 
 // Component state
 const metric = ref<any>(null)
@@ -115,6 +119,11 @@ const requestCacheTtl = ref<number | undefined>(undefined)
 const modifiersEnabled = ref(false)
 const modifiers = ref<MetricModifiers>([])
 
+// Variants state
+const variants = ref<SemanticMetricVariant[]>([])
+const variantsLoading = ref(false)
+const createVariantDialogOpen = ref(false)
+
 
 // Schema sheet functions
 const onOpenSchema = () => {
@@ -156,9 +165,9 @@ const hasParameters = computed(() => {
 
 const availableCortexParameters = computed(() => {
   if (!metric.value) return []
-  
+
   const params: string[] = []
-  
+
   // Check filters for $CORTEX_ parameters
   if (metric.value.filters) {
     metric.value.filters.forEach((filter: any) => {
@@ -176,7 +185,7 @@ const availableCortexParameters = computed(() => {
       }
     })
   }
-  
+
   // Check custom query for $CORTEX_ parameters
   if (metric.value.query && typeof metric.value.query === 'string') {
     const matches = metric.value.query.match(/\$CORTEX_([a-zA-Z_][a-zA-Z0-9_]*)/g)
@@ -184,9 +193,13 @@ const availableCortexParameters = computed(() => {
       params.push(...matches.map((m: string) => m.replace('$CORTEX_', '')))
     }
   }
-  
+
   // Remove duplicates and return
   return [...new Set(params)]
+})
+
+const recentVariants = computed(() => {
+  return variants.value.slice(0, 5)
 })
 
 const getStatusBadgeVariant = (status: string) => {
@@ -421,6 +434,23 @@ const handleMetricUpdated = (updatedMetric: any) => {
   toast.success('Metric updated successfully')
 }
 
+const navigateToVariantsList = () => {
+  navigateTo(`/metrics/${metricId}/variants`)
+}
+
+const navigateToVariant = (variantId: string) => {
+  navigateTo(`/metrics/${metricId}/variants/${variantId}`)
+}
+
+const createVariant = () => {
+  createVariantDialogOpen.value = true
+}
+
+const handleVariantCreated = async (variant: SemanticMetricVariant) => {
+  await loadVariants()
+  navigateToVariant(variant.id)
+}
+
 // Data loading
 const loadMetric = async () => {
   try {
@@ -466,15 +496,30 @@ const loadMetricVersions = async () => {
   }
 }
 
+const loadVariants = async () => {
+  if (!selectedEnvironmentId.value) return
+
+  variantsLoading.value = true
+  try {
+    variants.value = await getVariantsForMetric(metricId, selectedEnvironmentId.value)
+  } catch (error) {
+    console.error('Failed to load variants:', error)
+    variants.value = []
+  } finally {
+    variantsLoading.value = false
+  }
+}
+
 const loadData = async () => {
   loading.value = true
   try {
     await loadMetric()
     await Promise.all([
       loadParentModel(),
-      loadMetricVersions()
+      loadMetricVersions(),
+      loadVariants()
     ])
-    
+
     // Set selected data source ID for schema loading
     if (metric.value?.data_source_id) {
       selectedDataSourceId.value = metric.value.data_source_id
@@ -680,13 +725,57 @@ watch(currentDataSourceId, (newId, oldId) => {
         </TabsContent>
 
         <TabsContent value="history" class="space-y-6">
-          <MetricQueryHistory 
-            :metric-id="metric?.id || ''" 
+          <MetricQueryHistory
+            :metric-id="metric?.id || ''"
             @refresh="refreshQueryHistory"
             ref="queryHistoryRef"
           />
         </TabsContent>
       </Tabs>
+
+      <!-- Variants Section -->
+      <Card class="mt-6">
+        <CardHeader>
+          <div class="flex items-center justify-between">
+            <CardTitle class="flex items-center gap-2">
+              <GitBranch class="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              Variants
+              <Badge variant="secondary">
+                {{ variants.length }}
+              </Badge>
+            </CardTitle>
+            <Button @click="navigateToVariantsList">
+              View All
+              <ArrowRight class="h-4 w-4 ml-2" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <!-- Loading state -->
+          <div v-if="variantsLoading" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div v-for="i in 3" :key="i" class="h-40 rounded-lg border bg-card animate-pulse"></div>
+          </div>
+
+          <!-- Show 5 most recent variants -->
+          <div v-else-if="variants.length > 0" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <MetricVariantsListCard
+              v-for="variant in recentVariants"
+              :key="variant.id"
+              :variant="variant"
+              :source-metric-name="metric.name"
+              @click="navigateToVariant(variant.id)"
+            />
+          </div>
+
+          <!-- Empty state -->
+          <div v-else class="py-8 text-center text-muted-foreground">
+            <GitBranch class="h-8 w-8 mx-auto mb-2 opacity-50" />
+            <Button variant="outline" size="sm" class="mt-2" @click="createVariant">
+              Add
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
 
     <!-- Error state -->
@@ -708,6 +797,14 @@ watch(currentDataSourceId, (newId, oldId) => {
       :selected-data-source-id="selectedDataSourceId"
       @update:open="schemaSheetOpen = $event"
       @save="onSaveSchema"
+    />
+
+    <!-- Create Variant Dialog -->
+    <MetricVariantsFormDialog
+      :open="createVariantDialogOpen"
+      :default-source-metric-id="metricId"
+      @update:open="createVariantDialogOpen = $event"
+      @success="handleVariantCreated"
     />
   </div>
 </template> 

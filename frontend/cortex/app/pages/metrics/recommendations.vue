@@ -425,7 +425,7 @@ onMounted(() => {
             @click="handleGenerate" 
             :disabled="!canGenerate"
             size="lg"
-            class="hover:bg-fuchsia-600 hover:dark:bg-fuchsia-600 hover:text-white cursor-pointer"
+            class="hover:bg-fuchsia-600 hover:dark:bg-fuchsia-600 hover:text-white cursor-pointer hover:cursor-none"
           >
             <Loader2 v-if="isGenerating" class="h-4 w-4 mr-2 animate-spin" />
             <Sparkles v-else class="h-4 w-4 mr-2" />

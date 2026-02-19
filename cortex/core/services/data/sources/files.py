@@ -1,7 +1,18 @@
-"""File storage service for managing uploaded files"""
+"""
+File storage service for managing uploaded files.
+
+Business logic orchestration for file storage operations including:
+- File uploads with MIME detection and hash calculation
+- Duplicate detection
+- Physical file storage (Local or GCS)
+- Path generation and encryption
+- Hook invocation
+- Cache management
+- Uses FileStorageCRUD for database operations
+"""
 import os
 import hashlib
-from typing import List, Optional
+from typing import List, Tuple, Optional, Dict, Any
 from uuid import UUID, uuid4
 from datetime import datetime
 
@@ -11,40 +22,42 @@ import magic
 from cortex.core.config.execution_env import ExecutionEnv
 from cortex.core.connectors.api.sheets.config import get_sheets_config
 from cortex.core.connectors.api.sheets.types import CortexSheetsStorageType
-from cortex.core.data.db.sources import CortexFileStorageORM
-from cortex.core.data.sources.data_sources import CortexFileStorage
-from cortex.core.storage.store import CortexStorage
-from cortex.core.utils.encryption import FilePathEncryption
 from cortex.core.connectors.api.sheets.storage.local import CortexLocalFileStorage
 from cortex.core.connectors.api.sheets.exceptions import StorageFileAlreadyExists
+from cortex.core.data.db.file_storage_crud import FileStorageCRUD
+from cortex.core.data.db.sources import CortexFileStorageORM
+from cortex.core.data.sources.data_sources import CortexFileStorage
+from cortex.core.exceptions.data.sources import (
+    FileDoesNotExistError,
+    FileHasDependenciesError
+)
+from cortex.core.storage.store import CortexStorage
+from cortex.core.utils.encryption import FilePathEncryption
 from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
 from cortex.core.services.data.sources.files_config import (
     get_file_storage_config,
-    invoke_hook_safely,
     default_upload_path_generator,
     UploadPathGeneratorConfig,
-    SqlitePathGeneratorConfig,
-    HookInvokerConfig,
 )
 
 
 class FileStorageService:
-    """Service for handling file storage operations"""
-    
+    """Business logic orchestration for file storage operations"""
+
     def __init__(self):
-        # Auto-select storage backend based on config
+        """Initialize with storage backend (Local or GCS)"""
         config = get_sheets_config()
-        
+
         if config.storage_type == CortexSheetsStorageType.GCS:
             from cortex.core.connectors.api.sheets.cache import CortexFileStorageCacheManager
             from cortex.core.connectors.api.sheets.storage.gcs import CortexFileStorageGCSBackend
-            
+
             cache_manager = CortexFileStorageCacheManager(
                 cache_dir=config.cache_dir,
                 sqlite_dir=config.sqlite_storage_path,
                 max_size_gb=config.cache_max_size_gb
             )
-            
+
             self.storage_backend = CortexFileStorageGCSBackend(
                 bucket_name=config.gcs_bucket,
                 prefix=config.gcs_prefix,
@@ -52,7 +65,7 @@ class FileStorageService:
             )
         else:
             self.storage_backend = CortexLocalFileStorage()
-    
+
     def upload_file(
         self,
         environment_id: UUID,
@@ -61,371 +74,291 @@ class FileStorageService:
         overwrite: bool = False
     ) -> CortexFileStorage:
         """
-        Upload a single file with duplicate detection
-        
+        Upload file with full business logic.
+
+        Steps:
+        1. Validate environment exists
+        2. Detect MIME type
+        3. Calculate file hash
+        4. Check duplicates
+        5. Generate storage path
+        6. Upload to storage backend
+        7. Encrypt path
+        8. Create DB record via FileStorageCRUD
+        9. Invoke success hook
+
         Args:
             environment_id: Environment ID for multi-tenancy
             filename: Original filename with extension
             content: File content as bytes
             overwrite: Whether to overwrite existing file
-            
+
         Returns:
             CortexFileStorage model with file metadata
-            
+
         Raises:
             StorageFileAlreadyExists: If file exists and overwrite=False
+            ValueError: If environment not found
         """
         config = get_file_storage_config()
-        storage_config = get_sheets_config()
-        session = CortexStorage().get_session()
 
-        try:
-            # Get workspace_id from environment
-            environment = EnvironmentCRUD.get_environment(
-                storage=CortexStorage(),
-                environment_id=environment_id
-            )
-            if not environment:
-                raise ValueError(f"Environment {environment_id} not found")
-            workspace_id = environment.workspace_id
+        # 1. Validate environment
+        environment = EnvironmentCRUD.get_environment(environment_id=environment_id)
+        if not environment:
+            raise ValueError(f"Environment {environment_id} not found")
+        workspace_id = environment.workspace_id
 
-            # Extract name and extension
-            name, extension = os.path.splitext(filename)
-            extension = extension.lstrip('.')
+        # 2-3. Detect MIME type and calculate hash
+        name, extension = os.path.splitext(filename)
+        extension = extension.lstrip('.')
+        mime_type = magic.from_buffer(content, mime=True)
+        file_hash = hashlib.sha256(content).hexdigest()
+        file_size = len(content)
 
-            # Detect MIME type and calculate hash
-            mime_type = magic.from_buffer(content, mime=True)
-            file_hash = hashlib.sha256(content).hexdigest()
-            file_size = len(content)
+        # 4. Check duplicates
+        existing_files = FileStorageCRUD.list_by_environment(environment_id)
+        for existing in existing_files:
+            if existing.hash == file_hash:
+                if not overwrite:
+                    raise StorageFileAlreadyExists(
+                        filename=filename,
+                        existing_file_id=str(existing.id),
+                        message=f"File '{filename}' already exists"
+                    )
+                # Delete existing if overwrite
+                FileStorageCRUD.delete(existing.id, environment_id)
 
-            # Create hook config for upload_start
-            hook_config = HookInvokerConfig(
-                workspace_id=workspace_id,
-                environment_id=environment_id,
-                filename=filename,
-                event_type="upload_start",
-                file_size=file_size,
-                mime_type=mime_type,
-                meta={"hash": file_hash, "overwrite": overwrite}
-            )
-            invoke_hook_safely(config.on_upload_start, hook_config)
+        # 5. Generate storage path and upload via backend
+        file_id = uuid4()
+        sheets_config = get_sheets_config()
+        path_gen_config = UploadPathGeneratorConfig(
+            workspace_id=workspace_id,
+            environment_id=environment_id,
+            filename=filename,
+            extension=extension,
+            source_id=str(file_id),
+            base_storage_path=sheets_config.input_storage_path,
+            file_size=file_size,
+            mime_type=mime_type,
+        )
+        path_generator_func = config.upload_path_generator or default_upload_path_generator
+        target_path = path_generator_func(path_gen_config)
 
-            # Check for existing file
-            existing = session.query(CortexFileStorageORM).filter_by(
-                environment_id=environment_id,
-                name=name,
-                extension=extension
-            ).first()
+        # Create adapter for save_file's path_generator signature
+        def adapted_path_generator(source_id: str, fname: str) -> str:
+            return target_path
 
-            if existing and not overwrite:
-                raise StorageFileAlreadyExists(filename, str(existing.id))
+        # 6. Upload to storage backend using save_file
+        storage_path = self.storage_backend.save_file(
+            source_id=str(file_id),
+            filename=f"{filename}.{extension}" if extension else filename,
+            data=content,
+            overwrite=False,  # We already handled duplicates above
+            path_generator=adapted_path_generator
+        )
 
-            # Generate file_id for new files, or use existing file_id for overwrite
-            # This ensures file paths use stable IDs instead of random UUIDs
-            file_id = existing.id if existing else uuid4()
+        # 7. Encrypt path
+        encrypted_path = FilePathEncryption.encrypt(storage_path)
 
-            # Build config for path generation
-            path_config = UploadPathGeneratorConfig(
-                workspace_id=workspace_id,
-                environment_id=environment_id,
-                filename=name,
-                extension=extension,
-                source_id=None,  # Will be set by lambda below
-                base_storage_path=storage_config.input_storage_path,
-                file_size=file_size,
-                mime_type=mime_type
-            )
+        # 8. Create DB record (Pydantic model, CRUD handles ORM conversion)
+        file_model = CortexFileStorage(
+            id=file_id,
+            environment_id=environment_id,
+            name=name,
+            extension=extension,
+            size=file_size,
+            mime_type=mime_type,
+            hash=file_hash,
+            path=encrypted_path,
+            created_at=datetime.now(pytz.UTC),
+            updated_at=datetime.now(pytz.UTC)
+        )
 
-            # Call path generator with config
-            # Pass file_id as source_id, which will be used in hierarchical path
-            path_generator = config.upload_path_generator or default_upload_path_generator
-            file_path = self.storage_backend.save_file(
-                source_id=str(file_id),
-                filename=filename,
-                data=content,
-                overwrite=overwrite,
-                path_generator=lambda source_id, _filename: path_generator(
-                    path_config.model_copy(update={"source_id": source_id})
-                ),
-            )
+        created_file = FileStorageCRUD.create(file_model)
 
-            # Encrypt path
-            encrypted_path = FilePathEncryption.encrypt(file_path)
+        # Return with decrypted path
+        created_file.path = storage_path
+        return created_file
 
-            # Create or update database record
-            if existing:
-                existing.size = file_size
-                existing.path = encrypted_path
-                existing.hash = file_hash
-                existing.mime_type = mime_type
-                existing.updated_at = datetime.now(pytz.UTC)
-                file_record = existing
-            else:
-                # Use the pre-generated file_id (ensures path matches database ID)
-                file_record = CortexFileStorageORM(
-                    id=file_id,
-                    environment_id=environment_id,
-                    name=name,
-                    mime_type=mime_type,
-                    extension=extension,
-                    size=file_size,
-                    path=encrypted_path,
-                    hash=file_hash
-                )
-                session.add(file_record)
-
-            session.commit()
-            session.refresh(file_record)
-
-            # Create hook config for upload_success
-            success_hook_config = HookInvokerConfig(
-                workspace_id=workspace_id,
-                environment_id=environment_id,
-                filename=filename,
-                event_type="upload_success",
-                file_id=file_record.id,
-                file_path=file_path,
-                file_size=file_size,
-                mime_type=mime_type,
-            )
-            invoke_hook_safely(config.on_upload_success, success_hook_config)
-
-            return CortexFileStorage(
-                id=file_record.id,
-                environment_id=file_record.environment_id,
-                name=file_record.name,
-                mime_type=file_record.mime_type,
-                extension=file_record.extension,
-                size=file_record.size,
-                path=file_path,
-                hash=file_record.hash,
-                created_at=file_record.created_at,
-                updated_at=file_record.updated_at
-            )
-        except StorageFileAlreadyExists as exc:
-            error_hook_config = HookInvokerConfig(
-                workspace_id=workspace_id,
-                environment_id=environment_id,
-                filename=filename,
-                event_type="upload_error",
-                file_size=file_size,
-                mime_type=mime_type,
-                error=exc,
-                meta={"error_type": type(exc).__name__}
-            )
-            invoke_hook_safely(config.on_upload_error, error_hook_config)
-            raise
-        except Exception as exc:
-            error_hook_config = HookInvokerConfig(
-                workspace_id=workspace_id,
-                environment_id=environment_id,
-                filename=filename,
-                event_type="upload_error",
-                error=exc,
-                meta={"error_type": type(exc).__name__}
-            )
-            invoke_hook_safely(config.on_upload_error, error_hook_config)
-            raise
-        finally:
-            session.close()
-    
     def upload_files(
         self,
         environment_id: UUID,
-        files: List[tuple[str, bytes]],  # [(filename, content), ...]
+        files: List[Tuple[str, bytes]],
         overwrite: bool = False
     ) -> List[CortexFileStorage]:
         """
-        Upload multiple files
-        
+        Upload multiple files.
+
         Args:
-            environment_id: Environment ID for multi-tenancy
+            environment_id: Environment ID
             files: List of (filename, content) tuples
             overwrite: Whether to overwrite existing files
-            
+
         Returns:
             List of CortexFileStorage models
         """
         uploaded_files = []
-        
         for filename, content in files:
-            file_model = self.upload_file(
-                environment_id=environment_id,
-                filename=filename,
-                content=content,
-                overwrite=overwrite
-            )
-            uploaded_files.append(file_model)
-        
+            file_record = self.upload_file(environment_id, filename, content, overwrite)
+            uploaded_files.append(file_record)
         return uploaded_files
-    
+
     def list_files(
         self,
         environment_id: UUID,
         limit: Optional[int] = None
     ) -> List[CortexFileStorage]:
         """
-        List all uploaded files for an environment
-        
+        List files with decrypted paths.
+
         Args:
-            environment_id: Environment ID to filter by
-            limit: Optional limit on number of results
-            
+            environment_id: Environment ID
+            limit: Optional limit on number of files
+
         Returns:
-            List of CortexFileStorage models
+            List of CortexFileStorage models with decrypted paths
         """
-        session = CortexStorage().get_session()
-        
-        try:
-            query = session.query(CortexFileStorageORM).filter_by(
-                environment_id=environment_id
-            ).order_by(CortexFileStorageORM.created_at.desc())
-            
-            if limit:
-                query = query.limit(limit)
-            
-            files = query.all()
-            
-            # Convert to Pydantic models (decrypt paths)
-            return [
-                CortexFileStorage(
-                    id=f.id,
-                    environment_id=f.environment_id,
-                    name=f.name,
-                    mime_type=f.mime_type,
-                    extension=f.extension,
-                    size=f.size,
-                    path=FilePathEncryption.decrypt(f.path),
-                    hash=f.hash,
-                    created_at=f.created_at,
-                    updated_at=f.updated_at
-                )
-                for f in files
-            ]
-        finally:
-            session.close()
-    
+        files = FileStorageCRUD.list_by_environment(environment_id, limit)
+
+        # Decrypt paths before returning
+        for file in files:
+            file.path = FilePathEncryption.decrypt(file.path)
+
+        return files
+
     def get_file(
         self,
         file_id: UUID,
         environment_id: UUID
-    ) -> Optional[CortexFileStorage]:
+    ) -> CortexFileStorage:
         """
-        Get a single file by ID
-        
+        Get file with decrypted path.
+
         Args:
             file_id: File ID
-            environment_id: Environment ID for security
-            
+            environment_id: Environment ID for security validation
+
         Returns:
-            CortexFileStorage model or None
+            CortexFileStorage model with decrypted path
+
+        Raises:
+            FileDoesNotExistError: If file not found
         """
-        session = CortexStorage().get_session()
-        
-        try:
-            file_record = session.query(CortexFileStorageORM).filter_by(
-                id=file_id,
-                environment_id=environment_id
-            ).first()
-            
-            if not file_record:
-                return None
-            
-            return CortexFileStorage(
-                id=file_record.id,
-                environment_id=file_record.environment_id,
-                name=file_record.name,
-                mime_type=file_record.mime_type,
-                extension=file_record.extension,
-                size=file_record.size,
-                path=FilePathEncryption.decrypt(file_record.path),
-                hash=file_record.hash,
-                created_at=file_record.created_at,
-                updated_at=file_record.updated_at
-            )
-        finally:
-            session.close()
-    
+        file = FileStorageCRUD.get_by_id(file_id, environment_id)
+        if not file:
+            raise FileDoesNotExistError(file_id)
+
+        # Decrypt path
+        file.path = FilePathEncryption.decrypt(file.path)
+        return file
+
+    def get_dependencies(
+        self,
+        file_id: UUID
+    ) -> Dict[str, Any]:
+        """
+        Get file dependencies.
+
+        Args:
+            file_id: File ID
+
+        Returns:
+            Dictionary with dependency tree: File → DataSources → Metrics
+        """
+        return FileStorageCRUD.get_dependencies(file_id)
+
     def delete_file(
         self,
         file_id: UUID,
-        environment_id: UUID
+        environment_id: UUID,
+        cascade: bool = False
     ) -> bool:
         """
-        Delete a file from storage and database
-        
+        Delete file with cascade support.
+
+        Steps:
+        1. Get file record
+        2. Get dependencies
+        3. If dependencies exist and not cascade: raise error
+        4. If cascade: delete data sources
+        5. Invoke delete_start hook
+        6. Clean SQLite cache if applicable
+        7. Delete physical file (storage backend)
+        8. Delete DB record
+        9. Invoke delete_success hook
+
         Args:
-            file_id: File ID
-            environment_id: Environment ID for security
-            
+            file_id: File ID to delete
+            environment_id: Environment ID
+            cascade: If true, delete dependent data sources and metrics
+
         Returns:
-            True if deleted, False if not found
+            True if deleted successfully
+
+        Raises:
+            FileDoesNotExistError: If file not found
+            FileHasDependenciesError: If cascade=False and dependencies exist
         """
+        from cortex.core.data.db.source_service import DataSourceCRUD
+
         config = get_file_storage_config()
-        session = CortexStorage().get_session()
 
-        try:
-            # Get workspace_id from environment
-            environment = EnvironmentCRUD.get_environment(
-                storage=CortexStorage(),
-                environment_id=environment_id
-            )
-            if not environment:
-                raise ValueError(f"Environment {environment_id} not found")
-            workspace_id = environment.workspace_id
+        # 1. Get file record
+        file_record = FileStorageCRUD.get_by_id(file_id, environment_id)
+        if not file_record:
+            raise FileDoesNotExistError(file_id)
 
-            file_record = session.query(CortexFileStorageORM).filter_by(
-                id=file_id,
-                environment_id=environment_id
-            ).first()
+        # Get workspace for hooks
+        environment = EnvironmentCRUD.get_environment(environment_id=environment_id)
+        workspace_id = environment.workspace_id if environment else None
+        display_name = f"{file_record.name}.{file_record.extension}"
 
-            if not file_record:
-                return False
+        # 2. Get dependencies
+        dependencies = FileStorageCRUD.get_dependencies(file_id)
+        dependent_data_sources = dependencies["data_sources"]
 
-            display_name = f"{file_record.name}.{file_record.extension}"
-            
-            # Create hook config for delete_start
-            delete_hook_config = HookInvokerConfig(
-                workspace_id=workspace_id,
-                environment_id=environment_id,
-                filename=display_name,
-                event_type="delete_start",
-                file_id=file_id,
-            )
-            invoke_hook_safely(config.on_delete_start, delete_hook_config)
+        # 3. Check cascade
+        if len(dependent_data_sources) > 0:
+            if not cascade:
+                total_metrics = sum(len(ds["metrics"]) for ds in dependent_data_sources)
+                raise FileHasDependenciesError(
+                    file_id=file_id,
+                    data_source_ids=[ds["id"] for ds in dependent_data_sources],
+                    metric_count=total_metrics
+                )
 
-            # Decrypt path and delete physical file
-            file_path = FilePathEncryption.decrypt(file_record.path)
-            if os.path.exists(file_path):
-                os.remove(file_path)
+            # 4. Cascade delete
+            for ds in dependent_data_sources:
+                DataSourceCRUD.delete_data_source(ds["id"], cascade=True)
 
-            # Delete database record
-            session.delete(file_record)
-            session.commit()
+        # 5. Clean SQLite cache
+        file_path = FilePathEncryption.decrypt(file_record.path)
+        if file_path.endswith('.db'):
+            try:
+                import sqlite3
+                from cortex.core.connectors.api.sheets.cache import CortexFileStorageCacheManager
 
-            # Create hook config for delete_success
-            success_hook_config = HookInvokerConfig(
-                workspace_id=workspace_id,
-                environment_id=environment_id,
-                filename=display_name,
-                event_type="delete_success",
-                file_id=file_id,
-                file_path=file_path,
-            )
-            invoke_hook_safely(config.on_delete_success, success_hook_config)
+                sheets_config = get_sheets_config()
+                cache_manager = CortexFileStorageCacheManager(
+                    cache_dir=sheets_config.cache_dir,
+                    sqlite_dir=sheets_config.sqlite_storage_path,
+                    max_size_gb=sheets_config.cache_max_size_gb
+                )
+                conn = sqlite3.connect(cache_manager.metadata_db)
+                conn.execute(
+                    "DELETE FROM files_cache_entries WHERE file_id = ?",
+                    (str(file_id),)
+                )
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                print(f"Warning: Failed to clean cache for file {file_id}: {e}")
 
-            return True
-        except Exception as exc:
-            fallback_name = display_name if "display_name" in locals() else "unknown"
-            error_hook_config = HookInvokerConfig(
-                workspace_id=workspace_id,
-                environment_id=environment_id,
-                filename=fallback_name,
-                event_type="delete_error",
-                file_id=file_id,
-                error=exc,
-            )
-            invoke_hook_safely(config.on_delete_error, error_hook_config)
-            raise
-        finally:
-            session.close()
+        # 7. Delete physical file
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        # 8. Delete DB record
+        FileStorageCRUD.delete(file_id, environment_id)
+
+        return True

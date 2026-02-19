@@ -61,10 +61,15 @@ class MetricsManager(BaseManager):
 
         Args:
             environment_id: Optional override (uses client context if not provided)
-            **filters: Additional filters (limit, offset, search, etc.)
+            **filters: Additional filters including:
+                - page (int): Page number (default: 1)
+                - page_size (int): Items per page (default: 20)
+                - data_model_id (UUID): Filter by data model
+                - public_only (bool): Filter by public status
+                - valid_only (bool): Filter by valid status
 
         Returns:
-            Paginated list of metrics
+            Paginated list of metrics with total_count, page, and page_size
 
         Raises:
             CortexValidationError: If environment_id not provided and not in client context
@@ -72,7 +77,8 @@ class MetricsManager(BaseManager):
         Examples:
             >>> metrics = client.metrics.list()
             >>> metrics = client.metrics.list(environment_id=other_env_id)
-            >>> metrics = client.metrics.list(limit=10, offset=0)
+            >>> metrics = client.metrics.list(page=1, page_size=10)
+            >>> metrics = client.metrics.list(data_model_id=model_id, public_only=True)
         """
         env_id = environment_id or self.environment_id
         if not env_id:

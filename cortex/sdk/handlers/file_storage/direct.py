@@ -10,7 +10,7 @@ import logging
 from cortex.core.services.data.sources.files import FileStorageService
 from cortex.core.exceptions.data.sources import FileDoesNotExistError, FileHasDependenciesError
 from cortex.sdk.exceptions.mappers import CoreExceptionMapper
-from cortex.sdk.exceptions.base import CortexNotFoundError
+from cortex.sdk.exceptions.base import CortexNotFoundError, CortexValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ def delete_file(
     file_id: UUID,
     environment_id: UUID,
     cascade: bool = False
-) -> None:
+) -> Dict[str, Any]:
     """
     Delete a file - direct Core service call.
 
@@ -115,24 +115,49 @@ def delete_file(
         environment_id: Environment ID
         cascade: If true, delete dependent data sources and metrics
 
+    Returns:
+        Dictionary with dependencies if they exist (for 409 Conflict response)
+        or None if deletion succeeded
+
     Raises:
         CortexNotFoundError: If file doesn't exist
         CortexValidationError: If file has dependencies and cascade=False
     """
     try:
-        if not FileStorageService.delete_file(file_id, environment_id, cascade=cascade):
-            raise CortexNotFoundError(f"File {file_id} not found")
+        service = FileStorageService()
+        service.delete_file(file_id, environment_id, cascade=cascade)
+        return None
     except FileDoesNotExistError as e:
         raise CortexNotFoundError(str(e))
     except FileHasDependenciesError as e:
-        # Get dependencies for better error message
-        dependencies = FileStorageService.get_file_dependencies(file_id)
-        error_detail = {
+        # Get dependencies through service layer
+        service = FileStorageService()
+        dependencies = service.get_dependencies(file_id)
+        error_data = {
             "error": "FileHasDependencies",
             "message": str(e),
             "file_id": str(file_id),
-            "dependencies": dependencies
+            "dependencies": {
+                "data_sources": [
+                    {
+                        "id": str(ds["id"]),
+                        "name": ds["name"],
+                        "alias": ds["alias"],
+                        "metrics": [
+                            {
+                                "id": str(m["id"]),
+                                "name": m["name"],
+                                "alias": m["alias"],
+                                "version_count": m.get("version_count", 0)
+                            }
+                            for m in ds["metrics"]
+                        ]
+                    }
+                    for ds in dependencies["data_sources"]
+                ]
+            }
         }
-        raise CoreExceptionMapper().map(e, details=error_detail)
+        # Raise validation error with structured dependencies
+        raise CortexValidationError(str(e), details=error_data)
     except Exception as e:
         raise CoreExceptionMapper().map(e)

@@ -162,7 +162,7 @@ async def delete_consumer_group(group_id: UUID):
 async def add_consumer_to_group(group_id: UUID, request: ConsumerGroupMembershipRequest):
     """Add a consumer to a group"""
     try:
-        _client.consumer_groups.add_member(group_id, request.consumer_id)
+        _client.consumer_groups.add_member(group_id, request)
         return {"status": "success", "message": "Consumer added to group"}
     except CortexNotFoundError as e:
         raise HTTPException(

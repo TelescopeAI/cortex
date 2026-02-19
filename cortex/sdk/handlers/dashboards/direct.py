@@ -130,12 +130,13 @@ def update_dashboard(
         # Update nested config if provided
         if request.views is not None:
             # Rebuild views using the same conversion method as create
+            # Convert DashboardViewRequest instances to dicts for Pydantic validation
             temp_request = DashboardCreateRequest(
                 environment_id=existing_dashboard.environment_id,
                 name=existing_dashboard.name,
                 description=existing_dashboard.description,
                 type=existing_dashboard.type,
-                views=request.views,
+                views=[view.model_dump() for view in request.views],
                 default_view_index=0,
                 tags=existing_dashboard.tags,
                 alias=existing_dashboard.alias,
@@ -365,21 +366,7 @@ def execute_widget(
         execution_result = MetricExecutionService.execute_metric(**execution_kwargs)
 
         if not execution_result.get("success"):
-            from cortex.core.dashboards.transformers import ProcessedChartData, ChartMetadata, StandardChartData
-
-            error_data = StandardChartData(
-                raw={"columns": [], "data": []},
-                processed=ProcessedChartData(),
-                metadata=ChartMetadata(
-                    title="Error",
-                    description=execution_result.get("error", "Metric execution failed"),
-                    x_axis_title="",
-                    y_axes_title="",
-                    data_types={},
-                    formatting={},
-                    ranges={}
-                ),
-            ).model_dump()
+            error_data = _create_error_chart_data(execution_result.get("error", "Metric execution failed"))
 
             return WidgetExecutionResponse(
                 widget_alias=widget_alias,
@@ -389,33 +376,9 @@ def execute_widget(
             )
 
         # Convert execution result to metric execution result format
-        data = execution_result.get("data", [])
-        metadata = execution_result.get("metadata", {})
-        columns = metadata.get("columns", [])
-        if not columns and data:
-            first_row = data[0] if data else {}
-            if isinstance(first_row, dict):
-                columns = list(first_row.keys())
-            else:
-                columns = [f"col_{i}" for i in range(len(first_row) if first_row else 0)]
+        metric_result = _convert_to_metric_execution_result(execution_result)
 
-        if data and isinstance(data[0], dict):
-            converted_data = []
-            for row in data:
-                converted_data.append([row.get(col) for col in columns])
-            data = converted_data
-
-        metric_result = MetricExecutionResult(
-            columns=columns,
-            data=data,
-            total_rows=len(data),
-            execution_time_ms=metadata.get("execution_time_ms", 0.0)
-        )
-
-        # Transform data using the same mapper as preview
-        from cortex.core.dashboards.mapping.factory import MappingFactory
-        from cortex.core.dashboards.transformers import StandardChartData
-
+        # Transform data using field mapping
         transformed_data = _transform_widget_data_with_mapping(target_widget, metric_result)
 
         return WidgetExecutionResponse(
@@ -540,28 +503,7 @@ def preview_dashboard(
                         raise Exception(execution_result.get("error", "Metric execution failed"))
 
                     # Convert to metric execution result format
-                    data = execution_result.get("data", [])
-                    metadata = execution_result.get("metadata", {})
-                    columns = metadata.get("columns", [])
-                    if not columns and data:
-                        first_row = data[0] if data else {}
-                        if isinstance(first_row, dict):
-                            columns = list(first_row.keys())
-                        else:
-                            columns = [f"col_{i}" for i in range(len(first_row) if first_row else 0)]
-
-                    if data and isinstance(data[0], dict):
-                        converted_data = []
-                        for row in data:
-                            converted_data.append([row.get(col) for col in columns])
-                        data = converted_data
-
-                    metric_result = MetricExecutionResult(
-                        columns=columns,
-                        data=data,
-                        total_rows=len(data),
-                        execution_time_ms=metadata.get("execution_time_ms", 0.0)
-                    )
+                    metric_result = _convert_to_metric_execution_result(execution_result)
 
                     # Apply field mapping transformation
                     transformed_data = _transform_widget_data_with_mapping(widget, metric_result)
@@ -574,44 +516,16 @@ def preview_dashboard(
                     })
 
                 except MappingValidationError as e:
-                    from cortex.core.dashboards.transformers import ProcessedChartData, ChartMetadata, StandardChartData
-
                     preview_results.append({
                         "widget_alias": widget.alias if hasattr(widget, 'alias') else f"preview_widget_{index}",
-                        "data": StandardChartData(
-                            raw={"columns": [], "data": []},
-                            processed=ProcessedChartData(),
-                            metadata=ChartMetadata(
-                                title="Error",
-                                description=f"Mapping validation failed: {e.message}",
-                                x_axis_title="",
-                                y_axes_title="",
-                                data_types={},
-                                formatting={},
-                                ranges={}
-                            ),
-                        ).model_dump(),
+                        "data": _create_error_chart_data(f"Mapping validation failed: {e.message}"),
                         "execution_time_ms": 0.0,
                         "error": str(e)
                     })
                 except Exception as e:
-                    from cortex.core.dashboards.transformers import ProcessedChartData, ChartMetadata, StandardChartData
-
                     preview_results.append({
                         "widget_alias": widget.alias if hasattr(widget, 'alias') else f"preview_widget_{index}",
-                        "data": StandardChartData(
-                            raw={"columns": [], "data": []},
-                            processed=ProcessedChartData(),
-                            metadata=ChartMetadata(
-                                title="Error",
-                                description=f"Preview generation failed: {str(e)}",
-                                x_axis_title="",
-                                y_axes_title="",
-                                data_types={},
-                                formatting={},
-                                ranges={}
-                            ),
-                        ).model_dump(),
+                        "data": _create_error_chart_data(f"Preview generation failed: {str(e)}"),
                         "execution_time_ms": 0.0,
                         "error": str(e)
                     })
@@ -767,6 +681,63 @@ def _convert_create_request_to_dashboard(request: DashboardCreateRequest) -> Das
     )
 
     return dashboard
+
+
+def _create_error_chart_data(error_message: str):
+    """Create a StandardChartData object for error cases with all required fields."""
+    from cortex.core.dashboards.transformers import ProcessedChartData, ChartMetadata, StandardChartData
+
+    processed = ProcessedChartData()
+    metadata = ChartMetadata(
+        title="Error",
+        description=error_message,
+        x_axis_title="",
+        y_axes_title="",
+        data_types={},
+        formatting={},
+        ranges={}
+    )
+
+    return StandardChartData(
+        raw={"columns": [], "data": []},
+        processed=processed,
+        metadata=metadata,
+    ).model_dump()
+
+
+def _convert_to_metric_execution_result(execution_result):
+    """Convert metric service execution result to MetricExecutionResult format."""
+    from cortex.core.dashboards.transformers import MetricExecutionResult
+
+    # Extract data from the execution result
+    data = execution_result.get("data", [])
+    metadata = execution_result.get("metadata", {})
+
+    # Determine columns - try to get from metadata or infer from first row
+    columns = metadata.get("columns", [])
+    if not columns and data:
+        # If no columns in metadata, try to infer from first row if it's a dict
+        first_row = data[0] if data else {}
+        if isinstance(first_row, dict):
+            columns = list(first_row.keys())
+        else:
+            # Fallback: generate generic column names
+            columns = [f"col_{i}" for i in range(len(first_row) if first_row else 0)]
+
+    # Convert data to list of lists format if needed
+    if data and isinstance(data[0], dict):
+        # Convert from list of dicts to list of lists
+        converted_data = []
+        for row in data:
+            converted_data.append([row.get(col) for col in columns])
+        data = converted_data
+
+    return MetricExecutionResult(
+        columns=columns,
+        data=data,
+        total_rows=len(data),
+        execution_time_ms=metadata.get("execution_time_ms", 0.0)
+    )
 
 
 def _transform_widget_data_with_mapping(widget, metric_result):
@@ -935,18 +906,4 @@ def _transform_widget_data_with_mapping(widget, metric_result):
         ).model_dump()
 
     except Exception as e:
-        from cortex.core.dashboards.transformers import ProcessedChartData, ChartMetadata, StandardChartData
-
-        return StandardChartData(
-            raw={"columns": [], "data": []},
-            processed=ProcessedChartData(),
-            metadata=ChartMetadata(
-                title="Error",
-                description=f"Data transformation failed: {str(e)}",
-                x_axis_title="",
-                y_axes_title="",
-                data_types={},
-                formatting={},
-                ranges={}
-            ),
-        ).model_dump()
+        return _create_error_chart_data(f"Data transformation failed: {str(e)}")

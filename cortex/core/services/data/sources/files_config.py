@@ -6,17 +6,14 @@ especially useful when Cortex is used as a library in other codebases.
 """
 
 import contextvars
-import logging
 from pathlib import Path
-from typing import Optional, Callable, Any, Dict
+from typing import Optional, Callable
 from uuid import UUID
 
 from pydantic import ConfigDict, Field
 
 from cortex.core.types.telescope import TSModel
 from cortex.core.connectors.api.sheets.config import get_sheets_config
-
-logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -44,40 +41,18 @@ class SqlitePathGeneratorConfig(TSModel):
     base_storage_path: str  # From get_sheets_config()
 
 
-class HookInvokerConfig(TSModel):
-    """Configuration passed to lifecycle hooks"""
-    workspace_id: UUID
-    environment_id: UUID
-    filename: str  # Display name with extension
-    event_type: str  # "upload_start", "upload_success", etc.
-    file_id: Optional[UUID] = None
-    file_path: Optional[str] = None
-    file_size: Optional[int] = None
-    mime_type: Optional[str] = None
-    error: Optional[Exception] = None
-    meta: Optional[Dict[str, Any]] = None  # Optional metadata for custom hooks
-    
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-
 class FileStorageConfig(TSModel):
     """
-    Configuration for file storage with pluggable path generators and lifecycle hooks.
+    Configuration for file storage with pluggable path generators.
 
     All fields are optional. If not provided, default behavior is used.
+
+    Note: For event hooks, use SDK hooks system instead of Core hooks.
     """
 
     # Path generators - take config objects
     upload_path_generator: Optional[Callable[[UploadPathGeneratorConfig], str]] = None
     sqlite_path_generator: Optional[Callable[[SqlitePathGeneratorConfig], str]] = None
-
-    # Lifecycle hooks - take config objects
-    on_upload_start: Optional[Callable[[HookInvokerConfig], None]] = None
-    on_upload_success: Optional[Callable[[HookInvokerConfig], None]] = None
-    on_upload_error: Optional[Callable[[HookInvokerConfig], None]] = None
-    on_delete_start: Optional[Callable[[HookInvokerConfig], None]] = None
-    on_delete_success: Optional[Callable[[HookInvokerConfig], None]] = None
-    on_delete_error: Optional[Callable[[HookInvokerConfig], None]] = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -135,14 +110,3 @@ def default_sqlite_path_generator(config: SqlitePathGeneratorConfig) -> str:
     """Default SQLite path generator"""
     base_path = Path(config.base_storage_path)
     return str(base_path / str(config.workspace_id) / str(config.environment_id) / f"{config.source_id}.db")
-
-
-def invoke_hook_safely(hook: Optional[Callable[[HookInvokerConfig], None]], config: HookInvokerConfig) -> None:
-    """Safely invoke a lifecycle hook"""
-    if hook is None:
-        return
-    
-    try:
-        hook(config)
-    except Exception as exc:
-        logger.warning("File storage hook error", exc_info=True, extra={"event_type": config.event_type})

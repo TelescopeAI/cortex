@@ -1,16 +1,18 @@
+"""Consumer management router - refactored to use Cortex SDK"""
 from typing import List
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 
 from cortex.api.schemas.responses.consumers.consumers import ConsumerResponse
-from cortex.core.consumers.consumer import Consumer
-from cortex.core.consumers.db.service import ConsumerCRUD
-from cortex.core.exceptions.consumers import ConsumerDoesNotExistError, ConsumerAlreadyExistsError
 from cortex.api.schemas.requests.consumer.consumers import ConsumerCreateRequest, ConsumerUpdateRequest
-from cortex.core.exceptions.environments import EnvironmentDoesNotExistError
-from cortex.core.consumers.db.group_service import ConsumerGroupCRUD
+
+# Use Cortex SDK client instead of direct Core service calls
+from cortex.sdk import CortexClient, CortexNotFoundError, CortexValidationError, CortexSDKError
 
 ConsumersRouter = APIRouter()
+
+# Initialize SDK client in Direct mode (local Core access)
+_client = CortexClient(mode="direct")
 
 
 @ConsumersRouter.post(
@@ -22,29 +24,20 @@ ConsumersRouter = APIRouter()
 async def create_consumer(consumer_data: ConsumerCreateRequest):
     """Create a new consumer"""
     try:
-        consumer = Consumer(
-            environment_id=consumer_data.environment_id,
-            first_name=consumer_data.first_name,
-            last_name=consumer_data.last_name,
-            email=consumer_data.email,
-            organization=consumer_data.organization,
-            properties=consumer_data.properties
-        )
-        created_consumer = ConsumerCRUD.add_consumer(consumer)
-        consumer_dict = created_consumer.model_dump()
-        consumer_dict["groups"] = []  # New consumer has no groups
-        return ConsumerResponse(**consumer_dict)
-    except EnvironmentDoesNotExistError as e:
+        # Use SDK client - handles Consumer model creation and group initialization
+        consumer_response = _client.consumers.create(consumer_data)
+        return consumer_response
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except ConsumerAlreadyExistsError as e:
+    except CortexValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -59,23 +52,15 @@ async def create_consumer(consumer_data: ConsumerCreateRequest):
 async def get_consumer(consumer_id: UUID):
     """Get a consumer by ID"""
     try:
-        consumer = ConsumerCRUD.get_consumer(consumer_id)
-        
-        # Get groups for this consumer
-        from cortex.core.consumers.db.group_service import ConsumerGroupCRUD
-        groups = ConsumerGroupCRUD.get_groups_for_consumer(consumer_id)
-        groups_data = [{"id": str(g.id), "name": g.name, "description": g.description} for g in groups]
-        
-        consumer_dict = consumer.model_dump()
-        consumer_dict["groups"] = groups_data
-        
-        return ConsumerResponse(**consumer_dict)
-    except ConsumerDoesNotExistError as e:
+        # Use SDK client - automatically fetches consumer with groups
+        consumer_response = _client.consumers.get(consumer_id)
+        return consumer_response
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -90,28 +75,15 @@ async def get_consumer(consumer_id: UUID):
 async def list_consumers(environment_id: UUID):
     """List all consumers in an environment"""
     try:
-        consumers = ConsumerCRUD.get_consumers_by_environment(environment_id)
-        
-        # Get groups for each consumer
-        from cortex.core.consumers.db.group_service import ConsumerGroupCRUD
-        consumer_responses = []
-        
-        for consumer in consumers:
-            groups = ConsumerGroupCRUD.get_groups_for_consumer(consumer.id)
-            groups_data = [{"id": str(g.id), "name": g.name, "description": g.description} for g in groups]
-            
-            consumer_dict = consumer.model_dump()
-            consumer_dict["groups"] = groups_data
-            
-            consumer_responses.append(ConsumerResponse(**consumer_dict))
-        
+        # Use SDK client - automatically fetches consumers with groups
+        consumer_responses = _client.consumers.list(environment_id)
         return consumer_responses
-    except EnvironmentDoesNotExistError as e:
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -126,38 +98,15 @@ async def list_consumers(environment_id: UUID):
 async def update_consumer(consumer_id: UUID, consumer_data: ConsumerUpdateRequest):
     """Update a consumer"""
     try:
-        # Get existing consumer first
-        existing_consumer = ConsumerCRUD.get_consumer(consumer_id)
-        
-        # Update only the fields that are provided
-        if consumer_data.first_name is not None:
-            existing_consumer.first_name = consumer_data.first_name
-        if consumer_data.last_name is not None:
-            existing_consumer.last_name = consumer_data.last_name
-        if consumer_data.email is not None:
-            existing_consumer.email = consumer_data.email
-        if consumer_data.organization is not None:
-            existing_consumer.organization = consumer_data.organization
-        # Allow null values for properties to clear them
-        if hasattr(consumer_data, 'properties'):
-            existing_consumer.properties = consumer_data.properties
-            
-        updated_consumer = ConsumerCRUD.update_consumer(existing_consumer)
-        
-        # Get groups for this consumer
-        groups = ConsumerGroupCRUD.get_groups_for_consumer(consumer_id)
-        groups_data = [{"id": str(g.id), "name": g.name, "description": g.description} for g in groups]
-        
-        consumer_dict = updated_consumer.model_dump()
-        consumer_dict["groups"] = groups_data
-        
-        return ConsumerResponse(**consumer_dict)
-    except ConsumerDoesNotExistError as e:
+        # Use SDK client - handles field updates and group fetching
+        consumer_response = _client.consumers.update(consumer_id, consumer_data)
+        return consumer_response
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -172,18 +121,15 @@ async def update_consumer(consumer_id: UUID, consumer_data: ConsumerUpdateReques
 async def delete_consumer(consumer_id: UUID):
     """Delete a consumer"""
     try:
-        if ConsumerCRUD.delete_consumer(consumer_id):
-            return None
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete consumer"
-        )
-    except ConsumerDoesNotExistError as e:
+        # Use SDK client - handles deletion
+        _client.consumers.delete(consumer_id)
+        return None
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

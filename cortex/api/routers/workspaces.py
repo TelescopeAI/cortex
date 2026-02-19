@@ -1,17 +1,17 @@
-from datetime import datetime
 from typing import List
 from uuid import UUID
 
-import pytz
 from fastapi import APIRouter, HTTPException, status
 
 from cortex.api.schemas.responses.workspaces import WorkspaceResponse
-from cortex.core.exceptions.workspaces import WorkspaceDoesNotExistError, NoWorkspacesExistError, WorkspaceAlreadyExistsError
-from cortex.core.workspaces.db.workspace_service import WorkspaceCRUD
-from cortex.core.workspaces.workspace import Workspace
 from cortex.api.schemas.requests.workspaces import WorkspaceCreateRequest, WorkspaceUpdateRequest
+from cortex.sdk import CortexClient
+from cortex.sdk.exceptions import CortexNotFoundError, CortexValidationError, CortexSDKError
 
 WorkspaceRouter = APIRouter()
+
+# Module-level SDK client in Direct mode for local Core access
+_client = CortexClient(mode="direct")
 
 
 @WorkspaceRouter.post(
@@ -23,18 +23,14 @@ WorkspaceRouter = APIRouter()
 async def create_workspace(workspace_data: WorkspaceCreateRequest):
     """Create a new workspace"""
     try:
-        workspace = Workspace(
-            name=workspace_data.name,
-            description=workspace_data.description
-        )
-        created_workspace = WorkspaceCRUD.add_workspace(workspace)
-        return WorkspaceResponse(**created_workspace.model_dump())
-    except WorkspaceAlreadyExistsError as e:
+        workspace_response = _client.workspaces.create(workspace_data)
+        return workspace_response
+    except CortexValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -49,14 +45,14 @@ async def create_workspace(workspace_data: WorkspaceCreateRequest):
 async def get_workspace(workspace_id: UUID):
     """Get a workspace by ID"""
     try:
-        workspace = WorkspaceCRUD.get_workspace(workspace_id)
-        return WorkspaceResponse(**workspace.model_dump())
-    except WorkspaceDoesNotExistError:
+        workspace_response = _client.workspaces.get(workspace_id)
+        return workspace_response
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Workspace with ID {workspace_id} not found"
+            detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -71,11 +67,9 @@ async def get_workspace(workspace_id: UUID):
 async def list_workspaces():
     """Get all workspaces"""
     try:
-        workspaces = WorkspaceCRUD.get_all_workspaces()
-        return [WorkspaceResponse(**w.model_dump()) for w in workspaces]
-    except NoWorkspacesExistError:
-        return []
-    except Exception as e:
+        workspaces = _client.workspaces.list()
+        return workspaces
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -90,23 +84,14 @@ async def list_workspaces():
 async def update_workspace(workspace_id: UUID, workspace_data: WorkspaceUpdateRequest):
     """Update a workspace"""
     try:
-        # First get the existing workspace
-        existing_workspace = WorkspaceCRUD.get_workspace(workspace_id)
-
-        # Update only the fields that are provided
-        if workspace_data.name is not None:
-            existing_workspace.name = workspace_data.name
-        if workspace_data.description is not None:
-            existing_workspace.description = workspace_data.description
-        existing_workspace.updated_at = datetime.now(pytz.UTC)
-        updated_workspace = WorkspaceCRUD.update_workspace(existing_workspace)
-        return WorkspaceResponse(**updated_workspace.model_dump())
-    except WorkspaceDoesNotExistError:
+        updated_workspace = _client.workspaces.update(workspace_id, workspace_data)
+        return updated_workspace
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Workspace with ID {workspace_id} not found"
+            detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -121,19 +106,14 @@ async def update_workspace(workspace_id: UUID, workspace_data: WorkspaceUpdateRe
 async def delete_workspace(workspace_id: UUID):
     """Delete a workspace"""
     try:
-        workspace = WorkspaceCRUD.get_workspace(workspace_id)
-        if WorkspaceCRUD.delete_workspace(workspace):
-            return None
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete workspace"
-        )
-    except WorkspaceDoesNotExistError:
+        _client.workspaces.delete(workspace_id)
+        return None
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Workspace with ID {workspace_id} not found"
+            detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

@@ -2,14 +2,15 @@ from typing import List
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 
-from cortex.core.exceptions.environments import NoEnvironmentsExistError, EnvironmentDoesNotExistError
-from cortex.core.workspaces.db.environment_service import EnvironmentCRUD
-from cortex.core.exceptions.workspaces import WorkspaceDoesNotExistError
 from cortex.api.schemas.requests.environments import EnvironmentCreateRequest, EnvironmentUpdateRequest
 from cortex.api.schemas.responses.environments import EnvironmentResponse
-from cortex.core.workspaces.environments.environment import WorkspaceEnvironment
+from cortex.sdk import CortexClient
+from cortex.sdk.exceptions import CortexNotFoundError, CortexSDKError
 
 EnvironmentsRouter = APIRouter()
+
+# Module-level SDK client in Direct mode for local Core access
+_client = CortexClient(mode="direct")
 
 
 @EnvironmentsRouter.post(
@@ -21,19 +22,14 @@ EnvironmentsRouter = APIRouter()
 async def create_environment(environment_data: EnvironmentCreateRequest):
     """Create a new environment"""
     try:
-        environment = WorkspaceEnvironment(
-            workspace_id=environment_data.workspace_id,
-            name=environment_data.name,
-            description=environment_data.description
-        )
-        created_environment = EnvironmentCRUD.add_environment(environment)
-        return EnvironmentResponse(**created_environment.model_dump())
-    except WorkspaceDoesNotExistError as e:
+        environment_response = _client.environments.create(environment_data)
+        return environment_response
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -48,16 +44,14 @@ async def create_environment(environment_data: EnvironmentCreateRequest):
 async def list_environments(workspace_id: UUID):
     """List all environments in a workspace"""
     try:
-        environments = EnvironmentCRUD.get_environments_by_workspace(workspace_id)
-        return [EnvironmentResponse(**env.model_dump()) for env in environments]
-    except WorkspaceDoesNotExistError as e:
+        environments = _client.environments.list(workspace_id)
+        return environments
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except NoEnvironmentsExistError:
-        return []
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -72,14 +66,14 @@ async def list_environments(workspace_id: UUID):
 async def get_environment(environment_id: UUID):
     """Get an environment by ID"""
     try:
-        environment = EnvironmentCRUD.get_environment(environment_id)
-        return EnvironmentResponse(**environment.model_dump())
-    except EnvironmentDoesNotExistError as e:
+        environment_response = _client.environments.get(environment_id)
+        return environment_response
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -94,21 +88,14 @@ async def get_environment(environment_id: UUID):
 async def update_environment(environment_id: UUID, environment_data: EnvironmentUpdateRequest):
     """Update an environment"""
     try:
-        existing_environment = EnvironmentCRUD.get_environment(environment_id)
-        
-        if environment_data.name is not None:
-            existing_environment.name = environment_data.name
-        if environment_data.description is not None:
-            existing_environment.description = environment_data.description
-
-        updated_environment = EnvironmentCRUD.update_environment(existing_environment)
-        return EnvironmentResponse(**updated_environment.model_dump())
-    except EnvironmentDoesNotExistError as e:
+        updated_environment = _client.environments.update(environment_id, environment_data)
+        return updated_environment
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -123,19 +110,14 @@ async def update_environment(environment_id: UUID, environment_data: Environment
 async def delete_environment(environment_id: UUID):
     """Delete an environment"""
     try:
-        environment = EnvironmentCRUD.get_environment(environment_id)
-        if EnvironmentCRUD.delete_environment(environment):
-            return None
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete environment"
-        )
-    except EnvironmentDoesNotExistError as e:
+        _client.environments.delete(environment_id)
+        return None
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

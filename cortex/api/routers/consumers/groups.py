@@ -7,13 +7,13 @@ from cortex.api.schemas.requests.consumer.groups import ConsumerGroupCreateReque
 from cortex.api.schemas.responses.consumers.consumers import ConsumerResponse
 from cortex.api.schemas.responses.consumers.groups import ConsumerGroupResponse, ConsumerGroupDetailResponse, \
     ConsumerGroupMembershipResponse
-from cortex.core.consumers.db.group_service import ConsumerGroupCRUD
-from cortex.core.consumers.groups import ConsumerGroup
-from cortex.core.exceptions.consumers import ConsumerDoesNotExistError, ConsumerGroupDoesNotExistError, \
-    ConsumerGroupAlreadyExistsError
-from cortex.core.exceptions.environments import EnvironmentDoesNotExistError
+from cortex.sdk import CortexClient
+from cortex.sdk.exceptions import CortexNotFoundError, CortexValidationError, CortexSDKError
 
 ConsumerGroupsRouter = APIRouter()
+
+# Module-level SDK client in Direct mode for local Core access
+_client = CortexClient(mode="direct")
 
 
 @ConsumerGroupsRouter.post(
@@ -25,26 +25,19 @@ ConsumerGroupsRouter = APIRouter()
 async def create_consumer_group(group_data: ConsumerGroupCreateRequest):
     """Create a new consumer group"""
     try:
-        group = ConsumerGroup(
-            environment_id=group_data.environment_id,
-            name=group_data.name,
-            description=group_data.description,
-            alias=group_data.alias,
-            properties=group_data.properties
-        )
-        created_group = ConsumerGroupCRUD.add_consumer_group(group)
-        return ConsumerGroupResponse(**created_group.model_dump())
-    except EnvironmentDoesNotExistError as e:
+        group_response = _client.consumer_groups.create(group_data)
+        return group_response
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except ConsumerGroupAlreadyExistsError as e:
+    except CortexValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -59,14 +52,14 @@ async def create_consumer_group(group_data: ConsumerGroupCreateRequest):
 async def get_consumer_group(group_id: UUID):
     """Get a consumer group by ID"""
     try:
-        group = ConsumerGroupCRUD.get_consumer_group(group_id)
-        return ConsumerGroupResponse(**group.model_dump())
-    except ConsumerGroupDoesNotExistError as e:
+        group_response = _client.consumer_groups.get(group_id)
+        return group_response
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -81,30 +74,14 @@ async def get_consumer_group(group_id: UUID):
 async def get_consumer_group_with_members(group_id: UUID):
     """Get a consumer group by ID with all its members"""
     try:
-        group, consumers = ConsumerGroupCRUD.get_consumer_group_with_consumers(group_id)
-        # Get groups for each consumer
-        from cortex.core.consumers.db.service import ConsumerCRUD
-        consumer_responses = []
-        
-        for consumer in consumers:
-            groups = ConsumerGroupCRUD.get_groups_for_consumer(consumer.id)
-            groups_data = [{"id": str(g.id), "name": g.name, "description": g.description} for g in groups]
-            
-            consumer_dict = consumer.model_dump()
-            consumer_dict["groups"] = groups_data
-            
-            consumer_responses.append(ConsumerResponse(**consumer_dict))
-        
-        return ConsumerGroupDetailResponse(
-            **group.model_dump(),
-            consumers=consumer_responses
-        )
-    except ConsumerGroupDoesNotExistError as e:
+        group_detail_response = _client.consumer_groups.get_with_members(group_id)
+        return group_detail_response
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -119,14 +96,14 @@ async def get_consumer_group_with_members(group_id: UUID):
 async def list_consumer_groups(environment_id: UUID):
     """List all consumer groups in an environment"""
     try:
-        groups = ConsumerGroupCRUD.get_consumer_groups_by_environment(environment_id)
-        return [ConsumerGroupResponse(**g.model_dump()) for g in groups]
-    except EnvironmentDoesNotExistError as e:
+        groups = _client.consumer_groups.list(environment_id)
+        return groups
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -141,28 +118,14 @@ async def list_consumer_groups(environment_id: UUID):
 async def update_consumer_group(group_id: UUID, group_data: ConsumerGroupUpdateRequest):
     """Update a consumer group"""
     try:
-        # Get existing group
-        existing_group = ConsumerGroupCRUD.get_consumer_group(group_id)
-
-        # Update only provided fields
-        if group_data.name is not None:
-            existing_group.name = group_data.name
-        if group_data.description is not None:
-            existing_group.description = group_data.description
-        if group_data.alias is not None:
-            existing_group.alias = group_data.alias
-        # Allow null values for properties to clear them
-        if hasattr(group_data, 'properties'):
-            existing_group.properties = group_data.properties
-
-        updated_group = ConsumerGroupCRUD.update_consumer_group(existing_group)
-        return ConsumerGroupResponse(**updated_group.model_dump())
-    except ConsumerGroupDoesNotExistError as e:
+        updated_group = _client.consumer_groups.update(group_id, group_data)
+        return updated_group
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -177,18 +140,14 @@ async def update_consumer_group(group_id: UUID, group_data: ConsumerGroupUpdateR
 async def delete_consumer_group(group_id: UUID):
     """Delete a consumer group"""
     try:
-        if ConsumerGroupCRUD.delete_consumer_group(group_id):
-            return None
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete consumer group"
-        )
-    except ConsumerGroupDoesNotExistError as e:
+        _client.consumer_groups.delete(group_id)
+        return None
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -203,19 +162,19 @@ async def delete_consumer_group(group_id: UUID):
 async def add_consumer_to_group(group_id: UUID, request: ConsumerGroupMembershipRequest):
     """Add a consumer to a group"""
     try:
-        ConsumerGroupCRUD.add_consumer_to_group(group_id, request.consumer_id)
+        _client.consumer_groups.add_member(group_id, request.consumer_id)
         return {"status": "success", "message": "Consumer added to group"}
-    except (ConsumerGroupDoesNotExistError, ConsumerDoesNotExistError) as e:
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except ValueError as e:
+    except CortexValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -230,16 +189,16 @@ async def add_consumer_to_group(group_id: UUID, request: ConsumerGroupMembership
 async def remove_consumer_from_group(group_id: UUID, consumer_id: UUID):
     """Remove a consumer from a group"""
     try:
-        result = ConsumerGroupCRUD.remove_consumer_from_group(group_id, consumer_id)
+        result = _client.consumer_groups.remove_member(group_id, consumer_id)
         if result:
             return {"status": "success", "message": "Consumer removed from group"}
         return {"status": "success", "message": "Consumer was not a member of the group"}
-    except (ConsumerGroupDoesNotExistError, ConsumerDoesNotExistError) as e:
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -254,14 +213,14 @@ async def remove_consumer_from_group(group_id: UUID, consumer_id: UUID):
 async def check_consumer_in_group(group_id: UUID, consumer_id: UUID):
     """Check if a consumer is a member of a group"""
     try:
-        is_member = ConsumerGroupCRUD.is_consumer_in_group(group_id, consumer_id)
+        is_member = _client.consumer_groups.check_membership(group_id, consumer_id)
         return ConsumerGroupMembershipResponse(is_member=is_member)
-    except (ConsumerGroupDoesNotExistError, ConsumerDoesNotExistError) as e:
+    except CortexNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-    except Exception as e:
+    except CortexSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

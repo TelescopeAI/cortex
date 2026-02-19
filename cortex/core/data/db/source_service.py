@@ -252,7 +252,7 @@ class DataSourceCRUD:
             ).all()
 
             # Create MetricService instance to get version counts
-            metric_service = MetricService(session=db_session)
+            metric_service = MetricService()
 
             return {
                 "metrics": [
@@ -313,7 +313,7 @@ class DataSourceCRUD:
 
                 # CASCADE: Delete dependent metrics and their versions using MetricService
                 # MetricService.delete_metric() properly handles cascade deletion of metric_versions
-                metric_service = MetricService(session=db_session)
+                metric_service = MetricService()
                 for metric in dependent_metrics:
                     metric_service.delete_metric(metric.id)
 
@@ -325,9 +325,9 @@ class DataSourceCRUD:
             # Import here to avoid circular dependency
             from cortex.core.services.data.sources.files import FileStorageService
 
-            # Use existing FileStorageService to get the appropriate storage backend
-            file_service = FileStorageService()
-            storage_backend = file_service.storage_backend
+            # Get the appropriate storage backend
+            service = FileStorageService()
+            storage_backend = service.storage_backend
 
             # 1. Delete SQLite database file (with cache cleanup if GCS)
             if sqlite_path:

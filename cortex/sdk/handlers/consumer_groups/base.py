@@ -179,9 +179,9 @@ class ConsumerGroupsHandler:
             ...     print(consumer.email)
         """
         if self.mode == ConnectionMode.DIRECT:
-            return direct.get_consumer_group_with_members(group_id)
+            return direct.get_with_members(group_id)
         else:
-            return remote.get_consumer_group_with_members(self.http_client, group_id)
+            return remote.get_with_members(self.http_client, group_id)
 
     def list(self, environment_id: UUID) -> List[ConsumerGroupResponse]:
         """

@@ -4,7 +4,7 @@ from typing import Optional, List, Callable
 
 class CortexFileStorageBackend(ABC):
     """Abstract base class for file storage backends"""
-    
+
     @abstractmethod
     def save_file(
         self,
@@ -16,14 +16,14 @@ class CortexFileStorageBackend(ABC):
     ) -> str:
         """
         Save a file (CSV or raw data) to storage
-        
+
         Args:
             source_id: Unique identifier for the data source
             filename: Name of the file to save
             data: File contents as bytes
             overwrite: Whether to overwrite existing file
             path_generator: Optional custom path generator function
-            
+
         Returns:
             Path or URI where the file was saved
         """

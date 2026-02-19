@@ -64,7 +64,7 @@ def get_consumer_group(group_id: UUID) -> ConsumerGroupResponse:
         raise CoreExceptionMapper().map(e)
 
 
-def get_consumer_group_with_members(group_id: UUID) -> ConsumerGroupDetailResponse:
+def get_with_members(group_id: UUID) -> ConsumerGroupDetailResponse:
     """
     Get a consumer group with its members - direct Core service call.
 
@@ -91,7 +91,7 @@ def get_consumer_group_with_members(group_id: UUID) -> ConsumerGroupDetailRespon
 
         return ConsumerGroupDetailResponse(
             **group.model_dump(),
-            consumers=consumer_responses
+            consumers=[c.model_dump() for c in consumer_responses]
         )
     except Exception as e:
         raise CoreExceptionMapper().map(e)

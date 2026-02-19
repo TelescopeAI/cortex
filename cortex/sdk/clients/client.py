@@ -9,10 +9,24 @@ import logging
 
 from cortex.sdk.config import CortexSDKSettings, ConnectionMode
 from cortex.sdk.clients.http_client import CortexHTTPClient
-from cortex.sdk.clients.handlers import CortexHandlerLoader
 from cortex.sdk.auth.base import BaseAuthProvider
 from cortex.sdk.hooks.base import BaseHook
 from cortex.sdk.hooks.manager import HookManager
+
+# Handler imports for explicit initialization
+from cortex.sdk.handlers.metrics.base import MetricsHandler
+from cortex.sdk.handlers.metric_variants.base import MetricVariantsHandler
+from cortex.sdk.handlers.data_sources.base import DataSourcesHandler
+from cortex.sdk.handlers.file_storage.base import FileStorageHandler
+from cortex.sdk.handlers.data_models.base import DataModelsHandler
+from cortex.sdk.handlers.dashboards.base import DashboardsHandler
+from cortex.sdk.handlers.workspaces.base import WorkspacesHandler
+from cortex.sdk.handlers.environments.base import EnvironmentsHandler
+from cortex.sdk.handlers.consumers.base import ConsumersHandler
+from cortex.sdk.handlers.consumer_groups.base import ConsumerGroupsHandler
+from cortex.sdk.handlers.query_history.base import QueryHistoryHandler
+from cortex.sdk.handlers.preaggregations.base import PreAggregationsHandler
+from cortex.sdk.handlers.admin.base import AdminHandler
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +80,21 @@ class CortexClient:
         ...     metrics = client.metrics.list(environment_id=env_id)
         # Auto-cleanup
     """
+
+    # Handler attributes (type-hinted for IDE support)
+    metrics: MetricsHandler
+    metric_variants: MetricVariantsHandler
+    data_sources: DataSourcesHandler
+    file_storage: FileStorageHandler
+    data_models: DataModelsHandler
+    dashboards: DashboardsHandler
+    workspaces: WorkspacesHandler
+    environments: EnvironmentsHandler
+    consumers: ConsumersHandler
+    consumer_groups: ConsumerGroupsHandler
+    query_history: QueryHistoryHandler
+    preaggregations: PreAggregationsHandler
+    admin: AdminHandler
 
     def __init__(
         self,
@@ -149,26 +178,108 @@ class CortexClient:
         self._init_handlers()
 
     def _init_handlers(self):
-        """Initialize all handlers using the handler loader."""
+        """Initialize all handlers explicitly."""
         # Prepare context for handlers
         client_context = {
             "workspace_id": self._workspace_id,
             "environment_id": self._environment_id,
         }
 
-        logger.debug("Loading handlers...")
-        # Load all enabled handlers dynamically
-        handlers = CortexHandlerLoader.load_handlers(
+        logger.debug("Initializing handlers...")
+
+        # Initialize each handler explicitly
+        self.metrics = MetricsHandler(
             mode=self._settings.mode,
             http_client=self._http_client,
             hooks=self._hooks,
             client_context=client_context,
         )
 
-        # Set handlers as attributes (self.metrics, self.data_sources, etc.)
-        for name, handler in handlers.items():
-            setattr(self, name, handler)
-            logger.debug(f"Loaded handler: {name}")
+        self.metric_variants = MetricVariantsHandler(
+            mode=self._settings.mode,
+            http_client=self._http_client,
+            hooks=self._hooks,
+            client_context=client_context,
+        )
+
+        self.data_sources = DataSourcesHandler(
+            mode=self._settings.mode,
+            http_client=self._http_client,
+            hooks=self._hooks,
+            client_context=client_context,
+        )
+
+        self.file_storage = FileStorageHandler(
+            mode=self._settings.mode,
+            http_client=self._http_client,
+            hooks=self._hooks,
+            client_context=client_context,
+        )
+
+        self.data_models = DataModelsHandler(
+            mode=self._settings.mode,
+            http_client=self._http_client,
+            hooks=self._hooks,
+            client_context=client_context,
+        )
+
+        self.dashboards = DashboardsHandler(
+            mode=self._settings.mode,
+            http_client=self._http_client,
+            hooks=self._hooks,
+            client_context=client_context,
+        )
+
+        self.workspaces = WorkspacesHandler(
+            mode=self._settings.mode,
+            http_client=self._http_client,
+            hooks=self._hooks,
+            client_context=client_context,
+        )
+
+        self.environments = EnvironmentsHandler(
+            mode=self._settings.mode,
+            http_client=self._http_client,
+            hooks=self._hooks,
+            client_context=client_context,
+        )
+
+        self.consumers = ConsumersHandler(
+            mode=self._settings.mode,
+            http_client=self._http_client,
+            hooks=self._hooks,
+            client_context=client_context,
+        )
+
+        self.consumer_groups = ConsumerGroupsHandler(
+            mode=self._settings.mode,
+            http_client=self._http_client,
+            hooks=self._hooks,
+            client_context=client_context,
+        )
+
+        self.query_history = QueryHistoryHandler(
+            mode=self._settings.mode,
+            http_client=self._http_client,
+            hooks=self._hooks,
+            client_context=client_context,
+        )
+
+        self.preaggregations = PreAggregationsHandler(
+            mode=self._settings.mode,
+            http_client=self._http_client,
+            hooks=self._hooks,
+            client_context=client_context,
+        )
+
+        self.admin = AdminHandler(
+            mode=self._settings.mode,
+            http_client=self._http_client,
+            hooks=self._hooks,
+            client_context=client_context,
+        )
+
+        logger.debug("All handlers initialized")
 
     @property
     def workspace_id(self) -> Optional[UUID]:

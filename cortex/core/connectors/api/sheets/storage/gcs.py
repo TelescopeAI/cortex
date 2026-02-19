@@ -15,7 +15,7 @@ class CortexFileStorageGCSBackend(CortexFileStorageBackend):
         self.bucket = self.client.bucket(bucket_name)
         self.prefix = prefix
         self.cache_manager = cache_manager
-    
+
     def save_file(
         self,
         source_id: str,

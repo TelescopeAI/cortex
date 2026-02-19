@@ -24,7 +24,7 @@ class CortexLocalFileStorage(CortexFileStorageBackend):
     def _get_source_dir(self, source_id: str) -> Path:
         """Get the directory path for a source's files"""
         return self.base_input_path / source_id
-    
+
     def save_file(
         self,
         source_id: str,

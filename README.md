@@ -19,6 +19,7 @@ Cortex provides a unified semantic layer that lets you define what matters once 
 - **📊 Dashboards**: Build dashboards using 10+ chart types. Easily extended to support custom visualizations.
 - **📁 File Storage**: Upload CSV files with automatic SQLite conversion, hash-based change detection, and cloud storage support (GCS)
 - **👥 Multi Tenant**: Hierarchical organization (Workspaces → Environments → Consumers) with context-aware query execution
+- **🐍 Python SDK**: Programmatic access via Python SDK
 - **🔐 API First**: Comprehensive REST API with OpenAPI documentation
 
 ## Quick Start
@@ -42,42 +43,42 @@ For detailed installation instructions, see the [Getting Started Guide](cortex/d
 ### Create Metric
 
 ```python
-import httpx
+from cortex.sdk import CortexClient
+from cortex.sdk.schemas.requests.metrics import MetricCreateRequest, MetricExecutionRequest
+from cortex.core.semantics.measures import SemanticMeasure
+from cortex.core.semantics.dimensions import SemanticDimension
 
-# Define a metric with output formatting
-metric = {
-    "name": "monthly_revenue",
-    "description": "Total revenue aggregated by month",
-    "table_name": "sales",
-    "measures": [
-        {
-            "name": "revenue",
-            "type": "sum",
-            "query": "amount",
-            "formatting": [{
-                "name": "currency",
-                "type": "format",
-                "mode": "post_query",
-                "format_string": "${:,.2f}"
-            }]
-        }
-    ],
-    "dimensions": [
-        {
-            "name": "month",
-            "query": "sale_date",
-            "type": "time"
-        }
-    ]
-}
+# Initialize client
+client = CortexClient()
 
-# Create the metric
-response = httpx.post("http://localhost:9002/api/v1/metrics", json=metric)
+# Create metric with output formatting
+metric = client.metrics.create(MetricCreateRequest(
+    data_model_id=model_id,
+    name="monthly_revenue",
+    description="Total revenue aggregated by month",
+    table_name="sales",
+    measures=[SemanticMeasure(
+        name="revenue",
+        type="sum",
+        query="amount",
+        formatting=[{
+            "name": "currency",
+            "type": "format",
+            "mode": "post_query",
+            "format_string": "${:,.2f}"
+        }]
+    )],
+    dimensions=[SemanticDimension(
+        name="month",
+        query="sale_date",
+        type="time"
+    )]
+))
 
 # Execute the metric
-result = httpx.post(
-    f"http://localhost:9002/api/v1/metrics/{response.json()['id']}/execute",
-    json={"parameters": {"start_date": "2024-01-01"}}
+result = client.metrics.execute(
+    metric.id,
+    MetricExecutionRequest(parameters={"start_date": "2024-01-01"})
 )
 ```
 
@@ -106,7 +107,7 @@ result = httpx.post(
 }
 ```
 
-See the [API Reference](cortex/api/README.md) for complete API documentation.
+See the [Python SDK Documentation](cortex/sdk/README.md) for complete SDK reference, or the [API Reference](cortex/api/README.md) for API usage.
 
 ## Studio
 
@@ -138,6 +139,7 @@ yarn run dev
 | **[Query Engine](cortex/core/query/README.md)** | SQL generation, caching, and preaggregations |
 | **[Data Sources](cortex/core/data/sources/README.md)** | Database connectors and schema introspection |
 | **[Dashboards](cortex/core/dashboards/README.md)** | Visualization types and widget configuration |
+| **[Python SDK](cortex/sdk/README.md)** | Python SDK for programmatic access to Cortex |
 | **[API Reference](cortex/api/README.md)** | REST API endpoints and usage examples |
 
 ### 📖 Guides
@@ -164,3 +166,5 @@ For questions and support:
 - **Email**: [help@jointelescope.com](mailto:help@jointelescope.com)
 - **Documentation**: [docs.jointelescope.com](https://docs.jointelescope.com)
 - **Pull Requests**: [Contribute](https://github.com/TelescopeAI/cortex/compare)
+
+[![Stargazers repo roster for @TelescopeAI/cortex](https://reporoster.com/stars/TelescopeAI/cortex)](https://github.com/TelescopeAI/cortex/stargazers)

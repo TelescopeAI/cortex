@@ -116,29 +116,41 @@ class MetricsHandler:
             raise
 
     def list(
-        self, environment_id: UUID, limit: int = 100, offset: int = 0, **filters
+        self,
+        environment_id: UUID,
+        page: int = 1,
+        page_size: int = 20,
+        data_model_id: Optional[UUID] = None,
+        public_only: Optional[bool] = None,
+        valid_only: Optional[bool] = None
     ) -> MetricListResponse:
         """
         List metrics in an environment.
 
         Args:
             environment_id: Environment ID
-            limit: Page size (default: 100)
-            offset: Page offset (default: 0)
-            **filters: Additional filters
+            page: Page number (1-indexed, default: 1)
+            page_size: Number of items per page (default: 20)
+            data_model_id: Optional filter by data model ID
+            public_only: Optional filter by public status
+            valid_only: Optional filter by valid status
 
         Returns:
             MetricListResponse with list of metrics
 
         Examples:
-            >>> metrics = handler.list(environment_id=env_id, limit=10)
+            >>> metrics = handler.list(environment_id=env_id, page=1, page_size=10)
         """
         if self.mode == ConnectionMode.DIRECT:
-            return direct.list_metrics(environment_id, limit, offset, **filters)
+            return direct.list_metrics(
+                environment_id, page, page_size,
+                data_model_id, public_only, valid_only
+            )
         else:
             return remote.list_metrics(
-                    self.http_client, environment_id, limit, offset, **filters
-                )
+                self.http_client, environment_id, page, page_size,
+                data_model_id, public_only, valid_only
+            )
 
     def get(self, metric_id: UUID, environment_id: Optional[UUID] = None) -> MetricResponse:
         """
@@ -283,3 +295,75 @@ class MetricsHandler:
             ),
             metric_id=metric_id,
         )
+
+    def list_versions(self, metric_id: UUID):
+        """
+        List all versions of a metric.
+
+        Args:
+            metric_id: Metric ID
+
+        Returns:
+            MetricVersionListResponse with list of versions
+
+        Examples:
+            >>> versions = handler.list_versions(metric_id)
+        """
+        if self.mode == ConnectionMode.DIRECT:
+            return direct.list_metric_versions(metric_id)
+        else:
+            return remote.list_metric_versions(self.http_client, metric_id)
+
+    def create_version(self, metric_id: UUID, request):
+        """
+        Create a new version of a metric.
+
+        Args:
+            metric_id: Metric ID
+            request: Version creation request
+
+        Returns:
+            MetricVersionResponse
+
+        Examples:
+            >>> from cortex.sdk.schemas.requests.metrics import MetricVersionCreateRequest
+            >>> request = MetricVersionCreateRequest(description="Snapshot before Q4 changes")
+            >>> version = handler.create_version(metric_id, request)
+        """
+        return self._execute_with_hooks(
+            operation="metrics.create_version",
+            event_name=CortexEvents.METRIC_UPDATED,
+            func=lambda: (
+                direct.create_metric_version(metric_id, request)
+                if self.mode == ConnectionMode.DIRECT
+                else remote.create_metric_version(self.http_client, metric_id, request)
+            ),
+            metric_id=metric_id,
+        )
+
+    def generate_recommendations(self, request):
+        """
+        Generate metric recommendations from a data source schema.
+
+        This analyzes the schema of a data source and generates a set of recommended
+        metrics based on deterministic rules. The generated metrics are not saved.
+
+        Args:
+            request: Recommendations request
+
+        Returns:
+            MetricRecommendationsResponse with generated metrics
+
+        Examples:
+            >>> from cortex.sdk.schemas.requests.metrics import MetricRecommendationsRequest
+            >>> request = MetricRecommendationsRequest(
+            ...     environment_id=env_id,
+            ...     data_source_id=ds_id,
+            ...     data_model_id=dm_id
+            ... )
+            >>> recommendations = handler.generate_recommendations(request)
+        """
+        if self.mode == ConnectionMode.DIRECT:
+            return direct.generate_metric_recommendations(request)
+        else:
+            return remote.generate_metric_recommendations(self.http_client, request)

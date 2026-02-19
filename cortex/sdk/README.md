@@ -733,9 +733,9 @@ client = CortexClient(settings=settings)
 
 ## Best Practices
 
-### 1. Use Semantic Schema (Not Raw SQL)
+### 1. Use Semantic Schema
 
-**Good** - Let Cortex generate SQL:
+Cortex would autogenerate SQL based on your schema:
 ```python
 metric = client.metrics.create(MetricCreateRequest(
     data_model_id=model_id,
@@ -748,14 +748,6 @@ metric = client.metrics.create(MetricCreateRequest(
             query="amount"  # Column reference
         )
     ]
-))
-```
-
-**Bad** - Don't write raw SQL:
-```python
-# ❌ This won't work - there's no 'sql' field
-metric = client.metrics.create(MetricCreateRequest(
-    sql="SELECT SUM(amount) FROM sales"  # Wrong!
 ))
 ```
 
@@ -885,7 +877,3 @@ with CortexClient(mode="direct") as client:
 
     print(f"Revenue data: {result.data}")
 ```
-
-## License
-
-See the main Cortex project for license information.

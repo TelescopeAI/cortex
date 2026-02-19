@@ -1,195 +1,22 @@
+"""
+File data source service for building spreadsheet-based data sources.
+
+Contains:
+- Pydantic models for spreadsheet configuration
+- FileDataSourceService for orchestrating CSV/spreadsheet to SQLite conversion
+"""
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from uuid import UUID
-import os
-import sqlite3
 
-import pytz
 from pydantic import Field
-from sqlalchemy.exc import IntegrityError
 
-from cortex.core.data.db.sources import CortexFileStorageORM, DataSourceORM
-from cortex.core.data.db.source_service import DataSourceCRUD
-from cortex.core.exceptions.data.sources import (
-    FileDoesNotExistError,
-    FileHasDependenciesError
-)
-from cortex.core.storage.store import CortexStorage
+from cortex.core.services.data.sources.files import FileStorageService
 from cortex.core.types.telescope import TSModel
-from cortex.core.utils.encryption import FilePathEncryption
 
 if TYPE_CHECKING:
     from cortex.core.connectors.api.sheets.types import CortexCSVFileConfig
-
-
-class FileStorageService:
-    """CRUD operations for file storage with cascade delete support"""
-
-    @staticmethod
-    def get_file_dependencies(
-        file_id: UUID,
-        storage: Optional[CortexStorage] = None
-    ) -> Dict[str, Any]:
-        """
-        Get all entities that depend on a file.
-
-        Traverses the dependency tree:
-        File → DataSources → Metrics → MetricVersions
-
-        Returns:
-            {
-                "data_sources": [
-                    {
-                        "id": UUID,
-                        "name": str,
-                        "alias": str,
-                        "metrics": [
-                            {
-                                "id": UUID,
-                                "name": str,
-                                "alias": str,
-                                "version_count": int
-                            },
-                            ...
-                        ]
-                    },
-                    ...
-                ]
-            }
-        """
-        db_session = (storage or CortexStorage()).get_session()
-        try:
-            # Query data sources where config['file_id'] matches
-            # Use path-based indexing for dialect-independent JSON querying
-            # This works across PostgreSQL, MySQL, and SQLite
-            dependent_data_sources = db_session.query(DataSourceORM).filter(
-                DataSourceORM.config["file_id"].as_string() == str(file_id)
-            ).all()
-
-            result_data_sources = []
-            for ds in dependent_data_sources:
-                # Get metrics for each data source
-                ds_deps = DataSourceCRUD.get_data_source_dependencies(ds.id, storage=storage)
-                result_data_sources.append({
-                    "id": ds.id,
-                    "name": ds.name,
-                    "alias": ds.alias,
-                    "metrics": ds_deps["metrics"]
-                })
-
-            return {
-                "data_sources": result_data_sources
-            }
-        finally:
-            db_session.close()
-
-    @staticmethod
-    def delete_file(
-        file_id: UUID,
-        environment_id: UUID,
-        cascade: bool = False,
-        storage: Optional[CortexStorage] = None
-    ) -> bool:
-        """
-        Delete a file from storage and database.
-
-        Args:
-            file_id: File ID to delete
-            environment_id: Environment ID for multi-tenancy validation
-            cascade: If True, cascade delete data sources (and their metrics)
-            storage: Optional CortexStorage instance
-
-        Returns:
-            True if deleted successfully
-
-        Raises:
-            FileDoesNotExistError: If file not found
-            FileHasDependenciesError: If cascade=False and dependencies exist
-        """
-        storage_instance = storage or CortexStorage()
-        db_session = storage_instance.get_session()
-
-        try:
-            # 1. Verify file exists and belongs to the environment
-            file_record = db_session.query(CortexFileStorageORM).filter(
-                CortexFileStorageORM.id == file_id,
-                CortexFileStorageORM.environment_id == environment_id
-            ).first()
-
-            if file_record is None:
-                raise FileDoesNotExistError(file_id)
-
-            # 2. Check for dependencies
-            dependencies = FileStorageService.get_file_dependencies(file_id, storage=storage_instance)
-            dependent_data_sources = dependencies["data_sources"]
-
-            if len(dependent_data_sources) > 0:
-                if not cascade:
-                    # Count total metrics across all data sources
-                    total_metrics = sum(
-                        len(ds["metrics"]) for ds in dependent_data_sources
-                    )
-                    raise FileHasDependenciesError(
-                        file_id=file_id,
-                        data_source_ids=[ds["id"] for ds in dependent_data_sources],
-                        metric_count=total_metrics
-                    )
-
-                # 3. CASCADE: Delete all dependent data sources
-                # DataSourceCRUD.delete_data_source already handles cascade to metrics
-                for ds in dependent_data_sources:
-                    DataSourceCRUD.delete_data_source(
-                        ds["id"],
-                        cascade=True,
-                        storage=storage_instance
-                    )
-
-            # 4. Clean up cache entries if this is a SQLite file
-            file_path = FilePathEncryption.decrypt(file_record.path)
-            if file_path.endswith('.db'):
-                try:
-                    # Lazy imports to avoid circular dependencies
-                    from cortex.core.connectors.api.sheets.cache import CortexFileStorageCacheManager
-                    from cortex.core.connectors.api.sheets.config import get_sheets_config
-
-                    config = get_sheets_config()
-                    cache_manager = CortexFileStorageCacheManager(
-                        cache_dir=config.cache_dir,
-                        sqlite_dir=config.sqlite_storage_path,
-                        max_size_gb=config.cache_max_size_gb
-                    )
-                    # Remove cache entry by file_id
-                    conn = sqlite3.connect(cache_manager.metadata_db)
-                    conn.execute(
-                        "DELETE FROM files_cache_entries WHERE file_id = ?",
-                        (str(file_id),)
-                    )
-                    conn.commit()
-                    conn.close()
-                except Exception as e:
-                    # Log but don't fail on cache cleanup errors
-                    print(f"Warning: Failed to clean cache for file {file_id}: {e}")
-
-            # 5. Delete physical file
-            if os.path.exists(file_path):
-                os.remove(file_path)
-
-            # 6. Delete database record
-            db_session.delete(file_record)
-            db_session.commit()
-
-            return True
-
-        except (FileDoesNotExistError, FileHasDependenciesError):
-            db_session.rollback()
-            raise
-        except Exception as e:
-            db_session.rollback()
-            raise e
-        finally:
-            db_session.close()
 
 
 # ============================================================================
@@ -250,10 +77,9 @@ class FileDataSourceService:
         Raises:
             FileDoesNotExistError: If file not found
         """
-        from cortex.core.services.data.sources.files import FileStorageService as FileService
-
-        # Use FileStorageService from files.py to get file
-        file_record = FileService().get_file(file_id, environment_id)
+        # Use FileStorageService to get file
+        service = FileStorageService()
+        file_record = service.get_file(file_id, environment_id)
         return file_record
 
     @staticmethod

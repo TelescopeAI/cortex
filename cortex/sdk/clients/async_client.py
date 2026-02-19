@@ -10,10 +10,24 @@ import logging
 
 from cortex.sdk.config import CortexSDKSettings, ConnectionMode
 from cortex.sdk.clients.async_http_client import AsyncCortexHTTPClient
-from cortex.sdk.clients.handlers import CortexHandlerLoader
 from cortex.sdk.auth.base import BaseAuthProvider
 from cortex.sdk.hooks.base import BaseHook
 from cortex.sdk.hooks.manager import HookManager
+
+# Handler imports for explicit initialization
+from cortex.sdk.handlers.metrics.base import MetricsHandler
+from cortex.sdk.handlers.metric_variants.base import MetricVariantsHandler
+from cortex.sdk.handlers.data_sources.base import DataSourcesHandler
+from cortex.sdk.handlers.file_storage.base import FileStorageHandler
+from cortex.sdk.handlers.data_models.base import DataModelsHandler
+from cortex.sdk.handlers.dashboards.base import DashboardsHandler
+from cortex.sdk.handlers.workspaces.base import WorkspacesHandler
+from cortex.sdk.handlers.environments.base import EnvironmentsHandler
+from cortex.sdk.handlers.consumers.base import ConsumersHandler
+from cortex.sdk.handlers.consumer_groups.base import ConsumerGroupsHandler
+from cortex.sdk.handlers.query_history.base import QueryHistoryHandler
+from cortex.sdk.handlers.preaggregations.base import PreAggregationsHandler
+from cortex.sdk.handlers.admin.base import AdminHandler
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +82,22 @@ class AsyncCortexClient:
         For Direct mode, synchronous Core operations are wrapped using asyncio.to_thread()
         to run in a thread pool. For API mode, native async HTTP operations are used.
     """
+
+    # Handler attributes (type-hinted for IDE support)
+    # Note: These will be _AsyncHandlerWrapper instances, but typed as base handlers
+    metrics: MetricsHandler
+    metric_variants: MetricVariantsHandler
+    data_sources: DataSourcesHandler
+    file_storage: FileStorageHandler
+    data_models: DataModelsHandler
+    dashboards: DashboardsHandler
+    workspaces: WorkspacesHandler
+    environments: EnvironmentsHandler
+    consumers: ConsumersHandler
+    consumer_groups: ConsumerGroupsHandler
+    query_history: QueryHistoryHandler
+    preaggregations: PreAggregationsHandler
+    admin: AdminHandler
 
     def __init__(
         self,
@@ -151,30 +181,147 @@ class AsyncCortexClient:
         self._init_handlers()
 
     def _init_handlers(self):
-        """Initialize all handlers using the handler loader."""
+        """Initialize all handlers explicitly with async wrappers."""
         # Prepare context for handlers
         client_context = {
             "workspace_id": self._workspace_id,
             "environment_id": self._environment_id,
         }
 
-        logger.debug("Loading handlers for async client...")
+        logger.debug("Initializing handlers for async client...")
 
-        # Load all enabled handlers dynamically
-        # Note: Handlers are synchronous, but will be wrapped for async use
-        handlers = CortexHandlerLoader.load_handlers(
-            mode=self._settings.mode,
-            http_client=self._http_client,  # AsyncCortexHTTPClient for API mode
-            hooks=self._hooks,
-            client_context=client_context,
+        # Initialize and wrap each handler explicitly
+        self.metrics = _AsyncHandlerWrapper(
+            MetricsHandler(
+                mode=self._settings.mode,
+                http_client=self._http_client,
+                hooks=self._hooks,
+                client_context=client_context,
+            ),
+            self._settings.mode,
         )
 
-        # Wrap handlers for async use
-        for name, handler in handlers.items():
-            # Create async wrapper for each handler
-            wrapped_handler = _AsyncHandlerWrapper(handler, self._settings.mode)
-            setattr(self, name, wrapped_handler)
-            logger.debug(f"Loaded async handler: {name}")
+        self.metric_variants = _AsyncHandlerWrapper(
+            MetricVariantsHandler(
+                mode=self._settings.mode,
+                http_client=self._http_client,
+                hooks=self._hooks,
+                client_context=client_context,
+            ),
+            self._settings.mode,
+        )
+
+        self.data_sources = _AsyncHandlerWrapper(
+            DataSourcesHandler(
+                mode=self._settings.mode,
+                http_client=self._http_client,
+                hooks=self._hooks,
+                client_context=client_context,
+            ),
+            self._settings.mode,
+        )
+
+        self.file_storage = _AsyncHandlerWrapper(
+            FileStorageHandler(
+                mode=self._settings.mode,
+                http_client=self._http_client,
+                hooks=self._hooks,
+                client_context=client_context,
+            ),
+            self._settings.mode,
+        )
+
+        self.data_models = _AsyncHandlerWrapper(
+            DataModelsHandler(
+                mode=self._settings.mode,
+                http_client=self._http_client,
+                hooks=self._hooks,
+                client_context=client_context,
+            ),
+            self._settings.mode,
+        )
+
+        self.dashboards = _AsyncHandlerWrapper(
+            DashboardsHandler(
+                mode=self._settings.mode,
+                http_client=self._http_client,
+                hooks=self._hooks,
+                client_context=client_context,
+            ),
+            self._settings.mode,
+        )
+
+        self.workspaces = _AsyncHandlerWrapper(
+            WorkspacesHandler(
+                mode=self._settings.mode,
+                http_client=self._http_client,
+                hooks=self._hooks,
+                client_context=client_context,
+            ),
+            self._settings.mode,
+        )
+
+        self.environments = _AsyncHandlerWrapper(
+            EnvironmentsHandler(
+                mode=self._settings.mode,
+                http_client=self._http_client,
+                hooks=self._hooks,
+                client_context=client_context,
+            ),
+            self._settings.mode,
+        )
+
+        self.consumers = _AsyncHandlerWrapper(
+            ConsumersHandler(
+                mode=self._settings.mode,
+                http_client=self._http_client,
+                hooks=self._hooks,
+                client_context=client_context,
+            ),
+            self._settings.mode,
+        )
+
+        self.consumer_groups = _AsyncHandlerWrapper(
+            ConsumerGroupsHandler(
+                mode=self._settings.mode,
+                http_client=self._http_client,
+                hooks=self._hooks,
+                client_context=client_context,
+            ),
+            self._settings.mode,
+        )
+
+        self.query_history = _AsyncHandlerWrapper(
+            QueryHistoryHandler(
+                mode=self._settings.mode,
+                http_client=self._http_client,
+                hooks=self._hooks,
+                client_context=client_context,
+            ),
+            self._settings.mode,
+        )
+
+        self.preaggregations = _AsyncHandlerWrapper(
+            PreAggregationsHandler(
+                mode=self._settings.mode,
+                http_client=self._http_client,
+                hooks=self._hooks,
+                client_context=client_context,
+            ),
+            self._settings.mode,
+        )
+
+        self.admin = _AsyncHandlerWrapper(
+            AdminHandler(
+                mode=self._settings.mode,
+                http_client=self._http_client,
+                hooks=self._hooks,
+                client_context=client_context,
+            ),
+            self._settings.mode,
+        )
+
+        logger.debug("All async handlers initialized")
 
     @property
     def workspace_id(self) -> Optional[UUID]:

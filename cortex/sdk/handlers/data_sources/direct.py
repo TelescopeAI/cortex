@@ -466,3 +466,60 @@ def _clear_sqlite_cache(data_source_id: UUID, sqlite_path: str) -> None:
     except Exception as e:
         # Log but don't fail - cache cleanup is best-effort
         logger.warning(f"Failed to clear cache for {data_source_id}: {e}")
+
+
+def discover_sheets(provider_type: str, config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Discover available sheets from a provider - direct Core service call.
+
+    Args:
+        provider_type: Provider type (e.g., "csv", "gsheets")
+        config: Provider configuration
+
+    Returns:
+        Dictionary with available tables/sheets
+
+    Raises:
+        CortexSDKError: On discovery failure
+    """
+    try:
+        result = CortexSpreadsheetService.discover_sheets(
+            provider_type=provider_type,
+            config=config,
+        )
+        return result
+    except Exception as e:
+        raise CoreExceptionMapper().map(e)
+
+
+def preview_sheet(
+    provider_type: str,
+    config: Dict[str, Any],
+    sheet_name: str,
+    limit: int = 100
+) -> Dict[str, Any]:
+    """
+    Preview data from a sheet - direct Core service call.
+
+    Args:
+        provider_type: Provider type (e.g., "csv", "gsheets")
+        config: Provider configuration
+        sheet_name: Name of the sheet/table to preview
+        limit: Number of rows to preview
+
+    Returns:
+        Dictionary with preview data (columns, rows, total_rows)
+
+    Raises:
+        CortexSDKError: On preview failure
+    """
+    try:
+        result = CortexSpreadsheetService.preview_sheet(
+            provider_type=provider_type,
+            config=config,
+            sheet_name=sheet_name,
+            limit=limit,
+        )
+        return result
+    except Exception as e:
+        raise CoreExceptionMapper().map(e)

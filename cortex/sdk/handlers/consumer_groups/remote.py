@@ -55,7 +55,7 @@ def get_consumer_group(
     return ConsumerGroupResponse(**response)
 
 
-def get_consumer_group_with_members(
+def get_with_members(
     client: CortexHTTPClient,
     group_id: UUID
 ) -> ConsumerGroupDetailResponse:

@@ -23,9 +23,11 @@ from cortex.sdk.schemas.responses.metrics import (
 def list_metrics(
     client: CortexHTTPClient,
     environment_id: UUID,
-    limit: int = 100,
-    offset: int = 0,
-    **filters
+    page: int = 1,
+    page_size: int = 20,
+    data_model_id: Optional[UUID] = None,
+    public_only: Optional[bool] = None,
+    valid_only: Optional[bool] = None
 ) -> MetricListResponse:
     """
     List metrics - HTTP API call.
@@ -33,19 +35,27 @@ def list_metrics(
     Args:
         client: HTTP client instance
         environment_id: Environment ID
-        limit: Page size
-        offset: Page offset
-        **filters: Additional filters
+        page: Page number (1-indexed)
+        page_size: Number of items per page
+        data_model_id: Optional filter by data model ID
+        public_only: Optional filter by public status
+        valid_only: Optional filter by valid status
 
     Returns:
         MetricListResponse
     """
     params = {
         "environment_id": str(environment_id),
-        "limit": limit,
-        "offset": offset,
-        **filters,
+        "page": page,
+        "page_size": page_size,
     }
+    if data_model_id is not None:
+        params["data_model_id"] = str(data_model_id)
+    if public_only is not None:
+        params["public_only"] = public_only
+    if valid_only is not None:
+        params["valid_only"] = valid_only
+
     response = client.get("/metrics", params=params)
     return MetricListResponse(**response)
 

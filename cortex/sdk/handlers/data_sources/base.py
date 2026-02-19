@@ -373,3 +373,51 @@ class DataSourcesHandler:
             return direct.get_spreadsheet_status(data_source_id)
         else:
             return remote.get_spreadsheet_status(self.http_client, data_source_id)
+
+    def discover_sheets(self, provider_type: str, config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Discover available sheets from a provider.
+
+        Args:
+            provider_type: Provider type (e.g., "csv", "gsheets")
+            config: Provider configuration
+
+        Returns:
+            Dictionary with available tables/sheets
+
+        Examples:
+            >>> result = handler.discover_sheets("gsheets", {"spreadsheet_id": "..."})
+            >>> print(result["tables"])
+        """
+        if self.mode == ConnectionMode.DIRECT:
+            return direct.discover_sheets(provider_type, config)
+        else:
+            return remote.discover_sheets(self.http_client, provider_type, config)
+
+    def preview_sheet(
+        self,
+        provider_type: str,
+        config: Dict[str, Any],
+        sheet_name: str,
+        limit: int = 100
+    ) -> Dict[str, Any]:
+        """
+        Preview data from a sheet.
+
+        Args:
+            provider_type: Provider type (e.g., "csv", "gsheets")
+            config: Provider configuration
+            sheet_name: Name of the sheet/table to preview
+            limit: Number of rows to preview
+
+        Returns:
+            Dictionary with preview data (columns, rows, total_rows)
+
+        Examples:
+            >>> result = handler.preview_sheet("gsheets", config, "Sheet1", limit=10)
+            >>> print(result["columns"])
+        """
+        if self.mode == ConnectionMode.DIRECT:
+            return direct.preview_sheet(provider_type, config, sheet_name, limit)
+        else:
+            return remote.preview_sheet(self.http_client, provider_type, config, sheet_name, limit)

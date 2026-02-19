@@ -196,8 +196,7 @@ class DirectTransport(BaseTransport):
         """
         from cortex.core.data.db.metric_service import MetricService
 
-        session = self._get_session()
-        service = MetricService(db_session=session)
+        service = MetricService()
 
         try:
             if method == "get":
@@ -226,7 +225,6 @@ class DirectTransport(BaseTransport):
                     raise CortexValidationError("Request data required")
 
                 metric = service.create_metric(**data)
-                session.commit()
                 return metric.model_dump()
 
             elif method == "put" or method == "patch":
@@ -242,7 +240,6 @@ class DirectTransport(BaseTransport):
                     environment_id=UUID(environment_id) if environment_id else None,
                     **data
                 )
-                session.commit()
                 return metric.model_dump()
 
             elif method == "delete":
@@ -255,16 +252,16 @@ class DirectTransport(BaseTransport):
                     metric_id=UUID(resource_id),
                     environment_id=UUID(environment_id) if environment_id else None
                 )
-                session.commit()
                 return None
 
             else:
                 raise CortexValidationError(f"Unsupported method: {method}")
 
         except Exception as e:
-            session.rollback()
             # Map Core exceptions to SDK exceptions
             raise self._exception_mapper.map_exception(e)
+        finally:
+            service.close()
 
     def _handle_metric_variants(
         self, method: str, resource_id: Optional[str], action: Optional[str],

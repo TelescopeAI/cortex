@@ -1,6 +1,6 @@
 import { useEnvironments } from '~/composables/useEnvironments';
 import { computed, ref, watch } from 'vue';
-import type { DataSource, DataSourceDependenciesError } from '~/types';
+import type { DataSource, DataSourceDependenciesError, DataSourceQueryResponse } from '~/types';
 
 export function useDataSources() {
   const { apiUrl } = useApi();
@@ -10,6 +10,7 @@ export function useDataSources() {
 
   // Use ref for local state to avoid reactivity issues
   const loading = ref(false);
+  const executing = ref(false);
   const error = ref<string | null>(null);
   const data = ref<DataSource[]>([]);
 
@@ -119,6 +120,44 @@ export function useDataSources() {
     }
   }
 
+  // Query a data source directly
+  const queryDataSource = async (
+    dataSourceId: string,
+    params: {
+      table?: string
+      statement?: string
+      limit?: number | null
+      offset?: number
+    }
+  ) => {
+    if (!selectedEnvironmentId.value) {
+      throw new Error('No environment selected')
+    }
+
+    executing.value = true
+
+    try {
+      const body: Record<string, any> = {
+        environment_id: selectedEnvironmentId.value,
+      }
+      if (params.table) body.table = params.table
+      if (params.statement) body.statement = params.statement
+      if (params.limit != null) body.limit = params.limit
+      if (params.offset !== undefined) body.offset = params.offset
+
+      const response = await $fetch<DataSourceQueryResponse>(
+        apiUrl(`/api/v1/data/sources/${dataSourceId}/query`),
+        { method: 'POST', body }
+      )
+      return response
+    } catch (err: any) {
+      console.error('Failed to query data source:', err)
+      throw new Error(err?.data?.detail || 'Failed to query data source')
+    } finally {
+      executing.value = false
+    }
+  }
+
   /**
    * Delete a data source
    * @param id - Data source ID
@@ -167,12 +206,14 @@ export function useDataSources() {
   return {
     dataSources,
     loading,
+    executing,
     error,
     refresh,
     selectedEnvironmentId,
     createDataSource,
     getDataSource,
     getDataSourceSchema,
+    queryDataSource,
     deleteDataSource
   };
 } 

@@ -6,8 +6,8 @@
     </div>
     
     <Accordion type="single" collapsible class="w-full">
-      <AccordionItem 
-        v-for="table in schema.tables" 
+      <AccordionItem
+        v-for="table in schema.tables"
         :key="table.name"
         :value="table.name"
         class="border-b"
@@ -23,8 +23,69 @@
         </AccordionTrigger>
         <AccordionContent>
           <div class="pt-2 space-y-4">
-            <!-- Columns Table -->
-            <Table>
+            <Tabs default-value="schema" v-if="dataSourceId">
+              <TabsList>
+                <TabsTrigger value="schema">Schema</TabsTrigger>
+                <TabsTrigger value="data">Data</TabsTrigger>
+              </TabsList>
+              <TabsContent value="schema">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Column Name</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Nullable</TableHead>
+                      <TableHead>Primary Key</TableHead>
+                      <TableHead>Foreign Key</TableHead>
+                      <TableHead>Default</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow v-for="column in table.columns" :key="column.name">
+                      <TableCell class="font-medium">{{ column.name }}</TableCell>
+                      <TableCell>
+                        <code class="text-xs bg-muted px-1.5 py-0.5 rounded">{{ column.type }}</code>
+                      </TableCell>
+                      <TableCell>
+                        <Badge v-if="column.nullable" variant="outline">Yes</Badge>
+                        <Badge v-else variant="secondary">No</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge v-if="isPrimaryKey(table, column.name)" variant="default">PK</Badge>
+                        <span v-else class="text-muted-foreground">-</span>
+                      </TableCell>
+                      <TableCell>
+                        <div v-if="getForeignKeyInfo(table, column.name)" class="flex flex-col gap-1">
+                          <Badge
+                            v-for="(fk, index) in getForeignKeyInfo(table, column.name)"
+                            :key="`${fk.referenced_table}-${fk.referenced_column}-${index}`"
+                            variant="outline"
+                            class="text-xs"
+                          >
+                            → {{ fk.referenced_table }}.{{ fk.referenced_column }}
+                          </Badge>
+                        </div>
+                        <span v-else class="text-muted-foreground">-</span>
+                      </TableCell>
+                      <TableCell>
+                        <code v-if="column.default_value !== null && column.default_value !== undefined" class="text-xs bg-muted px-1.5 py-0.5 rounded">
+                          {{ String(column.default_value) }}
+                        </code>
+                        <span v-else class="text-muted-foreground">-</span>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TabsContent>
+              <TabsContent value="data">
+                <SourceTableContents
+                  :data-source-id="dataSourceId"
+                  :table-name="table.name"
+                />
+              </TabsContent>
+            </Tabs>
+            <!-- Fallback: no dataSourceId, show schema table directly -->
+            <Table v-else>
               <TableHeader>
                 <TableRow>
                   <TableHead>Column Name</TableHead>
@@ -51,10 +112,10 @@
                   </TableCell>
                   <TableCell>
                     <div v-if="getForeignKeyInfo(table, column.name)" class="flex flex-col gap-1">
-                      <Badge 
-                        v-for="(fk, index) in getForeignKeyInfo(table, column.name)" 
-                        :key="`${fk.referenced_table}-${fk.referenced_column}-${index}`" 
-                        variant="outline" 
+                      <Badge
+                        v-for="(fk, index) in getForeignKeyInfo(table, column.name)"
+                        :key="`${fk.referenced_table}-${fk.referenced_column}-${index}`"
+                        variant="outline"
                         class="text-xs"
                       >
                         → {{ fk.referenced_table }}.{{ fk.referenced_column }}
@@ -82,7 +143,9 @@
 import { Badge } from '~/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '~/components/ui/accordion';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { Database } from 'lucide-vue-next';
+import SourceTableContents from '~/components/SourceTableContents.vue';
 
 interface ForeignKeyRelation {
   column: string;
@@ -118,6 +181,7 @@ interface DatabaseSchema {
 
 interface Props {
   schema: DatabaseSchema | null;
+  dataSourceId?: string;
 }
 
 const props = defineProps<Props>();

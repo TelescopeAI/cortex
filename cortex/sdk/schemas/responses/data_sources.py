@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from cortex.core.types.databases import DataSourceTypes, DataSourceCatalog
@@ -68,3 +68,13 @@ class DataSourceRebuildResponse(TSModel):
     rebuilt_tables: List[str]
     last_synced: Optional[str] = None
     sqlite_path: Optional[str] = None
+
+
+class DataSourceQueryResponse(TSModel):
+    """Response from a direct data source query"""
+    success: bool
+    data: Optional[List[Dict[str, Any]]] = None
+    row_count: int = 0
+    query: str
+    duration: float = 0
+    error: Optional[str] = None

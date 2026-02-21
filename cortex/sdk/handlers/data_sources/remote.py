@@ -10,11 +10,13 @@ from cortex.sdk.clients.http_client import CortexHTTPClient
 from cortex.sdk.schemas.requests.data_sources import (
     DataSourceCreateRequest,
     DataSourceUpdateRequest,
-    DataSourceRebuildRequest
+    DataSourceRebuildRequest,
+    DataSourceQueryRequest,
 )
 from cortex.sdk.schemas.responses.data_sources import (
     DataSourceResponse,
-    DataSourceRebuildResponse
+    DataSourceRebuildResponse,
+    DataSourceQueryResponse,
 )
 
 
@@ -152,6 +154,29 @@ def get_data_source_schema_humanized(
     """
     response = client.get(f"/data/sources/{data_source_id}/schema/humanized")
     return response
+
+
+def query_data_source(
+    client: CortexHTTPClient,
+    data_source_id: UUID,
+    request: DataSourceQueryRequest,
+) -> DataSourceQueryResponse:
+    """
+    Run a direct query against a data source - HTTP API call.
+
+    Args:
+        client: HTTP client
+        data_source_id: Data source ID
+        request: Query request
+
+    Returns:
+        Query response with results
+    """
+    response = client.post(
+        f"/data/sources/{data_source_id}/query",
+        data=request.model_dump(),
+    )
+    return DataSourceQueryResponse(**response)
 
 
 def rebuild_data_source(

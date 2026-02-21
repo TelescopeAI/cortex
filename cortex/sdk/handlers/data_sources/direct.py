@@ -9,7 +9,7 @@ from uuid import UUID
 from cortex.core.data.db.source_service import DataSourceCRUD
 from cortex.core.connectors.databases.SQL.humanizer import SchemaHumanizer
 from cortex.core.connectors.databases.clients.service import DBClientService
-from cortex.core.services import DataSourceSchemaService
+from cortex.core.services import DataSourceSchemaService, DataSourceQueryService
 from cortex.core.connectors.api.sheets.service import CortexSpreadsheetService
 from cortex.core.data.db.file_storage_service import FileDataSourceService
 from cortex.core.types.databases import DataSourceTypes
@@ -17,11 +17,13 @@ from cortex.core.data.sources.data_sources import DataSource
 from cortex.sdk.schemas.requests.data_sources import (
     DataSourceCreateRequest,
     DataSourceUpdateRequest,
-    DataSourceRebuildRequest
+    DataSourceRebuildRequest,
+    DataSourceQueryRequest,
 )
 from cortex.sdk.schemas.responses.data_sources import (
     DataSourceResponse,
-    DataSourceRebuildResponse
+    DataSourceRebuildResponse,
+    DataSourceQueryResponse,
 )
 from cortex.sdk.exceptions.mappers import CoreExceptionMapper
 from cortex.sdk.exceptions.base import CortexNotFoundError
@@ -268,6 +270,34 @@ def get_data_source_schema_humanized(data_source_id: UUID) -> Dict[str, Any]:
             "source_type": data_source.source_type,
             "humanized_schema": human_readable_schema
         }
+    except Exception as e:
+        raise CoreExceptionMapper().map(e)
+
+
+def query_data_source(
+    data_source_id: UUID,
+    request: DataSourceQueryRequest,
+) -> DataSourceQueryResponse:
+    """
+    Run a direct query against a data source - direct Core service call.
+
+    Args:
+        data_source_id: Data source ID
+        request: Query request with table or statement
+
+    Returns:
+        Query response with results
+    """
+    try:
+        result = DataSourceQueryService.execute(
+            data_source_id=data_source_id,
+            environment_id=request.environment_id,
+            table=request.table,
+            statement=request.statement,
+            limit=request.limit,
+            offset=request.offset,
+        )
+        return DataSourceQueryResponse(**result)
     except Exception as e:
         raise CoreExceptionMapper().map(e)
 

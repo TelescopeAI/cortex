@@ -263,7 +263,7 @@ def create_metric(request: MetricCreateRequest) -> MetricResponse:
         metric_data["dimensions"] = dimensions
         metric_data["filters"] = filters
 
-        metric = metric_service.create_metric(metric_data)
+        metric = metric_service.create_metric(SemanticMetric(**metric_data))
         # Build response with data model name
         response = MetricResponse.model_validate(metric, from_attributes=True)
         response.data_model_name = data_model.name

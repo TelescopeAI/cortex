@@ -11,7 +11,7 @@
       <SidebarProvider>
         <div class="w-full h-full flex min-h-screen">
           <Sidebar />
-          <main class="flex-1">
+          <main class="flex-1 min-w-0">
             <NuxtPage />
           </main>
         </div>

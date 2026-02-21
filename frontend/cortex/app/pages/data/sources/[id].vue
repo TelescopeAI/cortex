@@ -500,7 +500,7 @@ function goBack() {
           </div>
 
           <!-- Schema Result -->
-          <SourceSchemaViewer v-if="schemaResult" :schema="schemaResult" />
+          <SourceSchemaViewer v-if="schemaResult" :schema="schemaResult" :data-source-id="currentDataSource?.id" />
         </CardContent>
       </Card>
     </div>

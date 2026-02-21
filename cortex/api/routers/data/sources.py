@@ -8,11 +8,13 @@ from fastapi.responses import JSONResponse
 from cortex.api.schemas.requests.data_sources import (
     DataSourceCreateRequest,
     DataSourceUpdateRequest,
-    DataSourceRebuildRequest
+    DataSourceRebuildRequest,
+    DataSourceQueryRequest,
 )
 from cortex.api.schemas.responses.data_sources import (
     DataSourceResponse,
-    DataSourceRebuildResponse
+    DataSourceRebuildResponse,
+    DataSourceQueryResponse,
 )
 from cortex.core.types.telescope import TSModel
 from cortex.sdk import CortexClient
@@ -189,6 +191,23 @@ async def get_data_source_schema_humanized(data_source_id: UUID):
         return _client.data_sources.get_schema_humanized(data_source_id)
     except CortexNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except CortexSDKError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@DataSourcesRouter.post(
+    "/data/sources/{data_source_id}/query",
+    response_model=DataSourceQueryResponse,
+    tags=["Data Sources"],
+)
+async def query_data_source(data_source_id: UUID, request: DataSourceQueryRequest):
+    """Run a direct query against a data source"""
+    try:
+        return _client.data_sources.query(data_source_id, request)
+    except CortexNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except CortexValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except CortexSDKError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 

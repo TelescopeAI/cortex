@@ -129,3 +129,12 @@ export interface FileDependenciesError {
   file_id: string;
   dependencies: FileDependencies;
 }
+
+export interface DataSourceQueryResponse {
+  success: boolean
+  data: Record<string, any>[] | null
+  rowCount: number
+  query: string
+  duration: number
+  error: string | null
+}

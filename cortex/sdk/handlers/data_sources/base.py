@@ -14,11 +14,13 @@ from cortex.sdk.events.types import CortexEvents, HookEventType
 from cortex.sdk.schemas.requests.data_sources import (
     DataSourceCreateRequest,
     DataSourceUpdateRequest,
-    DataSourceRebuildRequest
+    DataSourceRebuildRequest,
+    DataSourceQueryRequest,
 )
 from cortex.sdk.schemas.responses.data_sources import (
     DataSourceResponse,
-    DataSourceRebuildResponse
+    DataSourceRebuildResponse,
+    DataSourceQueryResponse,
 )
 from . import direct, remote
 
@@ -296,6 +298,30 @@ class DataSourcesHandler:
             return remote.get_data_source_schema_humanized(
                 self.http_client, data_source_id
             )
+
+    def query(
+        self, data_source_id: UUID, request: DataSourceQueryRequest
+    ) -> DataSourceQueryResponse:
+        """
+        Run a direct query against a data source.
+
+        Args:
+            data_source_id: Data source ID
+            request: Query request with table or statement, plus optional limit/offset
+
+        Returns:
+            Query response with results, duration, and any errors
+
+        Examples:
+            >>> from cortex.sdk.schemas.requests.data_sources import DataSourceQueryRequest
+            >>> request = DataSourceQueryRequest(table="users")
+            >>> result = handler.query(data_source_id, request)
+            >>> print(result.data)
+        """
+        if self.mode == ConnectionMode.DIRECT:
+            return direct.query_data_source(data_source_id, request)
+        else:
+            return remote.query_data_source(self.http_client, data_source_id, request)
 
     def rebuild(
         self, data_source_id: UUID, request: DataSourceRebuildRequest = None

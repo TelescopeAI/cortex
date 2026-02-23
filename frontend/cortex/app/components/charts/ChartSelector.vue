@@ -23,6 +23,7 @@ const xAxisKey = ref<string>('')
 const yAxisKey = ref<string>('')
 const useStacked = ref(false)
 const useDataZoom = ref(false)
+const debug = ref(false)
 
 const chartTypes = [
   { value: 'bar', label: 'Bar Chart' },
@@ -195,7 +196,7 @@ const donutChartLabels = computed(() => {
       </div>
 
       <!-- Debug Information -->
-      <div v-if="props.data.length > 0" class="mb-4 p-3 bg-muted rounded-lg text-xs">
+      <div v-if="debug" class="mb-4 p-3 bg-muted rounded-lg text-xs">
         <p><strong>Debug Info:</strong></p>
         <p>Data rows: {{ props.data.length }}</p>
         <p>Available keys: {{ availableKeys.join(', ') }}</p>

@@ -161,21 +161,20 @@ export const useMetricVariants = () => {
 
   /**
    * Execute a variant (compiles and executes)
+   *
+   * Supports two modes:
+   * - By ID: pass variant_id in executionRequest to execute a saved variant
+   * - Inline: pass variant in executionRequest to preview without saving
    */
   const executeVariant = async (
-    variantId: string,
-    executionRequest: MetricVariantExecutionRequest,
-    preview: boolean = false
+    executionRequest: MetricVariantExecutionRequest
   ): Promise<MetricVariantExecutionResponse | null> => {
     try {
       const response = await $fetch<MetricVariantExecutionResponse>(
-        apiUrl(`/api/v1/metrics/variants/${variantId}/execute`),
+        apiUrl('/api/v1/metrics/variants/execute'),
         {
           method: 'POST',
-          body: {
-            ...executionRequest,
-            preview
-          }
+          body: executionRequest
         }
       )
       return response

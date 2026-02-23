@@ -88,6 +88,31 @@ async def list_variants(
         )
 
 
+# Execute route placed before /{variant_id} routes to avoid path conflicts
+@VariantsRouter.post(
+    "/metrics/variants/execute",
+    response_model=MetricVariantExecutionResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["Metric Variants", "Execution"],
+)
+async def execute_variant(execution_request: MetricVariantExecutionRequest):
+    """
+    Execute a metric variant and return results.
+
+    Supports two modes:
+    - By ID: provide variant_id in the request body to execute a saved variant
+    - Inline: provide a variant definition in the request body to preview without saving
+    """
+    try:
+        return _client.metric_variants.execute(execution_request)
+    except CortexNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except CortexValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except CortexSDKError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 @VariantsRouter.get(
     "/metrics/variants/{variant_id}",
     response_model=MetricVariantResponse,
@@ -188,28 +213,6 @@ async def detach_variant(variant_id: UUID):
         return _client.metric_variants.detach(variant_id)
     except CortexNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except CortexSDKError as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-
-@VariantsRouter.post(
-    "/metrics/variants/{variant_id}/execute",
-    response_model=MetricVariantExecutionResponse,
-    status_code=status.HTTP_200_OK,
-    tags=["Metric Variants", "Execution"],
-)
-async def execute_variant(variant_id: UUID, execution_request: MetricVariantExecutionRequest):
-    """
-    Execute a metric variant and return results.
-
-    The variant is compiled to a resolved metric and then executed.
-    """
-    try:
-        return _client.metric_variants.execute(variant_id, execution_request)
-    except CortexNotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except CortexValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except CortexSDKError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 

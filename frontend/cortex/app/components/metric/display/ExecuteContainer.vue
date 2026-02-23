@@ -45,31 +45,23 @@
       @update:modifiers="$emit('update:modifiers', $event)"
       @reload-schema="$emit('reload-schema')"
     />
-    
-    <!-- Query Validation Section -->
-    <MetricDisplayQueryContainer
-      :validating="validating"
-      :validation-result="validationResult"
+
+    <!-- Unified Results Viewer -->
+    <ExecutionResultViewer
+      v-if="executionResults || validationResult"
+      :execution-results="executionResults || validationResult"
       :compiled-query="compiledQuery"
       :original-query="originalQuery"
-      @validate="$emit('validate')"
+      :is-preview="!executionResults && !!validationResult"
       @copy-query="$emit('copy-query')"
-    />
-
-   
-
-    <MetricDisplayExecutionResultsCard
-      v-if="executionResults"
-      :execution-results="executionResults"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import MetricDisplayQueryContainer from './QueryContainer.vue'
 import MetricDisplayQueryExecutionCard from './QueryExecutionCard.vue'
 import MetricDisplayAdvancedExecutionContainer from './AdvancedExecutionContainer.vue'
-import MetricDisplayExecutionResultsCard from './ExecutionResultsCard.vue'
+import ExecutionResultViewer from '~/components/ExecutionResultViewer.vue'
 import type { MetricModifiers } from '~/types/metric-modifiers'
 
 interface Props {

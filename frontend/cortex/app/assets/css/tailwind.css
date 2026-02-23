@@ -21,7 +21,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: "Inter", sans-serif;
+  --font-sans: "Geist Mono", monospace;
   --font-display: "Space Grotesk", sans-serif;
   --font-geist: "Geist Mono", monospace;
   --color-background: var(--background);
@@ -116,6 +116,9 @@
   --sidebar-ring: oklch(0.704 0.04 256.788);
   --card-content-bg: oklch(1 0 0);
   --card-content-border: oklch(0.929 0.013 255.508);
+
+  /* Shiki code highlighting */
+  --shiki-light-font-family: "Geist Mono", monospace;
 }
 
 .dark {
@@ -153,6 +156,9 @@
   --sidebar-ring: oklch(0.446 0.043 257.281);
   --card-content-bg: oklch(0.179 0.041 260.031);
   --card-content-border: oklch(0.279 0.041 260.031);
+
+  /* Shiki code highlighting */
+  --shiki-font-family: "Geist Mono", monospace;
 }
 
 @layer base {

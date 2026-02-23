@@ -109,13 +109,6 @@
       />
     </div>
 
-    <!-- Create Variant Dialog -->
-    <MetricVariantsFormDialog
-      :open="createDialogOpen"
-      :default-source-metric-id="metricId"
-      @update:open="createDialogOpen = $event"
-      @success="handleVariantCreated"
-    />
   </div>
 </template>
 
@@ -152,7 +145,6 @@ const variants = ref<SemanticMetricVariant[]>([])
 const metric = ref<SemanticMetric | null>(null)
 const searchQuery = ref('')
 const visibilityFilter = ref('all')
-const createDialogOpen = ref(false)
 
 // Computed
 const filteredVariants = computed(() => {
@@ -197,12 +189,7 @@ const refreshVariants = async () => {
 }
 
 const createNewVariant = () => {
-  createDialogOpen.value = true
-}
-
-const handleVariantCreated = async (variant: SemanticMetricVariant) => {
-  await loadVariants()
-  navigateToVariant(variant.id)
+  router.push(`/metrics/${metricId.value}/variants/create`)
 }
 
 const navigateToVariant = (variantId: string) => {

@@ -227,15 +227,38 @@ export interface MetricVariantFilters {
   search?: string
 }
 
-export interface MetricVariantExecutionRequest {
-  environment_id: string
-  measures?: string[]
-  dimensions?: string[]
-  filters?: any[]
-  limit?: number
+// Base variant definition (no environment_id) - used for inline preview
+export interface MetricVariantBaseRequest {
+  name: string
+  source: MetricRef
+  alias?: string
+  description?: string
+  overrides?: MetricOverrides
+  include?: IncludedComponents
+  derivations?: DerivedEntity[]
+  combine?: MetricRef[]
+  public?: boolean
   cache?: CachePreference
   refresh?: RefreshPolicy
+  parameters?: Record<string, ParameterDefinition>
+  meta?: Record<string, any>
+}
+
+export interface MetricVariantExecutionRequest {
+  environment_id: string
+  // Either variant_id OR variant must be provided (not both)
+  variant_id?: string
+  variant?: MetricVariantBaseRequest
+  // Execution parameters
   parameters?: Record<string, any>
+  filters?: Record<string, any>
+  limit?: number
+  offset?: number
+  context_id?: string
+  grouped?: boolean
+  ordered?: boolean
+  cache?: CachePreference
+  preview?: boolean
 }
 
 // ============================================================================

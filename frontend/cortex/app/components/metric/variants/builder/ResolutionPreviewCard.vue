@@ -1,80 +1,92 @@
 <template>
-  <Card class="border-purple-200 dark:border-purple-800">
-    <CardHeader>
-      <CardTitle class="flex items-center gap-2">
-        <Eye class="h-5 w-5 text-purple-600 dark:text-purple-400" />
-        Resolution Preview
+  <Card class="gap-y-0">
+    <CardHeader class="pb-3">
+      <CardTitle class="text-sm font-medium flex items-center gap-2">
+        <GitCompareArrows class="h-4 w-4 text-purple-600 dark:text-purple-400" />
+        Changes
       </CardTitle>
-      <CardDescription>
-        Preview how this variant will be resolved by the compiler
-      </CardDescription>
     </CardHeader>
     <CardContent>
-      <div v-if="!sourceMetric" class="text-center py-8 text-muted-foreground">
-        <AlertCircle class="h-8 w-8 mx-auto mb-2 opacity-50" />
-        <p class="text-sm">Select a source metric to see preview</p>
+      <div v-if="!sourceMetric" class="text-center py-6 text-muted-foreground">
+        <AlertCircle class="h-6 w-6 mx-auto mb-2 opacity-50" />
+        <p class="text-sm">Select a source metric to see changes</p>
+      </div>
+
+      <div v-else-if="!hasAnyChanges" class="text-center py-6 text-muted-foreground">
+        <CheckCircle2 class="h-6 w-6 mx-auto mb-2 opacity-50" />
+        <p class="text-sm">No modifications — variant inherits everything from source</p>
       </div>
 
       <div v-else class="space-y-4">
-        <!-- Summary Stats -->
-        <div class="grid grid-cols-2 gap-4">
-          <div class="text-center p-4 rounded-lg bg-muted">
-            <div class="text-2xl font-bold">{{ estimatedMeasures }}</div>
-            <div class="text-xs text-muted-foreground">Measures</div>
-          </div>
-          <div class="text-center p-4 rounded-lg bg-muted">
-            <div class="text-2xl font-bold">{{ estimatedDimensions }}</div>
-            <div class="text-xs text-muted-foreground">Dimensions</div>
+        <!-- Measures diff -->
+        <DiffSection
+          v-if="measuresDiff.hasChanges"
+          label="Measures"
+          :added="measuresDiff.added"
+          :removed="measuresDiff.removed"
+          :replaced="measuresDiff.replaced"
+          :included="measuresDiff.included"
+          :source-names="measuresDiff.sourceNames"
+        />
+
+        <!-- Dimensions diff -->
+        <DiffSection
+          v-if="dimensionsDiff.hasChanges"
+          label="Dimensions"
+          :added="dimensionsDiff.added"
+          :removed="dimensionsDiff.removed"
+          :replaced="dimensionsDiff.replaced"
+          :included="dimensionsDiff.included"
+          :source-names="dimensionsDiff.sourceNames"
+        />
+
+        <!-- Filters diff -->
+        <DiffSection
+          v-if="filtersDiff.hasChanges"
+          label="Filters"
+          :added="filtersDiff.added"
+          :removed="filtersDiff.removed"
+          :replaced="filtersDiff.replaced"
+          :included="filtersDiff.included"
+          :source-names="filtersDiff.sourceNames"
+        />
+
+        <!-- Joins diff -->
+        <DiffSection
+          v-if="joinsDiff.hasChanges"
+          label="Joins"
+          :added="joinsDiff.added"
+          :removed="joinsDiff.removed"
+          :replaced="joinsDiff.replaced"
+          :included="joinsDiff.included"
+          :source-names="joinsDiff.sourceNames"
+        />
+
+        <!-- Scalar overrides -->
+        <div v-if="scalarChanges.length > 0" class="space-y-1.5">
+          <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide">Settings</p>
+          <div v-for="change in scalarChanges" :key="change.field" class="flex items-center gap-2 text-sm">
+            <span class="inline-flex items-center gap-1 text-orange-600 dark:text-orange-400">
+              <ArrowRight class="h-3 w-3" />
+              <span class="font-medium">{{ change.field }}</span>
+            </span>
+            <span class="text-muted-foreground">{{ change.from }}</span>
+            <ArrowRight class="h-3 w-3 text-muted-foreground" />
+            <span class="font-medium">{{ change.to }}</span>
           </div>
         </div>
-
-        <!-- Changes Summary -->
-        <div class="space-y-2">
-          <Label class="text-sm">Changes</Label>
-          <div class="space-y-1 text-sm">
-            <div v-if="hasInclusion" class="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-              <Filter class="h-4 w-4" />
-              <span>Inclusion whitelist active</span>
-            </div>
-            <div v-if="excludeCount > 0" class="flex items-center gap-2 text-red-600 dark:text-red-400">
-              <Minus class="h-4 w-4" />
-              <span>{{ excludeCount }} components excluded</span>
-            </div>
-            <div v-if="scalarOverrides > 0" class="flex items-center gap-2 text-orange-600 dark:text-orange-400">
-              <Settings class="h-4 w-4" />
-              <span>{{ scalarOverrides }} scalar overrides</span>
-            </div>
-            <div v-if="!hasInclusion && excludeCount === 0 && scalarOverrides === 0" class="flex items-center gap-2 text-muted-foreground">
-              <CheckCircle2 class="h-4 w-4" />
-              <span>No modifications</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Fetch Resolved Button -->
-        <Button
-          @click="fetchResolved"
-          :disabled="loading || !canResolve"
-          class="w-full"
-          variant="outline"
-        >
-          <Loader2 v-if="loading" class="h-4 w-4 mr-2 animate-spin" />
-          <Eye v-else class="h-4 w-4 mr-2" />
-          {{ loading ? 'Resolving...' : 'Fetch Resolved Metric' }}
-        </Button>
       </div>
     </CardContent>
   </Card>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card'
-import { Button } from '~/components/ui/button'
-import { Label } from '~/components/ui/label'
-import { Eye, AlertCircle, Filter, Minus, Settings, CheckCircle2, Loader2 } from 'lucide-vue-next'
+import { computed } from 'vue'
+import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
+import { GitCompareArrows, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-vue-next'
 import type { SemanticMetric } from '~/composables/useMetrics'
 import type { IncludedComponents, MetricOverrides } from '~/types/metric_variants'
+import DiffSection from './DiffSection.vue'
 
 interface Props {
   sourceMetric: SemanticMetric | null
@@ -84,87 +96,119 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const loading = ref(false)
-
-// Estimate counts based on source and overrides
-const estimatedMeasures = computed(() => {
-  if (!props.sourceMetric) return 0
-
-  let count = props.sourceMetric.measures?.length || 0
-
-  // Apply inclusion whitelist
-  if (props.inclusion?.measures) {
-    count = props.inclusion.measures.length
-  }
-
-  // Apply exclusions
-  const excluded = props.overrides?.exclude?.measures?.length || 0
-  count = Math.max(0, count - excluded)
-
-  // Add new measures
-  const added = props.overrides?.add?.measures?.length || 0
-  count += added
-
-  return count
-})
-
-const estimatedDimensions = computed(() => {
-  if (!props.sourceMetric) return 0
-
-  let count = props.sourceMetric.dimensions?.length || 0
-
-  // Apply inclusion whitelist
-  if (props.inclusion?.dimensions) {
-    count = props.inclusion.dimensions.length
-  }
-
-  // Apply exclusions
-  const excluded = props.overrides?.exclude?.dimensions?.length || 0
-  count = Math.max(0, count - excluded)
-
-  // Add new dimensions
-  const added = props.overrides?.add?.dimensions?.length || 0
-  count += added
-
-  return count
-})
-
-const hasInclusion = computed(() => {
-  return props.inclusion !== null
-})
-
-const excludeCount = computed(() => {
-  if (!props.overrides?.exclude) return 0
-
-  return (
-    (props.overrides.exclude.measures?.length || 0) +
-    (props.overrides.exclude.dimensions?.length || 0) +
-    (props.overrides.exclude.filters?.length || 0) +
-    (props.overrides.exclude.joins?.length || 0)
-  )
-})
-
-const scalarOverrides = computed(() => {
-  if (!props.overrides) return 0
-
-  let count = 0
-  if (props.overrides.table_name) count++
-  if (props.overrides.limit !== undefined) count++
-  if (props.overrides.grouped !== undefined) count++
-  if (props.overrides.ordered !== undefined) count++
-
-  return count
-})
-
-const canResolve = computed(() => {
-  return props.sourceMetric !== null
-})
-
-const fetchResolved = async () => {
-  loading.value = true
-  // TODO: Call compiler API to get resolved metric
-  setTimeout(() => {
-    loading.value = false
-  }, 1000)
+interface ComponentDiff {
+  hasChanges: boolean
+  sourceNames: string[]
+  added: string[]
+  removed: string[]
+  replaced: string[]
+  included: string[] | null // null = no inclusion filter (all inherited)
 }
+
+function buildDiff(
+  sourceItems: any[] | undefined,
+  inclusionList: string[] | undefined,
+  excludeList: string[] | undefined,
+  addItems: any[] | undefined,
+  replaceItems: any[] | undefined
+): ComponentDiff {
+  const sourceNames = (sourceItems || []).map((item: any) => item.name || item.toString())
+  const added = (addItems || []).map((item: any) => item.name || item.toString())
+  const replaced = (replaceItems || []).map((item: any) => item.name || item.toString())
+  const removed = excludeList || []
+  const included = inclusionList || null
+
+  const hasChanges =
+    added.length > 0 ||
+    removed.length > 0 ||
+    replaced.length > 0 ||
+    included !== null
+
+  return { hasChanges, sourceNames, added, removed, replaced, included }
+}
+
+const measuresDiff = computed(() =>
+  buildDiff(
+    props.sourceMetric?.measures,
+    props.inclusion?.measures,
+    props.overrides?.exclude?.measures,
+    props.overrides?.add?.measures,
+    props.overrides?.replace?.measures
+  )
+)
+
+const dimensionsDiff = computed(() =>
+  buildDiff(
+    props.sourceMetric?.dimensions,
+    props.inclusion?.dimensions,
+    props.overrides?.exclude?.dimensions,
+    props.overrides?.add?.dimensions,
+    props.overrides?.replace?.dimensions
+  )
+)
+
+const filtersDiff = computed(() =>
+  buildDiff(
+    props.sourceMetric?.filters,
+    props.inclusion?.filters,
+    props.overrides?.exclude?.filters,
+    props.overrides?.add?.filters,
+    props.overrides?.replace?.filters
+  )
+)
+
+const joinsDiff = computed(() =>
+  buildDiff(
+    props.sourceMetric?.joins,
+    props.inclusion?.joins,
+    props.overrides?.exclude?.joins,
+    props.overrides?.add?.joins,
+    props.overrides?.replace?.joins
+  )
+)
+
+const scalarChanges = computed(() => {
+  if (!props.overrides || !props.sourceMetric) return []
+
+  const changes: { field: string; from: string; to: string }[] = []
+
+  if (props.overrides.table_name) {
+    changes.push({
+      field: 'table_name',
+      from: props.sourceMetric.table_name || '(none)',
+      to: props.overrides.table_name
+    })
+  }
+  if (props.overrides.limit !== undefined) {
+    changes.push({
+      field: 'limit',
+      from: String(props.sourceMetric.limit ?? '(none)'),
+      to: String(props.overrides.limit)
+    })
+  }
+  if (props.overrides.grouped !== undefined) {
+    changes.push({
+      field: 'grouped',
+      from: String(props.sourceMetric.grouped ?? true),
+      to: String(props.overrides.grouped)
+    })
+  }
+  if (props.overrides.ordered !== undefined) {
+    changes.push({
+      field: 'ordered',
+      from: String(props.sourceMetric.ordered ?? true),
+      to: String(props.overrides.ordered)
+    })
+  }
+
+  return changes
+})
+
+const hasAnyChanges = computed(() =>
+  measuresDiff.value.hasChanges ||
+  dimensionsDiff.value.hasChanges ||
+  filtersDiff.value.hasChanges ||
+  joinsDiff.value.hasChanges ||
+  scalarChanges.value.length > 0
+)
 </script>

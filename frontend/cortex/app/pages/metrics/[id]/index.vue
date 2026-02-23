@@ -122,7 +122,6 @@ const modifiers = ref<MetricModifiers>([])
 // Variants state
 const variants = ref<SemanticMetricVariant[]>([])
 const variantsLoading = ref(false)
-const createVariantDialogOpen = ref(false)
 
 
 // Schema sheet functions
@@ -443,12 +442,7 @@ const navigateToVariant = (variantId: string) => {
 }
 
 const createVariant = () => {
-  createVariantDialogOpen.value = true
-}
-
-const handleVariantCreated = async (variant: SemanticMetricVariant) => {
-  await loadVariants()
-  navigateToVariant(variant.id)
+  navigateTo(`/metrics/${metricId}/variants/create`)
 }
 
 // Data loading
@@ -799,12 +793,5 @@ watch(currentDataSourceId, (newId, oldId) => {
       @save="onSaveSchema"
     />
 
-    <!-- Create Variant Dialog -->
-    <MetricVariantsFormDialog
-      :open="createVariantDialogOpen"
-      :default-source-metric-id="metricId"
-      @update:open="createVariantDialogOpen = $event"
-      @success="handleVariantCreated"
-    />
   </div>
-</template> 
+</template>

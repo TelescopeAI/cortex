@@ -399,41 +399,96 @@ def detach_variant(variant_id: UUID) -> Dict[str, Any]:
 
 
 def execute_variant(
-    variant_id: UUID,
     request: MetricVariantExecutionRequest
 ) -> MetricVariantExecutionResponse:
     """
     Execute a metric variant - direct Core service call.
 
+    Supports two modes:
+    - By ID: request.variant_id is set — fetches saved variant from DB
+    - Inline: request.variant is set — constructs in-memory variant for preview without saving
+
     Args:
-        variant_id: Variant ID
-        request: Execution request
+        request: Execution request (must have either variant_id or variant)
 
     Returns:
         Execution response with results
     """
     variant_service = MetricVariantService()
+    metric_service = MetricService()
     execution_service = MetricExecutionService()
 
     try:
-        # Get the variant and validate environment
-        db_variant = variant_service.get_variant_by_id(variant_id, environment_id=request.environment_id)
-        if not db_variant:
-            raise CortexNotFoundError(
-                f"Variant with ID {variant_id} not found in environment {request.environment_id}"
+        if request.variant_id is not None:
+            # Mode 1: Execute a saved variant by ID
+            db_variant = variant_service.get_variant_by_id(
+                request.variant_id, environment_id=request.environment_id
+            )
+            if not db_variant:
+                raise CortexNotFoundError(
+                    f"Variant with ID {request.variant_id} not found in environment {request.environment_id}"
+                )
+
+            result = execution_service.execute_metric(
+                metric_id=str(request.variant_id),
+                context_id=request.context_id,
+                parameters=request.parameters,
+                limit=request.limit,
+                offset=request.offset,
+                grouped=request.grouped,
+                cache_preference=request.cache,
+                preview=request.preview,
+            )
+        else:
+            # Mode 2: Execute an inline variant definition (preview without saving)
+            inline = request.variant
+
+            # Fetch source metric to get data_model_id and data_source_id
+            source_metric_id = inline.source.metric_id
+            if not source_metric_id:
+                raise ValueError("Source metric_id is required in inline variant definition")
+
+            source_metric = metric_service.get_metric_by_id(
+                source_metric_id,
+                environment_id=request.environment_id
+            )
+            if not source_metric:
+                raise CortexNotFoundError(
+                    f"Source metric with ID {source_metric_id} not found in environment {request.environment_id}"
+                )
+
+            # Construct in-memory variant (same pattern as create_variant but without saving)
+            variant = SemanticMetricVariant(
+                name=inline.name,
+                alias=inline.alias,
+                description=inline.description,
+                environment_id=request.environment_id,
+                data_model_id=source_metric.data_model_id,
+                data_source_id=source_metric.data_source_id,
+                source_id=source_metric_id,
+                source=inline.source,
+                overrides=inline.overrides,
+                include=inline.include,
+                derivations=inline.derivations,
+                combine=inline.combine,
+                public=inline.public,
+                cache=inline.cache,
+                refresh=inline.refresh,
+                parameters=inline.parameters,
+                meta=inline.meta,
             )
 
-        # Execute the variant (execution service handles compilation)
-        result = execution_service.execute_metric(
-            metric_id=str(variant_id),
-            context_id=request.context_id,
-            parameters=request.parameters,
-            limit=request.limit,
-            offset=request.offset,
-            grouped=request.grouped,
-            cache_preference=request.cache,
-            preview=request.preview,
-        )
+            # Execute using the in-memory variant object directly
+            result = execution_service.execute_metric(
+                metric=variant,
+                context_id=request.context_id,
+                parameters=request.parameters,
+                limit=request.limit,
+                offset=request.offset,
+                grouped=request.grouped,
+                cache_preference=request.cache,
+                preview=request.preview,
+            )
 
         # Build error list from result
         errors = None
@@ -455,6 +510,7 @@ def execute_variant(
         raise CoreExceptionMapper().map(e)
     finally:
         variant_service.close()
+        metric_service.close()
 
 
 def override_source(variant_id: UUID) -> Dict[str, Any]:

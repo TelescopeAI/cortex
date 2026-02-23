@@ -409,9 +409,10 @@ const executeVariantQuery = async () => {
   executionTime.value = null
 
   try {
-    const result = await executeVariant(variantId.value, {
+    const result = await executeVariant({
+      variant_id: variantId.value,
       environment_id: selectedEnvironmentId.value
-    }, false)
+    })
 
     if (result) {
       executionTime.value = result.metadata.execution_time_ms

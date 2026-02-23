@@ -595,6 +595,7 @@ def generate_metric_recommendations(
         CortexNotFoundError: If resources not found
         CortexValidationError: If validation fails
     """
+    model_service = None
     try:
         # Generate metrics using the service
         generated_metrics = MetricsGenerationService.generate_metrics(
@@ -644,4 +645,5 @@ def generate_metric_recommendations(
     except Exception as e:
         raise CoreExceptionMapper().map(e)
     finally:
-        model_service.close()
+        if model_service is not None:
+            model_service.close()

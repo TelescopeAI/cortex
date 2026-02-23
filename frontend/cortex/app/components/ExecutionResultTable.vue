@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { h, computed } from 'vue'
+import { h, computed, ref, watch } from 'vue'
 import type { ColumnDef, SortingState } from '@tanstack/vue-table'
 import { ArrowUpDownIcon } from 'lucide-vue-next'
 import { FlexRender, getCoreRowModel, getPaginationRowModel, getFilteredRowModel, getSortedRowModel, useVueTable } from '@tanstack/vue-table'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 const props = defineProps({
@@ -39,6 +38,9 @@ const columns = computed<ColumnDef<Record<string, any>>[]>(() => {
 const columnVisibility = ref({})
 const sorting = ref<SortingState>([])
 
+// Track visible columns as an array for multi-select
+const visibleColumns = ref<string[]>([])
+
 const table = useVueTable({
   get data() { return props.data },
   get columns() { return columns.value },
@@ -65,31 +67,55 @@ const table = useVueTable({
     get sorting() { return sorting.value },
   },
 })
+
+// Initialize visible columns when table columns are available
+watch(() => table.getAllColumns(), (tableColumns) => {
+  if (visibleColumns.value.length === 0) {
+    visibleColumns.value = tableColumns.map(col => col.id)
+  }
+}, { immediate: true })
+
+// Update columnVisibility when visibleColumns changes
+watch(visibleColumns, (selected) => {
+  const allColumns = table.getAllColumns()
+  const visibility: Record<string, boolean> = {}
+  allColumns.forEach(column => {
+    visibility[column.id] = selected.includes(column.id)
+  })
+  columnVisibility.value = visibility
+})
+
+// Show column selector only when there are more than 10 columns
+const showColumnSelector = computed(() => columns.value.length > 10)
+
+// Available columns for the multi-select
+const availableColumns = computed(() => {
+  return table.getAllColumns()
+    .filter(column => column.getCanHide())
+    .map(column => ({
+      id: column.id,
+      label: column.id.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+    }))
+})
 </script>
 
 <template>
   <div class="max-w-full">
-    <div class="flex items-center py-4">
-      <DropdownMenu>
-        <DropdownMenuTrigger as-child>
-          <Button variant="outline" class="ml-auto">
-            Columns
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuCheckboxItem
-            v-for="column in table.getAllColumns().filter((column) => column.getCanHide())"
+    <div v-if="showColumnSelector" class="flex items-center py-4">
+      <Select v-model="visibleColumns" multiple>
+        <SelectTrigger class="ml-auto w-[200px]">
+          <SelectValue placeholder="Select columns" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem
+            v-for="column in availableColumns"
             :key="column.id"
-            class="capitalize"
-            :checked="column.getIsVisible()"
-            @update:checked="(value) => {
-              column.toggleVisibility(!!value)
-            }"
+            :value="column.id"
           >
-            {{ column.id }}
-          </DropdownMenuCheckboxItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            {{ column.label }}
+          </SelectItem>
+        </SelectContent>
+      </Select>
     </div>
     <div class="rounded-md border overflow-x-auto">
       <Table>

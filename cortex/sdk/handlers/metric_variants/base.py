@@ -309,31 +309,47 @@ class MetricVariantsHandler:
         )
 
     def execute(
-        self, variant_id: UUID, request: MetricVariantExecutionRequest
+        self, request: MetricVariantExecutionRequest
     ) -> MetricVariantExecutionResponse:
         """
         Execute a metric variant and return results.
 
+        Supports execution by variant_id or inline variant definition (for preview).
+
         Args:
-            variant_id: Variant ID
-            request: Execution request
+            request: Execution request (must have either variant_id or variant)
 
         Returns:
             Execution response with results
 
         Examples:
             >>> from cortex.sdk.schemas.requests.variants import MetricVariantExecutionRequest
+            >>> # Execute a saved variant
             >>> request = MetricVariantExecutionRequest(
             ...     environment_id=env_id,
+            ...     variant_id=variant_id,
             ...     limit=100
             ... )
-            >>> result = handler.execute(variant_id, request)
+            >>> result = handler.execute(request)
             >>> print(result.data)
+            >>>
+            >>> # Preview an inline variant (without saving)
+            >>> from cortex.sdk.schemas.requests.variants import MetricVariantBaseRequest
+            >>> request = MetricVariantExecutionRequest(
+            ...     environment_id=env_id,
+            ...     variant=MetricVariantBaseRequest(
+            ...         name="preview_variant",
+            ...         source=MetricRef(metric_id=source_id),
+            ...     ),
+            ...     preview=True
+            ... )
+            >>> result = handler.execute(request)
+            >>> print(result.metadata)
         """
         if self.mode == ConnectionMode.DIRECT:
-            return direct.execute_variant(variant_id, request)
+            return direct.execute_variant(request)
         else:
-            return remote.execute_variant(self.http_client, variant_id, request)
+            return remote.execute_variant(self.http_client, request)
 
     def override_source(self, variant_id: UUID) -> Dict[str, Any]:
         """

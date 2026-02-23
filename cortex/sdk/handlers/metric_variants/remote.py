@@ -163,22 +163,22 @@ def detach_variant(client: CortexHTTPClient, variant_id: UUID) -> Dict[str, Any]
 
 def execute_variant(
     client: CortexHTTPClient,
-    variant_id: UUID,
     request: MetricVariantExecutionRequest
 ) -> MetricVariantExecutionResponse:
     """
     Execute a metric variant - HTTP API call.
 
+    Supports execution by variant_id or inline variant definition (for preview).
+
     Args:
         client: HTTP client
-        variant_id: Variant ID
-        request: Execution request
+        request: Execution request (must have either variant_id or variant)
 
     Returns:
         Execution response with results
     """
     response = client.post(
-        f"/metrics/variants/{variant_id}/execute",
+        "/metrics/variants/execute",
         data=request.model_dump()
     )
     return MetricVariantExecutionResponse(**response)

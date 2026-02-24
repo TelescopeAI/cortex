@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-4">
     <!-- Add Dimension Button -->
-    <div class="flex justify-between items-center">
+    <div v-if="showHeader !== false" class="flex justify-between items-center">
       <h4 class="text-sm font-medium">Dimensions</h4>
       <ColumnSelector
         :available-tables="availableTables"
@@ -11,7 +11,7 @@
     </div>
 
     <!-- Dimensions List -->
-    <div v-if="props.dimensions.length === 0" class="text-center py-8 border-2 border-dashed rounded-lg">
+    <div v-if="props.dimensions.length === 0 && showEmptyState !== false" class="text-center py-8 border-2 border-dashed rounded-lg">
       <Grid class="h-8 w-8 mx-auto text-muted-foreground mb-2" />
       <p class="text-sm text-muted-foreground">No dimensions defined</p>
       <p class="text-xs text-muted-foreground">Add a dimension to enable grouping</p>
@@ -140,6 +140,7 @@
                 :model-value="dimension.name"
                 placeholder="Dimension name"
                 class="flex-1 h-9"
+                :disabled="readOnlyName"
                 @update:model-value="(value) => updateDimension(index, 'name', value)"
               />
             </div>
@@ -324,6 +325,9 @@ interface Props {
   dimensions?: Dimension[]
   availableColumns?: Array<{ name: string; type: string }>
   tableSchema?: any
+  showHeader?: boolean
+  showEmptyState?: boolean
+  readOnlyName?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {

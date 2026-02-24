@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue'
 import type { SemanticOrderSequence } from '~/types/order'
+import type { DiagnoseResponse, MetricDiagnoseRequest } from '~/types/doctor'
 
 export interface SemanticMetric {
   id: string
@@ -165,6 +166,19 @@ export const useMetrics = () => {
     }
   }
 
+  const diagnoseMetric = async (request: MetricDiagnoseRequest): Promise<DiagnoseResponse> => {
+    try {
+      const response = await $fetch<DiagnoseResponse>(apiUrl('/api/v1/metrics/diagnose'), {
+        method: 'POST',
+        body: request
+      })
+      return response
+    } catch (err) {
+      console.error('Failed to diagnose metric:', err)
+      throw err
+    }
+  }
+
   const cloneMetric = async (id: string, cloneRequest: { name: string; alias?: string }) => {
     try {
       const response = await $fetch<SemanticMetric>(apiUrl(`/api/v1/metrics/${id}/clone`), {
@@ -261,6 +275,7 @@ export const useMetrics = () => {
     updateMetric,
     deleteMetric,
     executeMetric,
+    diagnoseMetric,
     cloneMetric,
     getMetricVersions,
     getMetricsForModel,

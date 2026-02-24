@@ -37,6 +37,8 @@ from cortex.sdk.schemas.responses.metrics import (
     MetricVersionListResponse,
     MetricRecommendationsResponse,
 )
+from cortex.core.doctor.chief import CortexDoctor
+from cortex.sdk.schemas.responses.doctor import DiagnoseResponse
 
 logger = logging.getLogger(__name__)
 
@@ -647,3 +649,27 @@ def generate_metric_recommendations(
     finally:
         if model_service is not None:
             model_service.close()
+
+
+def diagnose_metric(request) -> "DiagnoseResponse":
+    """
+    Diagnose a metric - direct Core service call.
+
+    Args:
+        request: MetricDiagnoseRequest with metric_id or inline metric
+
+    Returns:
+        DiagnoseResponse with diagnosis result
+    """
+    try:
+        result = CortexDoctor.diagnose_metric(
+            metric_id=request.metric_id,
+            metric=request.metric,
+            environment_id=request.environment_id,
+        )
+        return DiagnoseResponse(
+            healthy=result.healthy,
+            diagnosis=result.diagnosis,
+        )
+    except Exception as e:
+        raise CoreExceptionMapper().map(e)

@@ -69,22 +69,37 @@
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div class="space-y-2 text-sm">
+        <div class="space-y-3 text-sm">
           <div class="flex justify-between">
             <span class="text-muted-foreground">Name:</span>
             <span class="font-medium">{{ selectedMetric.title || selectedMetric.name }}</span>
           </div>
-          <div v-if="selectedMetric.measures" class="flex justify-between">
-            <span class="text-muted-foreground">Measures:</span>
-            <span>{{ selectedMetric.measures.length }}</span>
+          <div v-if="selectedMetric.measures?.length">
+            <span class="text-muted-foreground">Measures ({{ selectedMetric.measures.length }}):</span>
+            <div class="mt-1 space-y-1">
+              <div v-for="measure in selectedMetric.measures" :key="measure.name" class="flex items-center justify-between pl-3 py-1 border-l-2 border-blue-300 dark:border-blue-700">
+                <span class="font-medium text-xs">{{ measure.name }}</span>
+                <Badge v-if="measure.type" variant="outline" class="text-[10px] h-5">{{ measure.type }}</Badge>
+              </div>
+            </div>
           </div>
-          <div v-if="selectedMetric.dimensions" class="flex justify-between">
-            <span class="text-muted-foreground">Dimensions:</span>
-            <span>{{ selectedMetric.dimensions.length }}</span>
+          <div v-if="selectedMetric.dimensions?.length">
+            <span class="text-muted-foreground">Dimensions ({{ selectedMetric.dimensions.length }}):</span>
+            <div class="mt-1 space-y-1">
+              <div v-for="dimension in selectedMetric.dimensions" :key="dimension.name" class="flex items-center justify-between pl-3 py-1 border-l-2 border-green-300 dark:border-green-700">
+                <span class="font-medium text-xs">{{ dimension.name }}</span>
+                <Badge v-if="dimension.query" variant="outline" class="text-[10px] h-5">{{ dimension.query }}</Badge>
+              </div>
+            </div>
           </div>
-          <div v-if="selectedMetric.filters" class="flex justify-between">
-            <span class="text-muted-foreground">Filters:</span>
-            <span>{{ selectedMetric.filters.length }}</span>
+          <div v-if="selectedMetric.filters?.length">
+            <span class="text-muted-foreground">Filters ({{ selectedMetric.filters.length }}):</span>
+            <div class="mt-1 space-y-1">
+              <div v-for="filter in selectedMetric.filters" :key="filter.name" class="flex items-center justify-between pl-3 py-1 border-l-2 border-red-300 dark:border-red-700">
+                <span class="font-medium text-xs">{{ filter.name }}</span>
+                <Badge v-if="filter.operator" variant="outline" class="text-[10px] h-5">{{ filter.operator }}</Badge>
+              </div>
+            </div>
           </div>
         </div>
       </CardContent>
@@ -97,6 +112,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select'
 import { Label } from '~/components/ui/label'
 import { Input } from '~/components/ui/input'
+import { Badge } from '~/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Loader2, CheckCircle2 } from 'lucide-vue-next'
 import { useMetrics } from '~/composables/useMetrics'

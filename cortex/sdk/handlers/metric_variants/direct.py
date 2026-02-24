@@ -513,6 +513,33 @@ def execute_variant(
         metric_service.close()
 
 
+def diagnose_variant(request) -> "DiagnoseResponse":
+    """
+    Diagnose a metric variant - direct Core service call.
+
+    Args:
+        request: VariantDiagnoseRequest with variant_id or inline variant
+
+    Returns:
+        DiagnoseResponse with diagnosis result
+    """
+    from cortex.core.doctor.chief import CortexDoctor
+    from cortex.sdk.schemas.responses.doctor import DiagnoseResponse
+
+    try:
+        result = CortexDoctor.diagnose_variant(
+            variant_id=request.variant_id,
+            variant=request.variant,
+            environment_id=request.environment_id,
+        )
+        return DiagnoseResponse(
+            healthy=result.healthy,
+            diagnosis=result.diagnosis,
+        )
+    except Exception as e:
+        raise CoreExceptionMapper().map(e)
+
+
 def override_source(variant_id: UUID) -> Dict[str, Any]:
     """
     Override the source metric with the resolved state of this variant - direct Core service call.

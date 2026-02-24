@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-4">
     <!-- Header with Add Button -->
-    <div class="flex items-center justify-between">
+    <div v-if="showHeader !== false" class="flex items-center justify-between">
       <div>
         <h4 class="text-sm font-medium">Filters</h4>
         <p class="text-xs text-muted-foreground">
@@ -19,7 +19,7 @@
     </div>
 
     <!-- Filters List -->
-    <div v-if="props.filters.length === 0" class="text-center py-8 border-2 border-dashed rounded-lg">
+    <div v-if="props.filters.length === 0 && showEmptyState !== false" class="text-center py-8 border-2 border-dashed rounded-lg">
       <Filter class="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
       <p class="text-sm text-muted-foreground">No filters defined</p>
       <p class="text-xs text-muted-foreground">Add filters to restrict your data</p>
@@ -304,6 +304,7 @@
                 @update:model-value="(value) => updateFilter(index, 'name', value)"
                 placeholder="Filter name"
                 class="flex-1 h-9"
+                :disabled="readOnlyName"
               />
             </div>
           </div>
@@ -470,6 +471,9 @@ interface Props {
   filters?: Filter[]
   availableColumns?: Array<{ name: string; type: string }>
   tableSchema?: any
+  showHeader?: boolean
+  showEmptyState?: boolean
+  readOnlyName?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {

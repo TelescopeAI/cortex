@@ -184,6 +184,26 @@ def execute_variant(
     return MetricVariantExecutionResponse(**response)
 
 
+def diagnose_variant(
+    client: CortexHTTPClient,
+    request,
+) -> "DiagnoseResponse":
+    """
+    Diagnose a metric variant - HTTP API call.
+
+    Args:
+        client: HTTP client
+        request: VariantDiagnoseRequest
+
+    Returns:
+        DiagnoseResponse
+    """
+    from cortex.sdk.schemas.responses.doctor import DiagnoseResponse
+
+    response = client.post("/metrics/variants/diagnose", data=request.model_dump())
+    return DiagnoseResponse(**response)
+
+
 def override_source(client: CortexHTTPClient, variant_id: UUID) -> Dict[str, Any]:
     """
     Override the source metric with the resolved state of this variant - HTTP API call.

@@ -125,8 +125,10 @@
 
               <!-- Overrides Tab -->
               <TabsContent value="overrides" class="mt-4">
-                <MetricVariantsBuilderOverridesBuilder
+                <MetricVariantsBuilderOverrideContainer
                   v-model="formData.overrides"
+                  :source-metric="sourceMetricData"
+                  :table-schema="tableSchema"
                 />
               </TabsContent>
             </Tabs>
@@ -149,6 +151,8 @@
           :execution-results="resultState"
           :compiled-query="compiledSQL || undefined"
           :is-preview="isPreviewMode"
+          :on-diagnose="canAutoExecute ? handleDiagnose : undefined"
+          @apply-fix="handleApplyFix"
         />
       </div>
     </div>
@@ -156,7 +160,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, provide, type Ref } from 'vue'
+import { ref, computed, watch, onMounted, provide, nextTick, type Ref } from 'vue'
 import { watchDebounced, useDebouncedRefHistory, useMagicKeys } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import {
@@ -184,12 +188,14 @@ const metricId = computed(() => route.params.id as string)
 
 const { selectedEnvironmentId } = useEnvironments()
 const { getMetric } = useMetrics()
-const { createVariant, executeVariant } = useMetricVariants()
+const { createVariant, executeVariant, diagnoseVariant } = useMetricVariants()
+const { getDataSourceSchema } = useDataSources()
 
 // UI State
 const activeTab = ref('basic')
 const saving = ref(false)
 const sourceMetricData = ref<SemanticMetric | null>(null)
+const tableSchema = ref<any>(null)
 const validationErrors = ref<VariantValidationErrors>({})
 
 // Preview / Execution State
@@ -312,16 +318,103 @@ const autoExecuteOrPreview = async () => {
   }
 }
 
+// Diagnose callback for ExecutionResultError
+const handleDiagnose = async () => {
+  const variant = buildInlineVariant()
+  if (!variant || !selectedEnvironmentId.value || !sourceMetricData.value) {
+    throw new Error('Missing variant definition, environment, or source metric')
+  }
+  // The backend SemanticMetricVariant model requires these binding fields
+  const enrichedVariant = {
+    ...variant,
+    environment_id: selectedEnvironmentId.value,
+    data_model_id: sourceMetricData.value.data_model_id,
+    data_source_id: sourceMetricData.value.data_source_id,
+    source_id: sourceMetricData.value.id,
+  }
+  return diagnoseVariant({
+    variant: enrichedVariant,
+    environment_id: selectedEnvironmentId.value,
+  })
+}
+
+// Helper to recursively remove null/undefined values from an object
+const removeNullValues = (obj: any): any => {
+  if (obj === null || obj === undefined) return undefined
+  if (Array.isArray(obj)) return obj.map(removeNullValues).filter(v => v !== undefined)
+  if (typeof obj === 'object') {
+    const cleaned: Record<string, any> = {}
+    for (const [key, value] of Object.entries(obj)) {
+      const cleanedValue = removeNullValues(value)
+      if (cleanedValue !== null && cleanedValue !== undefined) {
+        cleaned[key] = cleanedValue
+      }
+    }
+    return Object.keys(cleaned).length > 0 ? cleaned : undefined
+  }
+  return obj
+}
+
+// Apply fix from doctor suggestion
+const handleApplyFix = (fixed: Record<string, any>) => {
+  let applied = false
+
+  if (fixed.source) {
+    formData.value.source = fixed.source
+    applied = true
+  }
+  if (fixed.overrides !== undefined) {
+    // Remove null values to prevent empty CONFIG cards
+    const cleanedOverrides = removeNullValues(fixed.overrides)
+    if (cleanedOverrides) {
+      formData.value.overrides = cleanedOverrides
+      applied = true
+    }
+  }
+  if (fixed.include !== undefined) {
+    formData.value.inclusion = fixed.include
+    applied = true
+  }
+  if (fixed.derivations !== undefined) {
+    formData.value.derivations = fixed.derivations
+    applied = true
+  }
+  if (fixed.combine !== undefined) {
+    formData.value.combine = fixed.combine
+    applied = true
+  }
+
+  if (applied) {
+    toast.success('Fix applied — re-executing automatically.')
+    nextTick(() => autoExecuteOrPreview())
+  } else {
+    toast.warning('No applicable changes found in fix suggestion.')
+  }
+}
+
+// Load table schema for a data source
+const loadTableSchema = async (dataSourceId?: string) => {
+  if (!dataSourceId) { tableSchema.value = null; return }
+  try {
+    tableSchema.value = await getDataSourceSchema(dataSourceId)
+  } catch (error) {
+    console.error('Failed to load table schema:', error)
+    tableSchema.value = null
+  }
+}
+
 // Source change handler — reset inclusion/overrides (watch will trigger auto-execute)
 const handleSourceChange = async (source: MetricRef | null) => {
   if (source?.metric_id && selectedEnvironmentId.value) {
     sourceMetricData.value = await getMetric(source.metric_id, selectedEnvironmentId.value)
+    await loadTableSchema(sourceMetricData.value?.data_source_id)
     // Reset inclusion and overrides — old values reference the previous source metric
     formData.value.inclusion = null
     formData.value.overrides = null
     // Watch will trigger auto-execute
   } else {
     sourceMetricData.value = null
+    tableSchema.value = null
     formData.value.inclusion = null
     formData.value.overrides = null
   }
@@ -349,9 +442,13 @@ const onPreviewSQL = async () => {
     })
 
     if (result) {
-      compiledSQL.value = result.sql || null
-      if (result.metadata) {
-        executionMetadata.value = result.metadata
+      if (result.success === false) {
+        executionError.value = result.errors?.join('\n') || 'Preview failed'
+      } else {
+        compiledSQL.value = result.sql || null
+        if (result.metadata) {
+          executionMetadata.value = result.metadata
+        }
       }
     }
   } catch (err) {
@@ -378,10 +475,15 @@ const onExecute = async () => {
     })
 
     if (result) {
-      executionData.value = result.data || null
-      executionMetadata.value = result.metadata || null
-      compiledSQL.value = result.sql || compiledSQL.value
-      toast.success(`Executed successfully — ${result.metadata?.row_count ?? 0} rows returned`)
+      if (result.success === false) {
+        executionError.value = result.errors?.join('\n') || 'Execution failed'
+        toast.error('Execution failed')
+      } else {
+        executionData.value = result.data || null
+        executionMetadata.value = result.metadata || null
+        compiledSQL.value = result.sql || compiledSQL.value
+        toast.success(`Executed successfully — ${result.metadata?.row_count ?? 0} rows returned`)
+      }
     }
   } catch (err) {
     executionError.value = err instanceof Error ? err.message : 'Failed to execute variant'
@@ -404,7 +506,8 @@ const executionRelevantData = computed(() => ({
 watchDebounced(
   executionRelevantData,
   async () => {
-    if ((compiledSQL.value || executionData.value) && formData.value.source?.metric_id) {
+    // Always trigger preview if source is selected (removed gate to fix stuck preview)
+    if (formData.value.source?.metric_id) {
       await autoExecuteOrPreview()
     }
   },
@@ -457,6 +560,7 @@ onMounted(async () => {
   if (metricId.value && selectedEnvironmentId.value) {
     formData.value.source = { metric_id: metricId.value }
     sourceMetricData.value = await getMetric(metricId.value, selectedEnvironmentId.value)
+    await loadTableSchema(sourceMetricData.value?.data_source_id)
     await autoExecuteOrPreview()
   }
 })

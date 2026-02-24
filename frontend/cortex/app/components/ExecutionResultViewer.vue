@@ -7,7 +7,9 @@ import { Table2, BarChart3, FileJson, Info, CheckCircle, XCircle, Database, Eye,
 import ExecutionResultTable from './ExecutionResultTable.vue'
 import ExecutionResultChart from './ExecutionResultChart.vue'
 import ExecutionResultMetadata from './ExecutionResultMetadata.vue'
+import ExecutionResultError from './ExecutionResultError.vue'
 import CodeHighlight from './CodeHighlight.vue'
+import type { DiagnoseResponse } from '~/types/doctor'
 
 interface Props {
   // Existing props (backward compat with variants/create.vue)
@@ -28,6 +30,9 @@ interface Props {
 
   // Preview mode indicator
   isPreview?: boolean
+
+  // Diagnosis callback (entity-agnostic — parent provides the correct API call)
+  onDiagnose?: () => Promise<DiagnoseResponse>
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -38,6 +43,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   'execution-result-viewer:copy-query': []
+  'apply-fix': [fixed: Record<string, any>]
 }>()
 
 const activeTab = ref('table')
@@ -79,15 +85,13 @@ const showResults = computed(() => !isLoading.value && hasExecutionResults.value
 
       <!-- Results State -->
       <template v-else-if="showResults">
-        <!-- Execution errors -->
-        <div v-if="!isSuccess && executionErrors.length > 0" class="space-y-2">
-          <h4 class="font-medium text-sm text-red-600">Execution Errors:</h4>
-          <div class="space-y-1">
-            <div v-for="error in executionErrors" :key="error" class="text-sm text-red-600 bg-red-50 dark:bg-red-950 p-2 rounded">
-              {{ error }}
-            </div>
-          </div>
-        </div>
+        <!-- Execution errors with diagnosis -->
+        <ExecutionResultError
+          v-if="!isSuccess && executionErrors.length > 0"
+          :errors="executionErrors"
+          :on-diagnose="onDiagnose"
+          @apply-fix="emit('apply-fix', $event)"
+        />
 
         <!-- Preview mode: show only Statistics -->
         <ExecutionResultMetadata

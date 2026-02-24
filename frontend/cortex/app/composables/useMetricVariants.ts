@@ -6,6 +6,7 @@ import type {
   MetricVariantExecutionResponse,
   MetricVariantListResponse
 } from '~/types/metric_variants'
+import type { DiagnoseResponse, VariantDiagnoseRequest } from '~/types/doctor'
 
 export const useMetricVariants = () => {
   const { apiUrl } = useApi()
@@ -185,6 +186,27 @@ export const useMetricVariants = () => {
   }
 
   /**
+   * Diagnose a variant for configuration issues
+   */
+  const diagnoseVariant = async (
+    request: VariantDiagnoseRequest
+  ): Promise<DiagnoseResponse> => {
+    try {
+      const response = await $fetch<DiagnoseResponse>(
+        apiUrl('/api/v1/metrics/variants/diagnose'),
+        {
+          method: 'POST',
+          body: request
+        }
+      )
+      return response
+    } catch (err) {
+      console.error('Failed to diagnose variant:', err)
+      throw err
+    }
+  }
+
+  /**
    * Clone a variant
    */
   const cloneVariant = async (
@@ -301,6 +323,7 @@ export const useMetricVariants = () => {
     updateVariant,
     deleteVariant,
     executeVariant,
+    diagnoseVariant,
     cloneVariant,
     resetVariant,
     detachVariant,

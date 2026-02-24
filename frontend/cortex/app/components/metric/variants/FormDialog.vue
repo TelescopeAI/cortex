@@ -64,8 +64,10 @@
 
           <!-- Overrides Tab -->
           <TabsContent value="overrides" class="mt-4">
-            <MetricVariantsBuilderOverridesBuilder
+            <MetricVariantsBuilderOverrideContainer
               v-model="formData.overrides"
+              :source-metric="sourceMetricData"
+              :table-schema="tableSchema"
             />
           </TabsContent>
 
@@ -155,10 +157,22 @@ const emit = defineEmits<{
 const { selectedEnvironmentId } = useEnvironments()
 const { getMetric } = useMetrics()
 const { createVariant, updateVariant } = useMetricVariants()
+const { getDataSourceSchema } = useDataSources()
 
 const activeTab = ref('basic')
 const saving = ref(false)
 const sourceMetricData = ref<SemanticMetric | null>(null)
+const tableSchema = ref<any>(null)
+
+const loadTableSchema = async (dataSourceId?: string) => {
+  if (!dataSourceId) { tableSchema.value = null; return }
+  try {
+    tableSchema.value = await getDataSourceSchema(dataSourceId)
+  } catch (error) {
+    console.error('Failed to load table schema:', error)
+    tableSchema.value = null
+  }
+}
 
 const isEdit = computed(() => !!props.variant)
 
@@ -231,8 +245,10 @@ const previousTab = () => {
 const handleSourceChange = async (source: MetricRef | null) => {
   if (source?.metric_id && selectedEnvironmentId.value) {
     sourceMetricData.value = await getMetric(source.metric_id, selectedEnvironmentId.value)
+    await loadTableSchema(sourceMetricData.value?.data_source_id)
   } else {
     sourceMetricData.value = null
+    tableSchema.value = null
   }
 }
 
@@ -318,6 +334,7 @@ const resetForm = () => {
   }
   activeTab.value = 'basic'
   sourceMetricData.value = null
+  tableSchema.value = null
   validationErrors.value = {}
 }
 
@@ -345,6 +362,7 @@ watch(() => props.open, async (open) => {
           props.variant.source.metric_id,
           selectedEnvironmentId.value
         )
+        await loadTableSchema(sourceMetricData.value?.data_source_id)
       }
     } else if (props.defaultSourceMetricId && selectedEnvironmentId.value) {
       // Creating new variant with default source
@@ -355,6 +373,7 @@ watch(() => props.open, async (open) => {
         props.defaultSourceMetricId,
         selectedEnvironmentId.value
       )
+      await loadTableSchema(sourceMetricData.value?.data_source_id)
     }
   }
 })

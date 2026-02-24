@@ -53,7 +53,9 @@
       :compiled-query="compiledQuery"
       :original-query="originalQuery"
       :is-preview="!executionResults && !!validationResult"
+      :on-diagnose="onDiagnose"
       @copy-query="$emit('copy-query')"
+      @apply-fix="$emit('apply-fix', $event)"
     />
   </div>
 </template>
@@ -92,6 +94,7 @@ interface Props {
   schemaLoading: boolean
   schemaError: string | null
   executionResults: any
+  onDiagnose?: () => Promise<any>
 }
 
 defineProps<Props>()
@@ -112,5 +115,6 @@ defineEmits<{
   'update:modifiers': [value: MetricModifiers]
   'reload-schema': []
   'execute': []
+  'apply-fix': [fixed: Record<string, any>]
 }>()
 </script>

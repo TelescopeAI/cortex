@@ -1,5 +1,27 @@
 <template>
-  <DropdownMenu>
+  <!-- subsOnly: render just the table→column sub-menus (no outer DropdownMenu wrapper) -->
+  <template v-if="subsOnly">
+    <DropdownMenuSub v-for="table in availableTables" :key="table.name">
+      <DropdownMenuSubTrigger>
+        <Database class="h-4 w-4 mr-2" />
+        {{ table.name }}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent class="z-[100001]">
+        <DropdownMenuItem
+          v-for="column in table.columns"
+          :key="`${table.name}.${column.name}`"
+          @click="handleColumnSelect(table.name, column)"
+          class="cursor-pointer"
+        >
+          <span class="font-mono text-sm">{{ column.name }}</span>
+          <span class="text-xs text-muted-foreground ml-2">({{ column.type }})</span>
+        </DropdownMenuItem>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  </template>
+
+  <!-- Full mode: existing behavior with own DropdownMenu + Button trigger -->
+  <DropdownMenu v-else>
     <DropdownMenuTrigger as-child>
       <Button variant="outline" size="sm" :disabled="disabled">
         <Plus class="h-4 w-4 mr-2" />
@@ -55,11 +77,13 @@ interface Props {
   availableTables: Table[]
   buttonText?: string
   disabled?: boolean
+  subsOnly?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   buttonText: 'Select Column',
-  disabled: false
+  disabled: false,
+  subsOnly: false
 })
 
 const emit = defineEmits<{

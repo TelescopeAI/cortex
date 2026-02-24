@@ -16,11 +16,13 @@ from cortex.sdk.schemas.requests.variants import (
     MetricVariantUpdateRequest,
     MetricVariantExecutionRequest
 )
+from cortex.sdk.schemas.requests.doctor import VariantDiagnoseRequest
 from cortex.sdk.schemas.responses.variants import (
     MetricVariantResponse,
     MetricVariantListResponse,
     MetricVariantExecutionResponse
 )
+from cortex.sdk.schemas.responses.doctor import DiagnoseResponse
 from . import direct, remote
 
 
@@ -377,3 +379,22 @@ class MetricVariantsHandler:
             ),
             variant_id=variant_id,
         )
+
+    def diagnose(self, request: VariantDiagnoseRequest) -> DiagnoseResponse:
+        """
+        Diagnose a metric variant for configuration issues.
+
+        Compiles the variant (catching compiler errors) then delegates to
+        MetricSurgeon for the resolved metric. Collects all errors and
+        generates fix suggestions where possible.
+
+        Args:
+            request: Diagnose request with variant_id or inline variant
+
+        Returns:
+            DiagnoseResponse with healthy status and optional diagnosis
+        """
+        if self.mode == ConnectionMode.DIRECT:
+            return direct.diagnose_variant(request)
+        else:
+            return remote.diagnose_variant(self.http_client, request)

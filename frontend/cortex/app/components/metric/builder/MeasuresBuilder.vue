@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-4">
     <!-- Add Measure Button -->
-    <div class="flex justify-between items-center">
+    <div v-if="showHeader !== false" class="flex justify-between items-center">
       <h4 class="text-sm font-medium">Measures</h4>
       <div class="flex items-center space-x-2">
         <ColumnSelector
@@ -17,7 +17,7 @@
     </div>
 
     <!-- Measures List -->
-    <div v-if="props.measures.length === 0" class="text-center py-8 border-2 border-dashed rounded-lg">
+    <div v-if="props.measures.length === 0 && showEmptyState !== false" class="text-center py-8 border-2 border-dashed rounded-lg">
       <Target class="h-8 w-8 mx-auto text-muted-foreground mb-2" />
       <p class="text-sm text-muted-foreground">No measures defined</p>
       <p class="text-xs text-muted-foreground">Add a measure to get started</p>
@@ -164,6 +164,7 @@
                 :model-value="measure.name"
                 placeholder="Measure name"
                 class="flex-1 h-9"
+                :disabled="readOnlyName"
                 @update:model-value="(value) => updateMeasure(index, 'name', value)"
               />
             </div>
@@ -259,6 +260,9 @@ interface Props {
   measures?: Measure[]
   availableColumns?: Array<{ name: string; type: string }>
   tableSchema?: any
+  showHeader?: boolean
+  showEmptyState?: boolean
+  readOnlyName?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {

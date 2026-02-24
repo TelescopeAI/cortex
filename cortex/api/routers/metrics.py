@@ -11,6 +11,8 @@ from cortex.api.schemas.requests.metrics import (
     MetricVersionCreateRequest,
     MetricRecommendationsRequest
 )
+from cortex.sdk.schemas.requests.doctor import MetricDiagnoseRequest
+from cortex.core.types.doctor import DiagnosisResult
 from cortex.api.schemas.responses.metrics import (
     MetricResponse,
     MetricListResponse,
@@ -37,6 +39,28 @@ async def create_metric(metric_data: MetricCreateRequest):
     """Create a new metric."""
     try:
         return _client.metrics.create(metric_data)
+    except CortexNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except CortexValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except CortexSDKError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@MetricsRouter.post("/metrics/diagnose", response_model=DiagnosisResult, tags=["Metrics"])
+async def diagnose_metric(request: MetricDiagnoseRequest):
+    """
+    Diagnose a metric for configuration issues.
+
+    Accepts either a metric_id (to diagnose a saved metric) or an inline metric
+    definition. Runs through compilation, validation, SQL generation, and execution
+    stages, collecting all errors and generating fix suggestions where possible.
+    """
+    try:
+        result = _client.metrics.diagnose(request)
+        # FastAPI will serialize based on response_model=DiagnosisResult
+        # Pydantic's smart Union mode will use actual runtime type
+        return result
     except CortexNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except CortexValidationError as e:

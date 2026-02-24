@@ -28,7 +28,7 @@ const route = useRoute()
 const metricId = route.params.id as string
 
 // Use composables
-const { getMetric, executeMetric, getMetricVersions, updateMetric, deleteMetric } = useMetrics()
+const { getMetric, executeMetric, getMetricVersions, updateMetric, deleteMetric, diagnoseMetric } = useMetrics()
 const { getModel } = useDataModels()
 const { selectedEnvironmentId } = useEnvironments()
 const { getVariantsForMetric } = useMetricVariants()
@@ -403,6 +403,32 @@ const onExecute = async () => {
   }
 }
 
+// Diagnose callback for ExecutionResultError
+const handleDiagnoseMetric = async () => {
+  if (!metricId || !selectedEnvironmentId.value) {
+    throw new Error('Missing metric ID or environment')
+  }
+  return diagnoseMetric({
+    metric_id: metricId,
+    environment_id: selectedEnvironmentId.value,
+  })
+}
+
+// Apply fix from doctor suggestion
+const handleApplyMetricFix = async (fixed: Record<string, any>) => {
+  if (!selectedEnvironmentId.value) return
+  try {
+    const updated = await updateMetric(metricId, selectedEnvironmentId.value, fixed)
+    if (updated) {
+      Object.assign(metric.value, updated)
+      toast.success('Fix applied and metric updated.')
+    }
+  } catch (err) {
+    console.error('Failed to apply fix:', err)
+    toast.error('Failed to apply fix')
+  }
+}
+
 // Query history refresh
 const queryHistoryRef = ref()
 const refreshQueryHistory = async () => {
@@ -700,6 +726,8 @@ watch(currentDataSourceId, (newId, oldId) => {
             :has-parameters="hasParameters"
             :executing="executing"
             :execution-results="executionResults"
+            :on-diagnose="selectedEnvironmentId ? handleDiagnoseMetric : undefined"
+            @apply-fix="handleApplyMetricFix"
             @update:context-id="contextId = $event"
             @update:cache-enabled="requestCacheEnabled = $event"
             @update:cache-ttl="requestCacheTtl = $event"

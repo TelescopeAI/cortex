@@ -16,6 +16,8 @@ from cortex.api.schemas.requests.variants import (
     MetricVariantExecutionRequest,
     MetricVariantCloneRequest
 )
+from cortex.sdk.schemas.requests.doctor import VariantDiagnoseRequest
+from cortex.core.types.doctor import DiagnosisResult
 from cortex.api.schemas.responses.variants import (
     MetricVariantResponse,
     MetricVariantListResponse,
@@ -105,6 +107,33 @@ async def execute_variant(execution_request: MetricVariantExecutionRequest):
     """
     try:
         return _client.metric_variants.execute(execution_request)
+    except CortexNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except CortexValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except CortexSDKError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@VariantsRouter.post(
+    "/metrics/variants/diagnose",
+    response_model=DiagnosisResult,
+    status_code=status.HTTP_200_OK,
+    tags=["Metric Variants"],
+)
+async def diagnose_variant(request: VariantDiagnoseRequest):
+    """
+    Diagnose a metric variant for configuration issues.
+
+    Accepts either a variant_id (to diagnose a saved variant) or an inline variant
+    definition. Compiles the variant, then runs the resolved metric through validation,
+    SQL generation, and execution stages. Returns all errors and fix suggestions.
+    """
+    try:
+        result = _client.metric_variants.diagnose(request)
+        # FastAPI will serialize based on response_model=DiagnosisResult
+        # Pydantic's smart Union mode will use actual runtime type
+        return result
     except CortexNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except CortexValidationError as e:

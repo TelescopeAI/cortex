@@ -17,11 +17,13 @@ from cortex.sdk.schemas.requests.metrics import (
     MetricExecutionRequest,
     MetricCloneRequest,
 )
+from cortex.sdk.schemas.requests.doctor import MetricDiagnoseRequest
 from cortex.sdk.schemas.responses.metrics import (
     MetricResponse,
     MetricListResponse,
     MetricExecutionResponse,
 )
+from cortex.sdk.schemas.responses.doctor import DiagnoseResponse
 from . import direct, remote
 
 
@@ -367,3 +369,21 @@ class MetricsHandler:
             return direct.generate_metric_recommendations(request)
         else:
             return remote.generate_metric_recommendations(self.http_client, request)
+
+    def diagnose(self, request: MetricDiagnoseRequest) -> DiagnoseResponse:
+        """
+        Diagnose a metric for configuration issues.
+
+        Runs through compilation, validation, SQL generation, and execution
+        stages, collecting all errors and generating fix suggestions where possible.
+
+        Args:
+            request: Diagnose request with metric_id or inline metric
+
+        Returns:
+            DiagnoseResponse with healthy status and optional diagnosis
+        """
+        if self.mode == ConnectionMode.DIRECT:
+            return direct.diagnose_metric(request)
+        else:
+            return remote.diagnose_metric(self.http_client, request)

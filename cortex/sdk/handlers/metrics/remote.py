@@ -18,6 +18,8 @@ from cortex.sdk.schemas.responses.metrics import (
     MetricListResponse,
     MetricExecutionResponse,
 )
+from cortex.sdk.schemas.responses.doctor import DiagnoseResponse
+
 
 
 def list_metrics(
@@ -161,3 +163,21 @@ def clone_metric(
     """
     response = client.post(f"/metrics/{metric_id}/clone", data=request.model_dump())
     return MetricResponse(**response)
+
+
+def diagnose_metric(
+    client: CortexHTTPClient,
+    request,
+) -> "DiagnoseResponse":
+    """
+    Diagnose a metric - HTTP API call.
+
+    Args:
+        client: HTTP client instance
+        request: MetricDiagnoseRequest
+
+    Returns:
+        DiagnoseResponse
+    """
+    response = client.post("/metrics/diagnose", data=request.model_dump())
+    return DiagnoseResponse(**response)

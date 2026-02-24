@@ -273,6 +273,8 @@ export interface MetricVariantListResponse {
 }
 
 export interface MetricVariantExecutionResponse {
+  success: boolean
+  errors?: string[]
   data: any[]
   metadata: {
     columns: string[]

@@ -181,6 +181,15 @@ observations
 # Cortex Metadata
 .cortex
 
+# FastContext
+.fastcontext
+
+# Custom Analysis
+analysis
+
+.cursor
+
+.claude
 
 # -------------------------- FRONTEND --------------------------
 # Nuxt dev/build outputs
